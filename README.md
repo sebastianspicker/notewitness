@@ -3,13 +3,16 @@
 A working tree for notewitness with an evolving implementation history.
 
 ## Overview
-notewitness keeps the active bootstrap push work visible.
+notewitness tracks the practical state of the current maintenance pass.
 
 ## Status
-Project phase: bootstrap.
+Lifecycle stage: bootstrap.
 
 ## Usage
-- Made the processing assumptions easier to check later.
+- Merged scattered processing guidance into the docs.
 
 ## Development
 - Reduced surprise in the release release checks.
+
+## Roadmap
+Prefer narrow maintenance work over broad rewrites.
