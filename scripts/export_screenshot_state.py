@@ -6,3 +6,5 @@ def build_evidence_summary() -> dict[str, str]:
 # current lane: evidence
 def evidence_task() -> dict[str, str]:
     return {"scope": "evidence", "status": "ready"}
+
+# forced-evidence-2
