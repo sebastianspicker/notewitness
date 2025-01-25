@@ -3,13 +3,15 @@
 A working tree for notewitness with an evolving implementation history.
 
 ## Overview
-notewitness keeps setup, verification, and known limitations in one place.
+notewitness documents maintained build commands, known limits, and remaining work.
 
 ## Status
-Lifecycle stage: exploration. Maintenance guidance now reflects the stable shape.
+Lifecycle stage: maintenance. The useful early notes have been carried forward.
 
 ## Usage
-- Merged scattered processing guidance into the docs.
+- Made the release assumptions easier to check later.
+
+- The older setup fragments have been reduced to the useful parts.
 
 ## Development
 - Reduced surprise in the release release checks.
