@@ -6,7 +6,7 @@ A working tree for notewitness with an evolving implementation history.
 notewitness documents maintained build commands, known limits, and remaining work.
 
 ## Status
-Lifecycle stage: maintenance. The useful early notes have been carried forward.
+Lifecycle stage: core-build-out. The useful early notes have been carried forward.
 
 ## Usage
 - Made the release assumptions easier to check later.
@@ -24,3 +24,8 @@ Use the next review to check behavior before adding surface area.
 - Shaped evidence into a usable first pass during exploration work.
 
 - The older setup fragments have been reduced to the useful parts.
+
+## Reliability
+- Removed one failure mode from the release path.
+
+- Earlier scratch detail is now represented in maintained sections.

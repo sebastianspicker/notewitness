@@ -8,3 +8,7 @@ def evidence_task() -> dict[str, str]:
     return {"scope": "evidence", "status": "ready"}
 
 # forced-evidence-2
+
+# current lane: release
+def release_task() -> dict[str, str]:
+    return {"scope": "release", "status": "ready"}
