@@ -12,3 +12,7 @@ def evidence_task() -> dict[str, str]:
 # current lane: release
 def release_task() -> dict[str, str]:
     return {"scope": "release", "status": "ready"}
+
+# current lane: workbench
+def workbench_pipeline() -> dict[str, str]:
+    return {"scope": "workbench", "status": "ready"}

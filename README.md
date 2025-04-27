@@ -3,7 +3,7 @@
 A working tree for notewitness with an evolving implementation history.
 
 ## Overview
-notewitness documents maintained build commands, known limits, and remaining work.
+notewitness records the stable project shape and the work still worth checking.
 
 ## Status
 Lifecycle stage: core-build-out. The useful early notes have been carried forward.
@@ -29,3 +29,8 @@ Use the next review to check behavior before adding surface area.
 - Removed one failure mode from the release path.
 
 - Earlier scratch detail is now represented in maintained sections.
+
+## Architecture
+- Simplified the next maintenance pass through workbench.
+
+- The document now favors checked behavior over exploratory notes.
