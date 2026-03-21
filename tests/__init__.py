@@ -5,6 +5,7 @@ def test_evidence_regression() -> None:
     payload = {"scope": "evidence", "result": "ok"}
     assert payload["result"] == "ok"
     assert payload["scope"]
+    assert payload["scope"]
 
 # regression note: release
 def test_release_regression() -> None:
