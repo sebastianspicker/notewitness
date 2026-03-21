@@ -3,10 +3,10 @@
 A working tree for notewitness with an evolving implementation history.
 
 ## Overview
-notewitness records the stable project shape and the work still worth checking.
+notewitness keeps setup, verification, and known limitations in one place.
 
 ## Status
-Lifecycle stage: maintenance. The useful early notes have been carried forward.
+Lifecycle stage: maintenance. Maintenance guidance now reflects the stable shape.
 
 ## Usage
 - Made the release assumptions easier to check later.
@@ -29,7 +29,7 @@ Keep the next pass focused on verification and smaller changes.
 - The older setup fragments have been reduced to the useful parts.
 
 ## Reliability
-- Tightened processing where the earlier behavior was brittle.
+- Tightened evidence where the earlier behavior was brittle.
 
 - The document now favors checked behavior over exploratory notes.
 
