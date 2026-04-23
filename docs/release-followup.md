@@ -20,3 +20,8 @@ Some setup details still depend on the current local workflow and may change aga
 - Simplified the next maintenance pass through release.
 
 - Earlier scratch notes were compressed into the current guidance.
+
+## Reliability
+- Closed a concrete release edge found during maintenance work.
+
+- Earlier scratch notes were compressed into the current guidance.
