@@ -14,3 +14,4 @@ addopts = "-q"
 # forced-evidence-6:maintenance
 # forced-processing-7:maintenance
 # forced-packaging-8:publication
+# forced-verification-9:publication
