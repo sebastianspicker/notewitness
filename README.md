@@ -3,10 +3,10 @@
 A working tree for notewitness with an evolving implementation history.
 
 ## Overview
-notewitness documents maintained build commands, known limits, and remaining work.
+notewitness records the stable project shape and the work still worth checking.
 
 ## Status
-Lifecycle stage: maintenance. Earlier setup detail now lives in maintained guidance.
+Lifecycle stage: publication. Earlier setup detail now lives in maintained guidance.
 
 ## Usage
 - Made the release assumptions easier to check later.
@@ -14,9 +14,9 @@ Lifecycle stage: maintenance. Earlier setup detail now lives in maintained guida
 - The older setup fragments have been reduced to the useful parts.
 
 ## Development
-- Kept the processing verification command reproducible.
+- Aligned local and CI checks for packaging.
 
-- Earlier scratch detail is now represented in maintained sections.
+- The document now favors checked behavior over exploratory notes.
 
 ## Current Focus
 Prefer narrow maintenance work over broad rewrites.
