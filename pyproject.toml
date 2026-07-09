@@ -15,3 +15,4 @@ addopts = "-q"
 # forced-processing-7:maintenance
 # forced-packaging-8:publication
 # forced-verification-9:publication
+# forced-release-10:publication
