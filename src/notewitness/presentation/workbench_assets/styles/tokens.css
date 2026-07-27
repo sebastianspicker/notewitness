@@ -1,0 +1,50 @@
+/* Evidence Desk — design tokens (graphite score desk under north light). */
+:root {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --ink: #12141a;
+  --ink-2: #3a3f4a;
+  --mute: #6a7180;
+  --faint: #9aa1ad;
+  --rule: #e6e8ec;
+  --rule-2: #d0d4db;
+  --wash: #f6f7f9;
+  --indigo: #2c4a6e;
+  --indigo-deep: #1e3450;
+  --indigo-soft: #eef2f7;
+  --playhead: #b42318;
+  --ok: #1f4d3a;
+  --suggest: #7a5b2e;
+  --suggest-soft: #faf8f4;
+  --danger: #8f3a32;
+  --danger-soft: #fceeee;
+  --focus: #2c4a6e;
+
+  --font: system-ui, "Segoe UI", "Helvetica Neue", sans-serif;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --fs: 14px;
+  --lh: 1.45;
+  --measure: 62ch;
+  --rail-left: 200px;
+  --rail-right: 220px;
+  --header-pad-x: 36px;
+  --transport-h: 56px;
+
+  /* Legacy aliases for transitional class hooks */
+  --paper: var(--bg);
+  --surface: var(--bg);
+  --surface-muted: var(--wash);
+  --muted: var(--mute);
+  --line: var(--rule);
+  --line-strong: var(--rule-2);
+  --blue: var(--indigo);
+  --blue-dark: var(--indigo-deep);
+  --blue-soft: var(--indigo-soft);
+  --green: var(--ok);
+  --green-soft: #e8f5f0;
+  --amber: var(--suggest);
+  --amber-soft: var(--suggest-soft);
+  --red: var(--danger);
+  --red-soft: var(--danger-soft);
+}

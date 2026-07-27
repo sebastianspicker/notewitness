@@ -1,0 +1,508 @@
+{
+  "schema_version": "0.1.0",
+  "project": {
+    "id": "project:synthetic-lesson",
+    "name": "Synthetic lesson contract fixture",
+    "created_at": "2026-07-18T00:00:00+00:00"
+  },
+  "network": {
+    "mode": "offline"
+  },
+  "rights": [
+    {
+      "id": "rights:fixture-public-local-only",
+      "access": "public",
+      "remote_processing": false,
+      "model_training": false,
+      "retention": "retain",
+      "license": "CC0-1.0"
+    }
+  ],
+  "sources": [
+    {
+      "id": "source:synthetic-script",
+      "kind": "synthetic_timeline",
+      "uri": "script.txt",
+      "sha256": "4cd241cd21b3b9bee960f92287fa701f74f9d891530cbfb02abf7d6d1e844db6",
+      "rights_id": "rights:fixture-public-local-only"
+    }
+  ],
+  "actors": [
+    {
+      "id": "actor:teacher",
+      "role": "teacher",
+      "visibility": "public",
+      "instrument_role": "violin"
+    },
+    {
+      "id": "actor:student",
+      "role": "student",
+      "visibility": "public",
+      "instrument_role": "violin"
+    },
+    {
+      "id": "actor:researcher",
+      "role": "researcher",
+      "visibility": "public"
+    },
+    {
+      "id": "actor:unknown",
+      "role": "unknown",
+      "visibility": "public"
+    }
+  ],
+  "targets": [
+    {
+      "id": "target:instruction",
+      "source_id": "source:synthetic-script",
+      "selector": {
+        "stream_id": "timeline",
+        "start_us": 0,
+        "duration_us": 4000000,
+        "spatial": null
+      },
+      "musical_selector": {
+        "kind": "score_span",
+        "score_id": "score:fixture",
+        "bar_start": 18,
+        "bar_end": 21
+      },
+      "alignment_state": "aligned"
+    },
+    {
+      "id": "target:demonstration",
+      "source_id": "source:synthetic-script",
+      "selector": {
+        "stream_id": "timeline",
+        "start_us": 4000000,
+        "duration_us": 5000000,
+        "spatial": null
+      },
+      "musical_selector": {
+        "kind": "score_span",
+        "score_id": "score:fixture",
+        "bar_start": 18,
+        "bar_end": 21
+      },
+      "alignment_state": "aligned"
+    },
+    {
+      "id": "target:attempt-1",
+      "source_id": "source:synthetic-script",
+      "selector": {
+        "stream_id": "timeline",
+        "start_us": 9000000,
+        "duration_us": 5000000,
+        "spatial": null
+      },
+      "musical_selector": {
+        "kind": "score_span",
+        "score_id": "score:fixture",
+        "bar_start": 18,
+        "bar_end": 21
+      },
+      "alignment_state": "aligned"
+    },
+    {
+      "id": "target:feedback",
+      "source_id": "source:synthetic-script",
+      "selector": {
+        "stream_id": "timeline",
+        "start_us": 14000000,
+        "duration_us": 4000000,
+        "spatial": null
+      },
+      "musical_selector": null,
+      "alignment_state": "not_applicable"
+    },
+    {
+      "id": "target:attempt-2",
+      "source_id": "source:synthetic-script",
+      "selector": {
+        "stream_id": "timeline",
+        "start_us": 18000000,
+        "duration_us": 5000000,
+        "spatial": null
+      },
+      "musical_selector": {
+        "kind": "score_span",
+        "score_id": "score:fixture",
+        "bar_start": 18,
+        "bar_end": 21
+      },
+      "alignment_state": "aligned"
+    },
+    {
+      "id": "target:humming",
+      "source_id": "source:synthetic-script",
+      "selector": {
+        "stream_id": "timeline",
+        "start_us": 23000000,
+        "duration_us": 4000000,
+        "spatial": null
+      },
+      "musical_selector": null,
+      "alignment_state": "not_alignable"
+    },
+    {
+      "id": "target:overlap",
+      "source_id": "source:synthetic-script",
+      "selector": {
+        "stream_id": "timeline",
+        "start_us": 27000000,
+        "duration_us": 3000000,
+        "spatial": null
+      },
+      "musical_selector": null,
+      "alignment_state": "unknown"
+    }
+  ],
+  "generators": [
+    {
+      "id": "generator:fixture-human",
+      "kind": "human",
+      "name": "NoteWitness synthetic fixture",
+      "version": "0.1.0"
+    }
+  ],
+  "events": [
+    {
+      "id": "event:instruction",
+      "type": "speech",
+      "scope": "evidence",
+      "actor_id": "actor:teacher",
+      "target_ids": ["target:instruction"],
+      "body": {
+        "format": "text",
+        "value": "Again from bar 18, leichter; release the C♯."
+      },
+      "alternatives": [],
+      "generator_id": "generator:fixture-human",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "event:demonstration",
+      "type": "music",
+      "scope": "evidence",
+      "actor_id": "actor:teacher",
+      "target_ids": ["target:demonstration"],
+      "body": {
+        "format": "text",
+        "value": "Teacher demonstrates bars 18–21."
+      },
+      "alternatives": [],
+      "generator_id": "generator:fixture-human",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "event:attempt-1",
+      "type": "music",
+      "scope": "evidence",
+      "actor_id": "actor:student",
+      "target_ids": ["target:attempt-1"],
+      "body": {
+        "format": "text",
+        "value": "Student makes a first attempt."
+      },
+      "alternatives": [],
+      "generator_id": "generator:fixture-human",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "event:feedback",
+      "type": "speech",
+      "scope": "evidence",
+      "actor_id": "actor:teacher",
+      "target_ids": ["target:feedback"],
+      "body": {
+        "format": "text",
+        "value": "The beginning changed; listen to the final release."
+      },
+      "alternatives": [],
+      "generator_id": "generator:fixture-human",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "event:attempt-2",
+      "type": "music",
+      "scope": "evidence",
+      "actor_id": "actor:student",
+      "target_ids": ["target:attempt-2"],
+      "body": {
+        "format": "text",
+        "value": "Student repeats the phrase with a revised release."
+      },
+      "alternatives": [],
+      "generator_id": "generator:fixture-human",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "event:humming",
+      "type": "sung_or_hummed",
+      "scope": "evidence",
+      "actor_id": "actor:teacher",
+      "target_ids": ["target:humming"],
+      "body": {
+        "format": "text",
+        "value": "Teacher hums an unmetered alternative."
+      },
+      "alternatives": [],
+      "generator_id": "generator:fixture-human",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "event:overlap",
+      "type": "speech_over_music",
+      "scope": "evidence",
+      "actor_id": "actor:unknown",
+      "target_ids": ["target:overlap"],
+      "body": {
+        "format": "text",
+        "value": "Teacher speaks while the student sustains a note."
+      },
+      "alternatives": [],
+      "generator_id": "generator:fixture-human",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    }
+  ],
+  "relations": [
+    {
+      "id": "relation:demonstrates",
+      "type": "demonstrates",
+      "arguments": [
+        {
+          "role": "example",
+          "ref_kind": "event",
+          "ref_id": "event:demonstration"
+        },
+        {
+          "role": "instruction",
+          "ref_kind": "event",
+          "ref_id": "event:instruction"
+        }
+      ],
+      "generator_id": "generator:fixture-human",
+      "annotator_id": "actor:researcher",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "relation:attempts",
+      "type": "attempts",
+      "arguments": [
+        {
+          "role": "attempt",
+          "ref_kind": "event",
+          "ref_id": "event:attempt-1"
+        },
+        {
+          "role": "task",
+          "ref_kind": "event",
+          "ref_id": "event:instruction"
+        }
+      ],
+      "generator_id": "generator:fixture-human",
+      "annotator_id": "actor:researcher",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "relation:feedback-on",
+      "type": "feedback_on",
+      "arguments": [
+        {
+          "role": "feedback",
+          "ref_kind": "event",
+          "ref_id": "event:feedback"
+        },
+        {
+          "role": "attempt",
+          "ref_kind": "event",
+          "ref_id": "event:attempt-1"
+        }
+      ],
+      "generator_id": "generator:fixture-human",
+      "annotator_id": "actor:researcher",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "relation:refers-to",
+      "type": "refers_to",
+      "arguments": [
+        {
+          "role": "utterance",
+          "ref_kind": "event",
+          "ref_id": "event:instruction"
+        },
+        {
+          "role": "score_span",
+          "ref_kind": "target",
+          "ref_id": "target:instruction"
+        }
+      ],
+      "generator_id": "generator:fixture-human",
+      "annotator_id": "actor:researcher",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "relation:repeats",
+      "type": "repeats",
+      "arguments": [
+        {
+          "role": "repeat",
+          "ref_kind": "event",
+          "ref_id": "event:attempt-2"
+        },
+        {
+          "role": "earlier_attempt",
+          "ref_kind": "event",
+          "ref_id": "event:attempt-1"
+        }
+      ],
+      "generator_id": "generator:fixture-human",
+      "annotator_id": "actor:researcher",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "relation:revises",
+      "type": "revises",
+      "arguments": [
+        {
+          "role": "revision",
+          "ref_kind": "event",
+          "ref_id": "event:attempt-2"
+        },
+        {
+          "role": "earlier_attempt",
+          "ref_kind": "event",
+          "ref_id": "event:attempt-1"
+        }
+      ],
+      "generator_id": "generator:fixture-human",
+      "annotator_id": "actor:researcher",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "relation:contrasts-with",
+      "type": "contrasts_with",
+      "arguments": [
+        {
+          "role": "unmetered_example",
+          "ref_kind": "event",
+          "ref_id": "event:humming"
+        },
+        {
+          "role": "score_based_example",
+          "ref_kind": "event",
+          "ref_id": "event:demonstration"
+        }
+      ],
+      "generator_id": "generator:fixture-human",
+      "annotator_id": "actor:researcher",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    },
+    {
+      "id": "relation:assigned-for-practice",
+      "type": "local:assigned_for_practice",
+      "arguments": [
+        {
+          "role": "assignment",
+          "ref_kind": "event",
+          "ref_id": "event:instruction"
+        },
+        {
+          "role": "score_span",
+          "ref_kind": "target",
+          "ref_id": "target:instruction"
+        }
+      ],
+      "generator_id": "generator:fixture-human",
+      "annotator_id": "actor:researcher",
+      "rights_id": "rights:fixture-public-local-only",
+      "layer": "accepted_annotation",
+      "confidence": {
+        "kind": "not_applicable"
+      },
+      "review_status": "human_created"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "revision:feedback-created",
+      "record_id": "event:feedback",
+      "parent_revision_ids": [],
+      "author_id": "actor:researcher",
+      "timestamp": "2026-07-18T00:00:00+00:00",
+      "operation": "create",
+      "reason": "Initial synthetic annotation"
+    }
+  ]
+}

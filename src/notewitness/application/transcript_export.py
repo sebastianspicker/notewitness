@@ -1,0 +1,380 @@
+"""Owner-private transcript projections from workbench evidence."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+import hashlib
+from pathlib import Path
+from typing import Any, Mapping
+
+from notewitness.domain.interop import (
+    ExportFormat,
+    ExportPreflight,
+    LossSeverity,
+    ProjectionLoss,
+)
+from notewitness.domain.timeline import MediaSpan
+from notewitness.domain.transcript_document import (
+    TranscriptDocument,
+    TranscriptSegment,
+)
+from notewitness.domain.transcription_export import transcript_export_losses
+from notewitness.domain.transcription_options import (
+    DiarizationMode,
+    DisfluencyPolicy,
+    LanguageMode,
+    TranscriptExportFormat,
+    TranscriptionJobSpec,
+)
+from notewitness.project_store import ProjectStore
+from notewitness.transcript_writers import (
+    publish_new_private_text,
+    render_html,
+    render_txt,
+    render_webvtt,
+)
+
+
+MAX_EXPORT_FILENAME_CHARS = 128
+_UNREVIEWED_PREFIX = "[UNREVIEWED MACHINE SUGGESTION]"
+_FORMAT_SUFFIX = {
+    TranscriptExportFormat.HTML: ".html",
+    TranscriptExportFormat.TEXT: ".txt",
+    TranscriptExportFormat.WEBVTT: ".vtt",
+}
+_INTEROP_FORMAT = {
+    TranscriptExportFormat.HTML: ExportFormat.HTML,
+    TranscriptExportFormat.TEXT: ExportFormat.TEXT,
+    TranscriptExportFormat.WEBVTT: ExportFormat.WEBVTT,
+}
+_RENDERER = {
+    TranscriptExportFormat.HTML: render_html,
+    TranscriptExportFormat.TEXT: render_txt,
+    TranscriptExportFormat.WEBVTT: render_webvtt,
+}
+
+
+class TranscriptEvidenceLayer(StrEnum):
+    ACCEPTED_ONLY = "accepted_only"
+    INCLUDE_MACHINE_SUGGESTIONS = "include_machine_suggestions"
+
+
+class TranscriptExportError(RuntimeError):
+    """A graph transcript cannot be projected without violating its contract."""
+
+
+@dataclass(frozen=True, slots=True)
+class TranscriptExportResult:
+    export_format: TranscriptExportFormat
+    path: str
+    record_count: int
+    source_id: str
+    evidence_layer: TranscriptEvidenceLayer
+    checksum_sha256: str
+    documented_losses: tuple[ProjectionLoss, ...]
+
+
+class TranscriptEvidenceExportService:
+    """Render accepted evidence, or explicitly selected suggestions, locally."""
+
+    def __init__(self, store: ProjectStore) -> None:
+        self._store = store
+
+    @classmethod
+    def for_project(
+        cls,
+        project_root: str | Path,
+    ) -> TranscriptEvidenceExportService:
+        return cls(ProjectStore(project_root))
+
+    def export(
+        self,
+        *,
+        export_format: TranscriptExportFormat | str,
+        filename: str,
+        source_id: str,
+        evidence_layer: TranscriptEvidenceLayer | str,
+        rights_authorized: bool,
+        loss_preview_acknowledged: bool,
+        visible_timestamps: bool = True,
+        timestamp_interval_ms: int = 60_000,
+        pause_threshold_ms: int | None = None,
+    ) -> TranscriptExportResult:
+        try:
+            format_value = TranscriptExportFormat(export_format)
+            layer = TranscriptEvidenceLayer(evidence_layer)
+        except ValueError as exc:
+            raise TranscriptExportError(
+                "Transcript format or evidence layer is invalid."
+            ) from exc
+        if not isinstance(rights_authorized, bool) or not isinstance(
+            loss_preview_acknowledged,
+            bool,
+        ):
+            raise TranscriptExportError(
+                "Transcript export decisions must be explicit booleans."
+            )
+        suffix = _FORMAT_SUFFIX[format_value]
+        if (
+            not isinstance(filename, str)
+            or not filename
+            or len(filename) > MAX_EXPORT_FILENAME_CHARS
+            or Path(filename).name != filename
+            or not filename.casefold().endswith(suffix)
+        ):
+            raise TranscriptExportError(
+                f"Transcript export filename must be a safe {suffix} basename."
+            )
+        document, record_ids = _document(
+            self._store.load().payload,
+            source_id,
+            layer,
+        )
+        job = _job(
+            document,
+            format_value,
+            visible_timestamps,
+            timestamp_interval_ms,
+            pause_threshold_ms,
+        )
+        losses = (*transcript_export_losses(job, selected_record_ids=record_ids),
+                  _graph_projection_loss(record_ids))
+        destination = self._store.ensure_private_directory("exports") / filename
+        preflight = ExportPreflight(
+            export_format=_INTEROP_FORMAT[format_value],
+            destination=f"exports/{filename}",
+            selected_record_ids=record_ids,
+            rights_authorized=rights_authorized,
+            losses=losses,
+            loss_preview_acknowledged=loss_preview_acknowledged,
+        )
+        if not preflight.executable:
+            raise TranscriptExportError(
+                "Transcript export requires rights authorization and loss acknowledgement."
+            )
+        contents = _RENDERER[format_value](
+            document,
+            visible_timestamps=visible_timestamps,
+            timestamp_interval_ms=timestamp_interval_ms,
+            pause_threshold_ms=pause_threshold_ms,
+        )
+        published = publish_new_private_text(destination, contents)
+        return TranscriptExportResult(
+            format_value,
+            str(published),
+            len(record_ids),
+            source_id,
+            layer,
+            hashlib.sha256(contents.encode("utf-8")).hexdigest(),
+            preflight.losses,
+        )
+
+
+def _document(
+    payload: Mapping[str, Any],
+    source_id: str,
+    layer: TranscriptEvidenceLayer,
+) -> tuple[TranscriptDocument, tuple[str, ...]]:
+    if not any(
+        isinstance(source, Mapping) and source.get("id") == source_id
+        for source in payload.get("sources", ())
+    ):
+        raise TranscriptExportError(
+            "The selected transcript export source does not exist."
+        )
+    targets = {
+        item.get("id"): item
+        for item in payload.get("targets", ())
+        if isinstance(item, Mapping)
+    }
+    events = tuple(
+        item for item in payload.get("events", ()) if isinstance(item, Mapping)
+    )
+    accepted_sources = _body_references(events, "source_suggestion_id")
+    superseded_annotations = _body_references(events, "source_annotation_id")
+    entries: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
+    for event in events:
+        event_id = event.get("id")
+        status = event.get("review_status")
+        body = event.get("body")
+        if (
+            event.get("type") not in {"speech", "speech_over_music"}
+            or status
+            not in {"human_accepted", "human_created", "machine_suggested"}
+            or event_id in superseded_annotations
+        ):
+            continue
+        if status == "machine_suggested" and (
+            layer is TranscriptEvidenceLayer.ACCEPTED_ONLY
+            or event_id in accepted_sources
+        ):
+            continue
+        if (
+            not isinstance(body, Mapping)
+            or not isinstance(body.get("value"), str)
+            or not body["value"].strip()
+        ):
+            continue
+        matches = _source_targets(event, targets, source_id)
+        if len(matches) > 1:
+            raise TranscriptExportError(
+                "Speech evidence has multiple time anchors for the selected source."
+            )
+        if matches:
+            entries.append((event, matches[0]))
+    entries.sort(
+        key=lambda pair: (
+            pair[1]["selector"]["start_us"],
+            str(pair[0]["id"]),
+        )
+    )
+    if not entries:
+        label = (
+            "accepted"
+            if layer is TranscriptEvidenceLayer.ACCEPTED_ONLY
+            else "accepted or machine-suggested"
+        )
+        raise TranscriptExportError(
+            f"No {label} speech evidence is available for this source."
+        )
+    streams = {
+        str(target["selector"].get("stream_id") or "audio")
+        for _, target in entries
+    }
+    if len(streams) != 1:
+        raise TranscriptExportError(
+            "Transcript export requires one source stream; select a narrower projection."
+        )
+    stream_id = next(iter(streams))
+    record_ids = tuple(str(event["id"]) for event, _ in entries)
+    segments = tuple(
+        _segment(index, source_id, stream_id, event, target)
+        for index, (event, target) in enumerate(entries, start=1)
+    )
+    digest = hashlib.sha256("\0".join(record_ids).encode("utf-8")).hexdigest()[:24]
+    return (
+        TranscriptDocument(
+            f"document:workbench-export-{digest}",
+            source_id,
+            stream_id,
+            "artifact:workbench-evidence",
+            f"run:workbench-export-{digest}",
+            "mul",
+            segments,
+            (),
+        ),
+        record_ids,
+    )
+
+
+def _body_references(
+    events: tuple[Mapping[str, Any], ...],
+    field: str,
+) -> set[str]:
+    return {
+        str(body[field])
+        for event in events
+        if event.get("review_status") in {"human_accepted", "human_created"}
+        and isinstance((body := event.get("body")), Mapping)
+        and isinstance(body.get(field), str)
+    }
+
+
+def _source_targets(
+    event: Mapping[str, Any],
+    targets: Mapping[object, Mapping[str, Any]],
+    source_id: str,
+) -> tuple[Mapping[str, Any], ...]:
+    matches = []
+    for target_id in event.get("target_ids", ()):
+        target = targets.get(target_id)
+        selector = target.get("selector") if isinstance(target, Mapping) else None
+        if (
+            isinstance(target, Mapping)
+            and target.get("source_id") == source_id
+            and isinstance(selector, Mapping)
+            and isinstance(selector.get("start_us"), int)
+            and not isinstance(selector["start_us"], bool)
+            and isinstance(selector.get("duration_us"), int)
+            and not isinstance(selector["duration_us"], bool)
+            and selector["start_us"] >= 0
+            and selector["duration_us"] > 0
+        ):
+            matches.append(target)
+    return tuple(matches)
+
+
+def _segment(
+    index: int,
+    source_id: str,
+    stream_id: str,
+    event: Mapping[str, Any],
+    target: Mapping[str, Any],
+) -> TranscriptSegment:
+    selector = target["selector"]
+    start_us = selector["start_us"]
+    text = str(event["body"]["value"])
+    if event.get("review_status") == "machine_suggested":
+        text = f"{_UNREVIEWED_PREFIX} {text}"
+    confidence = event.get("confidence")
+    value = confidence.get("value") if isinstance(confidence, Mapping) else None
+    numeric_confidence = (
+        float(value)
+        if isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and 0 <= value <= 1
+        else 1.0
+    )
+    actor_id = event.get("actor_id")
+    speaker = actor_id if isinstance(actor_id, str) and actor_id else None
+    return TranscriptSegment(
+        f"segment:workbench-export-{index}",
+        source_id,
+        stream_id,
+        start_us,
+        start_us + selector["duration_us"],
+        text,
+        "mul",
+        numeric_confidence,
+        (),
+        speaker,
+    )
+
+
+def _job(
+    document: TranscriptDocument,
+    export_format: TranscriptExportFormat,
+    visible_timestamps: bool,
+    timestamp_interval_ms: int,
+    pause_threshold_ms: int | None,
+) -> TranscriptionJobSpec:
+    start = min(item.start_us for item in document.segments)
+    end = max(item.end_us for item in document.segments)
+    return TranscriptionJobSpec(
+        "job:workbench-evidence-export",
+        (MediaSpan(document.source_id, document.stream_id, start, end - start),),
+        "profile:workbench-evidence",
+        LanguageMode.AUTO,
+        None,
+        DiarizationMode.OFF,
+        None,
+        False,
+        DisfluencyPolicy.INCLUDE,
+        pause_threshold_ms,
+        visible_timestamps,
+        timestamp_interval_ms,
+        export_format,
+    )
+
+
+def _graph_projection_loss(record_ids: tuple[str, ...]) -> ProjectionLoss:
+    return ProjectionLoss(
+        field="evidence_graph_metadata",
+        reason=(
+            "Transcript formats retain text, source timing, and project-local speaker labels "
+            "but not the full evidence graph, confidence, alternatives, or review history."
+        ),
+        severity=LossSeverity.LOSSY,
+        affected_record_ids=record_ids,
+    )

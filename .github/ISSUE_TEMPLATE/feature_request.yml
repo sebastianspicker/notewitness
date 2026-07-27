@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose a bounded addition to the local-first evidence workbench.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Research or operator problem
+      description: Describe the evidence or review problem, not only a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Privacy and evidence boundary
+      description: Explain data, network, human-review, provenance, and licensing implications.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Verifiable outcome
+      description: State the smallest observable behavior that would solve the problem.
+    validations:
+      required: true
