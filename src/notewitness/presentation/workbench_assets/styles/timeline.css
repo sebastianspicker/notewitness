@@ -1,0 +1,350 @@
+/* Source-aware timeline — score-like lanes */
+
+.timeline-section {
+  flex: 0 0 auto;
+  padding: 14px 36px 8px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--bg);
+}
+
+.app-shell.is-single-source .timeline-section {
+  padding: 12px 32px 6px;
+}
+
+.timeline-header,
+.score-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px 20px;
+  margin-bottom: 12px;
+  min-height: 0;
+  padding: 0;
+  flex-wrap: wrap;
+}
+
+.timeline-header .dual-clocks,
+.score-head .dual-clocks {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.timeline-header h2,
+.score-head h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.timeline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.lane-picker {
+  position: relative;
+}
+
+.lane-picker summary {
+  min-height: 28px;
+  padding: 4px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--rule-2);
+  border-radius: 0;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  list-style: none;
+  cursor: pointer;
+}
+
+.lane-picker summary::-webkit-details-marker {
+  display: none;
+}
+
+.lane-picker summary::after {
+  content: " ▾";
+  color: var(--faint);
+}
+
+.lane-picker[open] fieldset {
+  position: absolute;
+  z-index: 25;
+  top: 34px;
+  right: 0;
+  width: 280px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--rule-2);
+  background: var(--bg);
+  box-shadow: 0 8px 24px rgba(18, 20, 26, 0.08);
+}
+
+.lane-picker legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lane-picker label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.timeline-scroll {
+  max-height: 320px;
+  overflow: auto;
+  border-top: 0;
+  background: transparent;
+}
+
+.app-shell.is-single-source .timeline-scroll {
+  max-height: 300px;
+}
+
+.timeline-canvas,
+.lanes {
+  position: relative;
+  min-width: 640px;
+  background: var(--bg);
+}
+
+.time-ruler,
+.timeline-lane,
+.lane {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  min-height: 30px;
+  align-items: stretch;
+}
+
+.lane-h {
+  min-height: 24px;
+}
+
+.ruler-label,
+.lane-label,
+.lane-name {
+  padding: 8px 14px 8px 0;
+  border-right: 0;
+  background: transparent;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-align: right;
+  user-select: none;
+}
+
+.lane-label {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 6px;
+  align-items: center;
+  text-align: left;
+  padding-right: 8px;
+  line-height: 1.2;
+}
+
+.lane-label span {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.lane-label kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--faint);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--bg);
+  font: 10px var(--font);
+}
+
+.tick-scale,
+.ticks {
+  position: relative;
+  height: 28px;
+  margin: 0;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tick-scale span,
+.ticks span {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+}
+
+.tick-scale span:first-child,
+.ticks span:first-child {
+  transform: none;
+}
+
+.tick-scale span:last-child,
+.ticks span:last-child {
+  transform: translateX(-100%);
+}
+
+.lane-track,
+.track {
+  position: relative;
+  min-height: 30px;
+  border-top: 1px solid var(--rule);
+  background: transparent;
+}
+
+.lane:last-child .track,
+.timeline-lane:last-child .lane-track {
+  border-bottom: 1px solid var(--rule);
+}
+
+.lane-h .track,
+.time-ruler .track {
+  border-top: 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.lane-track::before {
+  display: none;
+}
+
+.lane-item,
+.event {
+  position: absolute;
+  z-index: 2;
+  top: 6px;
+  min-width: 7px;
+  min-height: 0;
+  height: 17px;
+  padding: 0 6px;
+  overflow: hidden;
+  color: var(--ink-2);
+  border: 0;
+  border-radius: 1px;
+  background: #e8ebf0;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 17px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.lane-item[data-status="machine_suggested"],
+.event[data-status="machine_suggested"] {
+  color: var(--ink-2);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--rule-2);
+  font-style: italic;
+  border: 0;
+}
+
+.lane-item[data-status="human_created"],
+.lane-item[data-status="accepted"],
+.event[data-status="human_created"],
+.event[data-status="accepted"] {
+  color: var(--indigo-deep);
+  background: var(--indigo-soft);
+  box-shadow: inset 0 0 0 1px #c5d0df;
+  border: 0;
+  font-style: normal;
+}
+
+.lane-item[data-status="source"],
+.event[data-status="source"] {
+  top: 14px;
+  min-height: 4px;
+  height: 4px;
+  padding: 0;
+  border: 0;
+  background: var(--indigo);
+  box-shadow: none;
+}
+
+.lane-item:focus-visible,
+.event:focus-visible {
+  z-index: 3;
+  outline: 1.5px solid var(--indigo);
+  outline-offset: 1px;
+}
+
+.playhead {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--playhead);
+  pointer-events: none;
+}
+
+.playhead::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -3.5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--playhead);
+  border: 0;
+}
+
+.timeline-empty {
+  padding: 24px 100px;
+  color: var(--mute);
+  font-size: 13px;
+}
+
+.timeline-empty p {
+  margin: 4px 0 0;
+}
+
+.episode-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  color: var(--mute);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.episode-line strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.episode-line .here {
+  color: var(--indigo-deep);
+  font-weight: 600;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+}
+
+@media (max-width: 780px) {
+  .timeline-section {
+    padding: 14px 20px 8px;
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "nw": "urn:notewitness:vocabulary:",
+    "id": "@id",
+    "type": "@type",
+    "actor_id": {
+      "@id": "nw:actor",
+      "@type": "@id"
+    },
+    "target_ids": {
+      "@id": "nw:target",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "source_id": {
+      "@id": "nw:source",
+      "@type": "@id"
+    },
+    "generator_id": {
+      "@id": "nw:generatedBy",
+      "@type": "@id"
+    },
+    "rights_id": {
+      "@id": "nw:rights",
+      "@type": "@id"
+    },
+    "demonstrates": "nw:demonstrates",
+    "attempts": "nw:attempts",
+    "feedback_on": "nw:feedbackOn",
+    "refers_to": "nw:refersTo",
+    "repeats": "nw:repeats",
+    "revises": "nw:revises",
+    "contrasts_with": "nw:contrastsWith"
+  }
+}
