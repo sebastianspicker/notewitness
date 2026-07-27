@@ -1,0 +1,13 @@
+NoteWitness synthetic lesson fixture. No real participant data.
+
+00:00.000 Teacher: “Again from bar 18, leichter; release the C♯.”
+00:04.000 Teacher demonstrates a four-bar phrase.
+00:09.000 Student makes a first attempt.
+00:14.000 Teacher: “The beginning changed; listen to the final release.”
+00:18.000 Student repeats and revises the attempt.
+00:23.000 Teacher hums an unmetered alternative.
+00:27.000 Teacher speaks while the student sustains a note.
+
+This textual timeline exercises speech, music, humming, overlap, score-linked,
+and explicitly not-alignable evidence. It is a contract fixture, not an audio
+transcription or model-accuracy benchmark.

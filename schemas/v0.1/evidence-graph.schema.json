@@ -1,0 +1,585 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:notewitness:schema:evidence-graph:0.1.0",
+  "title": "NoteWitness evidence graph",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project",
+    "network",
+    "rights",
+    "sources",
+    "actors",
+    "targets",
+    "generators",
+    "events",
+    "relations",
+    "revisions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "project": {
+      "$ref": "#/$defs/project"
+    },
+    "network": {
+      "$ref": "#/$defs/network"
+    },
+    "rights": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rights"
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/actor"
+      }
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/target"
+      }
+    },
+    "generators": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/generator"
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relation"
+      }
+    },
+    "revisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/revision"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$"
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "created_at"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "enum": ["offline", "download_models_only", "remote_explicit"]
+        }
+      }
+    },
+    "rights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "access",
+        "remote_processing",
+        "model_training",
+        "retention"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "access": {
+          "enum": ["restricted", "project", "public"]
+        },
+        "remote_processing": {
+          "type": "boolean"
+        },
+        "model_training": {
+          "type": "boolean"
+        },
+        "retention": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Derived records must preserve this value exactly."
+        },
+        "license": {
+          "type": "string"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "uri", "sha256", "rights_id"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "rights_id": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "visibility"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "visibility": {
+          "enum": ["restricted", "project", "public"]
+        },
+        "instrument_role": {
+          "type": "string"
+        }
+      }
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stream_id", "start_us", "duration_us"],
+      "properties": {
+        "stream_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start_us": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duration_us": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "spatial": {
+          "type": ["object", "null"]
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source_id", "selector", "alignment_state"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "selector": {
+          "$ref": "#/$defs/selector"
+        },
+        "musical_selector": {
+          "type": ["object", "null"]
+        },
+        "alignment_state": {
+          "enum": [
+            "aligned",
+            "unknown",
+            "not_detected",
+            "not_applicable",
+            "not_alignable"
+          ]
+        }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name", "version"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": ["human", "machine", "import"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string"
+        },
+        "weight_hash_state": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "machine"
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["model", "weight_hash_state"]
+          }
+        }
+      ]
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "scope",
+        "actor_id",
+        "target_ids",
+        "body",
+        "alternatives",
+        "generator_id",
+        "rights_id",
+        "layer",
+        "confidence",
+        "review_status"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^(speech|music|sung_or_hummed|speech_over_music|silence|gesture|score_reference|local:[A-Za-z][A-Za-z0-9._-]*)$"
+        },
+        "scope": {
+          "enum": ["evidence", "project"]
+        },
+        "actor_id": {
+          "$ref": "#/$defs/id"
+        },
+        "target_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "uniqueItems": true
+        },
+        "body": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["format", "value"],
+          "properties": {
+            "format": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {}
+          }
+        },
+        "alternatives": {
+          "type": "array"
+        },
+        "generator_id": {
+          "$ref": "#/$defs/id"
+        },
+        "rights_id": {
+          "$ref": "#/$defs/id"
+        },
+        "layer": {
+          "enum": [
+            "raw_model_output",
+            "normalized_hypothesis",
+            "accepted_annotation",
+            "presentation"
+          ]
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "review_status": {
+          "$ref": "#/$defs/review_status"
+        }
+      },
+      "$comment": "Generator-kind provenance and human adjudication revision requirements are cross-record runtime invariants.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "scope": {
+                "const": "evidence"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target_ids": {
+                "minItems": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "target_ids": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "review_status": {
+                "const": "machine_suggested"
+              }
+            },
+            "required": ["review_status"]
+          },
+          "then": {
+            "properties": {
+              "layer": {
+                "enum": ["raw_model_output", "normalized_hypothesis"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "layer": {
+                "const": "accepted_annotation"
+              }
+            },
+            "required": ["layer"]
+          },
+          "then": {
+            "properties": {
+              "review_status": {
+                "enum": ["human_created", "human_accepted"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "relation_argument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "ref_kind", "ref_id"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ref_kind": {
+          "enum": ["event", "target"]
+        },
+        "ref_id": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "$comment": "Generator-kind provenance and human adjudication revision requirements are cross-record runtime invariants.",
+      "required": [
+        "id",
+        "type",
+        "arguments",
+        "generator_id",
+        "annotator_id",
+        "rights_id",
+        "layer",
+        "confidence",
+        "review_status"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^(demonstrates|attempts|feedback_on|refers_to|repeats|revises|contrasts_with|local:[A-Za-z][A-Za-z0-9._-]*)$"
+        },
+        "arguments": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/relation_argument"
+          }
+        },
+        "generator_id": {
+          "$ref": "#/$defs/id"
+        },
+        "annotator_id": {
+          "$ref": "#/$defs/id"
+        },
+        "rights_id": {
+          "$ref": "#/$defs/id"
+        },
+        "layer": {
+          "enum": ["normalized_hypothesis", "accepted_annotation", "presentation"]
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "review_status": {
+          "$ref": "#/$defs/review_status"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "review_status": {
+                "const": "machine_suggested"
+              }
+            },
+            "required": ["review_status"]
+          },
+          "then": {
+            "properties": {
+              "layer": {
+                "const": "normalized_hypothesis"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "layer": {
+                "const": "accepted_annotation"
+              }
+            },
+            "required": ["layer"]
+          },
+          "then": {
+            "properties": {
+              "review_status": {
+                "enum": ["human_created", "human_accepted"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "record_id",
+        "parent_revision_ids",
+        "author_id",
+        "timestamp",
+        "operation",
+        "reason"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "record_id": {
+          "$ref": "#/$defs/id"
+        },
+        "parent_revision_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "uniqueItems": true
+        },
+        "author_id": {
+          "$ref": "#/$defs/id"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "operation": {
+          "enum": ["create", "replace", "supersede", "reject", "adjudicate"]
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "review_status": {
+      "enum": [
+        "machine_suggested",
+        "human_accepted",
+        "human_created",
+        "rejected",
+        "contested"
+      ]
+    }
+  }
+}

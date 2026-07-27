@@ -1,0 +1,81 @@
+{
+  "version": 2,
+  "transcription": {
+    "whisper_path": "/absolute/path/to/whisper",
+    "ffprobe_path": "/absolute/path/to/ffprobe",
+    "ffmpeg_path": "/absolute/path/to/ffmpeg",
+    "model_checkpoint": "/absolute/path/to/whisper-model.bin",
+    "model_license": "REPLACE-WITH-MODEL-LICENSE",
+    "adapter_license": "REPLACE-WITH-WHISPER-LAUNCHER-LICENSE",
+    "ffmpeg_license": "REPLACE-WITH-FFMPEG-LICENSE",
+    "language": "de",
+    "beam_size": 5,
+    "threads": 0,
+    "device": "cpu",
+    "timeout_seconds": 7200
+  },
+  "analysis": {
+    "ffprobe_path": "/absolute/path/to/ffprobe",
+    "diarization_mode": "auto",
+    "detect_overlap": true,
+    "providers": [
+      {
+        "stage": "activity_segmentation",
+        "analysis_path": "/absolute/path/to/notewitness-provider-bridge",
+        "adapter_version": "REPLACE-WITH-PANNS-REVISION",
+        "adapter_license": "MIT",
+        "model_path": "/absolute/path/to/panns-checkpoint.pth",
+        "model_license": "REPLACE-WITH-CHECKPOINT-LICENSE",
+        "parameters": {
+          "window_us": 10000,
+          "hop_us": 10000,
+          "activation_threshold": 0.5,
+          "merge_gap_us": 250000,
+          "speech_label": "Speech",
+          "music_label": "Music"
+        },
+        "timeout_seconds": 3600
+      },
+      {
+        "stage": "anonymous_diarization",
+        "analysis_path": "/absolute/path/to/notewitness-provider-bridge",
+        "adapter_version": "REPLACE-WITH-PYANNOTE-VERSION",
+        "adapter_license": "MIT",
+        "model_path": "/absolute/path/to/speaker-diarization-community-1",
+        "model_license": "CC-BY-4.0",
+        "timeout_seconds": 3600
+      },
+      {
+        "stage": "note_transcription",
+        "analysis_path": "/absolute/path/to/notewitness-provider-bridge",
+        "adapter_version": "REPLACE-WITH-BASIC-PITCH-VERSION",
+        "adapter_license": "Apache-2.0",
+        "model_path": "/absolute/path/to/basic-pitch-model.tflite",
+        "model_license": "Apache-2.0",
+        "timeout_seconds": 3600
+      },
+      {
+        "stage": "instrument_diarization",
+        "analysis_path": "/absolute/path/to/notewitness-provider-bridge",
+        "adapter_version": "REPLACE-WITH-PANNS-REVISION",
+        "adapter_license": "MIT",
+        "model_path": "/absolute/path/to/panns-checkpoint.pth",
+        "model_license": "REPLACE-WITH-CHECKPOINT-LICENSE",
+        "parameters": {
+          "window_us": 10000,
+          "hop_us": 10000,
+          "activation_threshold": 0.5,
+          "merge_gap_us": 250000,
+          "instrument_labels": [
+            "Guitar",
+            "Piano",
+            "Violin, fiddle",
+            "Cello",
+            "Flute"
+          ]
+        },
+        "timeout_seconds": 3600
+      }
+    ]
+  }
+}

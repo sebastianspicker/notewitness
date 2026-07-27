@@ -1,0 +1,268 @@
+/* Buttons, inputs, file control, dialogs, consent */
+
+.field-label {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.full-select,
+.field-label + select,
+select.full-select {
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--rule-2);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.primary-button,
+.secondary-button,
+.text-button,
+.time-button,
+.linkish {
+  border-radius: 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.primary-button {
+  min-height: 34px;
+  padding: 0 16px;
+  color: #fff;
+  border: 0;
+  background: var(--indigo);
+  letter-spacing: 0.01em;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--indigo-deep);
+}
+
+.secondary-button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--rule-2);
+  background: transparent;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.secondary-button:hover:not(:disabled) {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.text-button,
+.time-button,
+.linkish {
+  padding: 2px 0;
+  color: var(--indigo);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--indigo) 30%, transparent);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.text-button:hover,
+.time-button:hover,
+.linkish:hover:not(:disabled) {
+  border-bottom-color: var(--indigo);
+  color: var(--indigo-deep);
+}
+
+.linkish:disabled,
+.text-button:disabled {
+  opacity: 0.4;
+}
+
+.play-link {
+  color: var(--indigo);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid color-mix(in srgb, var(--indigo) 35%, transparent);
+  padding-bottom: 1px;
+  background: none;
+}
+
+.play-link:hover {
+  border-bottom-color: var(--indigo);
+}
+
+.full-button {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.file-button {
+  display: block;
+  min-height: 34px;
+  margin-top: 14px;
+  padding: 8px 0;
+  color: var(--indigo-deep);
+  border: 0;
+  border-bottom: 1px solid var(--indigo);
+  border-radius: 0;
+  background: transparent;
+  font-weight: 600;
+  font-size: 13px;
+  text-align: left;
+  position: relative;
+}
+
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.file-button:has(input:focus-visible) {
+  outline: 1.5px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.file-button.is-busy {
+  opacity: 0.6;
+}
+
+.consent-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 10px;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.consent-check input {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 2px 0 0;
+  accent-color: var(--indigo);
+}
+
+/* Dialogs */
+
+.editor-dialog {
+  width: min(480px, calc(100vw - 32px));
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--rule-2);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: 0 16px 48px rgba(18, 20, 26, 0.12);
+}
+
+.editor-dialog::backdrop {
+  background: rgba(18, 20, 26, 0.28);
+}
+
+.editor-dialog form {
+  display: grid;
+  gap: 14px;
+  padding: 22px 24px 20px;
+}
+
+.dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dialog-heading h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.editor-dialog label {
+  display: grid;
+  gap: 6px;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.editor-dialog input,
+.editor-dialog textarea {
+  min-height: 36px;
+  padding: 8px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--rule-2);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.editor-dialog textarea {
+  min-height: 88px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.export-section .dialog-actions {
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+.original-evidence {
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.original-evidence span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--faint);
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Busy state on action buttons */
+button[data-busy-key][disabled] {
+  opacity: 0.55;
+}

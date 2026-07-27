@@ -1,18 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
 [project]
 name = "notewitness"
-version = "0.1.0"
+version = "0.1.0a0"
+description = "Local-first evidence workbench for music teaching and artistic research"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+authors = [
+  { name = "NoteWitness contributors" },
+]
+keywords = [
+  "artistic-research",
+  "music-education",
+  "music-information-retrieval",
+  "transcription",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Multimedia :: Sound/Audio :: Analysis",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
 dependencies = []
 
-[tool.ruff]
-line-length = 100
-[tool.pytest.ini_options]
-addopts = "-q"
-# forced-evidence-3:exploration
-# forced-workbench-4:core-build-out
-# forced-evidence-5:maintenance
-# forced-evidence-6:maintenance
-# forced-processing-7:maintenance
-# forced-packaging-8:publication
-# forced-verification-9:publication
-# forced-release-10:publication
+[project.scripts]
+notewitness = "notewitness.cli:main"
+notewitness-provider-bridge = "notewitness.bridges.dispatcher:main"
+notewitness-mt3-events-bridge = "notewitness.bridges.mt3_decoded_events_bridge:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/notewitness"]
