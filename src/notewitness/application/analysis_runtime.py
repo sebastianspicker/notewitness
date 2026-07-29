@@ -40,6 +40,7 @@ from notewitness.domain.analysis import (
 )
 from notewitness.domain.timeline import MediaSpan
 from notewitness.local_artifacts import (
+    LocalArtifactError,
     write_new_private_bytes,
     write_new_private_json,
 )
@@ -363,7 +364,7 @@ class LocalAnalysisRuntime:
                         "timestamp": _now(),
                     },
                 )
-            except Exception:
+            except (LocalArtifactError, OSError):
                 pass
             if isinstance(exc, LocalAnalysisRuntimeError):
                 raise

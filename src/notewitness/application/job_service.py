@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from notewitness.domain.analysis import AnalysisStage, JobState, MAX_CONTINUATION_TOKEN_CHARS
+from notewitness.domain.analysis import AnalysisStage, MAX_CONTINUATION_TOKEN_CHARS
 from notewitness.domain.jobs import DurableJob, MAX_ARTIFACT_ID_CHARS
 from notewitness.domain.timeline import MediaSpan
 from notewitness.infrastructure.sqlite_job_store import JobConflictError, SQLiteJobStore

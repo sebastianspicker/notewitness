@@ -450,17 +450,7 @@ def _resource_limited_launcher_command(
     if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) & 0o022:
         raise LocalToolError("Local tool launcher is unavailable.")
 
-    try:
-        interpreter = Path(sys.executable).resolve(strict=True)
-        interpreter_metadata = interpreter.stat()
-    except OSError as exc:
-        raise LocalToolError("Local Python launcher is unavailable.") from exc
-    if (
-        not stat.S_ISREG(interpreter_metadata.st_mode)
-        or not os.access(interpreter, os.X_OK)
-        or stat.S_IMODE(interpreter_metadata.st_mode) & 0o022
-    ):
-        raise LocalToolError("Local Python launcher is unavailable.")
+    interpreter = _trusted_python_launcher()
 
     cpu_seconds = min(MAX_TOOL_TIMEOUT_SECONDS, max(2, timeout_seconds * 2))
     return (
@@ -471,6 +461,24 @@ def _resource_limited_launcher_command(
         "--",
         *command,
     )
+
+
+def _trusted_python_launcher() -> Path:
+    """Select an immutable interpreter for the fixed resource-limit helper."""
+
+    for candidate in dict.fromkeys((Path(sys.executable), Path("/usr/bin/python3"))):
+        try:
+            interpreter = candidate.resolve(strict=True)
+            metadata = interpreter.stat()
+        except OSError:
+            continue
+        if (
+            stat.S_ISREG(metadata.st_mode)
+            and os.access(interpreter, os.X_OK)
+            and not stat.S_IMODE(metadata.st_mode) & 0o022
+        ):
+            return interpreter
+    raise LocalToolError("Local Python launcher is unavailable.")
 
 
 def _communicate_bounded(
@@ -495,46 +503,20 @@ def _communicate_bounded(
     next_cancellation_probe = started
     try:
         while selector.get_map() or process.poll() is None:
-            now = time.monotonic()
-            if (
-                cancellation_requested is not None
-                and now >= next_cancellation_probe
-            ):
-                if cancellation_requested():
-                    _terminate_process_group(process)
-                    raise LocalToolCancelled("Local tool execution was cancelled.")
-                next_cancellation_probe = now + 0.25
-            remaining = deadline - now
-            if remaining <= 0:
-                _terminate_process_group(process)
-                raise LocalToolTimeout(
-                    f"Local tool exceeded {timeout_seconds} seconds."
-                )
-            wait_seconds = min(0.25, remaining)
-            if cancellation_requested is not None:
-                wait_seconds = min(
-                    wait_seconds,
-                    max(0.0, next_cancellation_probe - now),
-                )
-            if selector.get_map():
-                for key, _ in selector.select(timeout=wait_seconds):
-                    stream_name, buffer = streams[key.fd]
-                    chunk = os.read(key.fd, 64 * 1024)
-                    if not chunk:
-                        selector.unregister(key.fd)
-                        continue
-                    buffer.extend(chunk)
-                    if len(buffer) > MAX_TOOL_OUTPUT_BYTES:
-                        _terminate_process_group(process)
-                        raise LocalToolOutputLimit(
-                            f"Local tool {stream_name} exceeded "
-                            f"{MAX_TOOL_OUTPUT_BYTES} bytes."
-                        )
-            else:
-                try:
-                    process.wait(timeout=max(0.001, wait_seconds))
-                except subprocess.TimeoutExpired:
-                    pass
+            now, next_cancellation_probe = _check_execution_limits(
+                process,
+                timeout_seconds=timeout_seconds,
+                deadline=deadline,
+                next_cancellation_probe=next_cancellation_probe,
+                cancellation_requested=cancellation_requested,
+            )
+            wait_seconds = _process_poll_interval(
+                deadline=deadline,
+                now=now,
+                next_cancellation_probe=next_cancellation_probe,
+                cancellation_requested=cancellation_requested,
+            )
+            _drain_output_or_wait(process, selector, streams, wait_seconds)
         if cancellation_requested is not None and cancellation_requested():
             _terminate_process_group(process)
             raise LocalToolCancelled("Local tool execution was cancelled.")
@@ -553,6 +535,65 @@ def _communicate_bounded(
         selector.close()
         process.stdout.close()
         process.stderr.close()
+
+
+def _check_execution_limits(
+    process: subprocess.Popen[bytes],
+    *,
+    timeout_seconds: int,
+    deadline: float,
+    next_cancellation_probe: float,
+    cancellation_requested: Callable[[], bool] | None,
+) -> tuple[float, float]:
+    now = time.monotonic()
+    if cancellation_requested is not None and now >= next_cancellation_probe:
+        if cancellation_requested():
+            _terminate_process_group(process)
+            raise LocalToolCancelled("Local tool execution was cancelled.")
+        next_cancellation_probe = now + 0.25
+    if deadline - now <= 0:
+        _terminate_process_group(process)
+        raise LocalToolTimeout(f"Local tool exceeded {timeout_seconds} seconds.")
+    return now, next_cancellation_probe
+
+
+def _process_poll_interval(
+    *,
+    deadline: float,
+    now: float,
+    next_cancellation_probe: float,
+    cancellation_requested: Callable[[], bool] | None,
+) -> float:
+    wait_seconds = min(0.25, deadline - now)
+    if cancellation_requested is not None:
+        return min(wait_seconds, max(0.0, next_cancellation_probe - now))
+    return wait_seconds
+
+
+def _drain_output_or_wait(
+    process: subprocess.Popen[bytes],
+    selector: selectors.BaseSelector,
+    streams: dict[int, tuple[str, bytearray]],
+    wait_seconds: float,
+) -> None:
+    if not selector.get_map():
+        try:
+            process.wait(timeout=max(0.001, wait_seconds))
+        except subprocess.TimeoutExpired:
+            pass
+        return
+    for key, _ in selector.select(timeout=wait_seconds):
+        stream_name, buffer = streams[key.fd]
+        chunk = os.read(key.fd, 64 * 1024)
+        if not chunk:
+            selector.unregister(key.fd)
+            continue
+        buffer.extend(chunk)
+        if len(buffer) > MAX_TOOL_OUTPUT_BYTES:
+            _terminate_process_group(process)
+            raise LocalToolOutputLimit(
+                f"Local tool {stream_name} exceeded {MAX_TOOL_OUTPUT_BYTES} bytes."
+            )
 
 
 def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
