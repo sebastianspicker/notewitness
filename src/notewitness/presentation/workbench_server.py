@@ -132,6 +132,33 @@ _ASSETS = {
     "/assets/styles/panels.css": ("styles/panels.css", _CSS_TYPE),
     "/assets/styles/forms.css": ("styles/forms.css", _CSS_TYPE),
 }
+_POST_ERROR_RESPONSES = (
+    ((ProjectConflictError,), HTTPStatus.CONFLICT, "project_changed"),
+    (
+        (WorkbenchError, ValueError, LocalArtifactError, MusicExportError),
+        HTTPStatus.UNPROCESSABLE_ENTITY,
+        None,
+    ),
+    (
+        (MediaIngestError, ProjectStoreError, WorkbenchProcessingError),
+        HTTPStatus.CONFLICT,
+        None,
+    ),
+    ((sqlite3.Error,), HTTPStatus.INTERNAL_SERVER_ERROR, "job_store_failed"),
+    ((OSError,), HTTPStatus.INTERNAL_SERVER_ERROR, "local_io_failed"),
+)
+_POST_ERRORS = (
+    ProjectConflictError,
+    WorkbenchError,
+    ValueError,
+    LocalArtifactError,
+    MusicExportError,
+    MediaIngestError,
+    ProjectStoreError,
+    WorkbenchProcessingError,
+    sqlite3.Error,
+    OSError,
+)
 
 
 class WorkbenchServerError(RuntimeError):
@@ -266,55 +293,40 @@ class WorkbenchRequestHandler(BaseHTTPRequestHandler):
         if path is None:
             return
         try:
-            if path == "/api/review/accept":
-                self._accept_review()
-            elif path == "/api/review/relations/accept":
-                self._accept_relation_review()
-            elif path == "/api/review/relations/reject":
-                self._reject_relation_review()
-            elif path == "/api/review/revise":
-                self._revise_annotation()
-            elif path == "/api/bookmarks":
-                self._create_bookmark()
-            elif path == "/api/actors":
-                self._create_actor()
-            elif path == "/api/practice":
-                self._update_practice()
-            elif path == "/api/tuner":
-                self._tuner()
-            elif path == "/api/metronome":
-                self._metronome()
-            elif path == "/api/captures":
-                self._capture()
-            elif path == "/api/imports":
-                self._import_media()
-            elif path == "/api/exports/music":
-                self._export_music()
-            elif path == "/api/exports/transcript":
-                self._export_transcript()
-            elif path == "/api/jobs":
-                self._enqueue_job()
-            elif path.startswith("/api/jobs/"):
-                self._job_action(path)
-            else:
-                self._json_error(HTTPStatus.NOT_FOUND, "route_not_found")
-        except ProjectConflictError:
-            self._json_error(HTTPStatus.CONFLICT, "project_changed")
-        except (WorkbenchError, ValueError) as exc:
-            self._json_error(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc))
-        except (LocalArtifactError, MusicExportError) as exc:
-            self._json_error(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc))
-        except (MediaIngestError, ProjectStoreError) as exc:
-            self._json_error(HTTPStatus.CONFLICT, str(exc))
-        except WorkbenchProcessingError as exc:
-            self._json_error(HTTPStatus.CONFLICT, str(exc))
-        except sqlite3.Error:
-            self._json_error(HTTPStatus.INTERNAL_SERVER_ERROR, "job_store_failed")
-        except OSError:
-            self._json_error(
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                "local_io_failed",
-            )
+            self._dispatch_post(path)
+        except _POST_ERRORS as exc:
+            self._post_error(exc)
+
+    def _post_error(self, error: Exception) -> None:
+        for error_types, status, code in _POST_ERROR_RESPONSES:
+            if isinstance(error, error_types):
+                self._json_error(status, str(error) if code is None else code)
+                return
+        raise AssertionError("Unhandled POST error type.")
+
+    def _dispatch_post(self, path: str) -> None:
+        handler = {
+            "/api/review/accept": self._accept_review,
+            "/api/review/relations/accept": self._accept_relation_review,
+            "/api/review/relations/reject": self._reject_relation_review,
+            "/api/review/revise": self._revise_annotation,
+            "/api/bookmarks": self._create_bookmark,
+            "/api/actors": self._create_actor,
+            "/api/practice": self._update_practice,
+            "/api/tuner": self._tuner,
+            "/api/metronome": self._metronome,
+            "/api/captures": self._capture,
+            "/api/imports": self._import_media,
+            "/api/exports/music": self._export_music,
+            "/api/exports/transcript": self._export_transcript,
+            "/api/jobs": self._enqueue_job,
+        }.get(path)
+        if handler is not None:
+            handler()
+        elif path.startswith("/api/jobs/"):
+            self._job_action(path)
+        else:
+            self._json_error(HTTPStatus.NOT_FOUND, "route_not_found")
 
     def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
         method = self.command if self.command in {"GET", "HEAD", "POST"} else "OTHER"
@@ -325,7 +337,7 @@ class WorkbenchRequestHandler(BaseHTTPRequestHandler):
             f"notewitness-workbench: {method} {route} {safe_code} {safe_size}\n"
         )
 
-    def log_message(self, format_string: str, *args: object) -> None:
+    def log_message(self, *_args: object) -> None:
         # BaseHTTPRequestHandler error strings may include raw request targets.
         # Request completion is already recorded by the redacted log_request().
         return
@@ -336,11 +348,7 @@ class WorkbenchRequestHandler(BaseHTTPRequestHandler):
         path = self._request_path()
         if path is None:
             return
-        if path in _ASSETS:
-            self._asset(path, send_body=send_body)
-            return
-        if path.startswith(_LAUNCH_PATH_PREFIX):
-            self._launch(path, send_body=send_body)
+        if self._dispatch_public_get(path, send_body=send_body):
             return
         if not self._session_is_authenticated():
             self._json_error(
@@ -349,32 +357,31 @@ class WorkbenchRequestHandler(BaseHTTPRequestHandler):
                 send_body=send_body,
             )
             return
-        if path == "/api/workbench":
-            try:
-                payload = project_workbench(str(self.server.project_root))
-                payload["csrf_token"] = self.server.csrf_token
-                self._json(HTTPStatus.OK, payload, send_body=send_body)
-            except (WorkbenchError, ProjectStoreError, ValueError):
-                self._json_error(
-                    HTTPStatus.INTERNAL_SERVER_ERROR,
-                    "project_projection_failed",
-                    send_body=send_body,
-                )
+        if self._dispatch_private_get(path, send_body=send_body):
             return
-        if path == "/api/jobs":
-            try:
-                self._json(
-                    HTTPStatus.OK,
-                    self.server.processing.snapshot(),
-                    send_body=send_body,
-                )
-            except (WorkbenchProcessingError, OSError, sqlite3.Error):
-                self._json_error(
-                    HTTPStatus.INTERNAL_SERVER_ERROR,
-                    "job_store_failed",
-                    send_body=send_body,
-                )
-            return
+        self._json_error(
+            HTTPStatus.NOT_FOUND,
+            "route_not_found",
+            send_body=send_body,
+        )
+
+    def _dispatch_public_get(self, path: str, *, send_body: bool) -> bool:
+        if path in _ASSETS:
+            self._asset(path, send_body=send_body)
+            return True
+        if path.startswith(_LAUNCH_PATH_PREFIX):
+            self._launch(path, send_body=send_body)
+            return True
+        return False
+
+    def _dispatch_private_get(self, path: str, *, send_body: bool) -> bool:
+        handler = {
+            "/api/workbench": self._workbench_snapshot,
+            "/api/jobs": self._job_snapshot,
+        }.get(path)
+        if handler is not None:
+            handler(send_body=send_body)
+            return True
         prefix = "/api/media/"
         if path.startswith(prefix):
             encoded_source_id = path[len(prefix) :]
@@ -386,12 +393,34 @@ class WorkbenchRequestHandler(BaseHTTPRequestHandler):
                 self._media(source_id, send_body=send_body)
             except (UnicodeError, WorkbenchError, ProjectStoreError, OSError):
                 self._json_error(HTTPStatus.NOT_FOUND, "media_not_found")
-            return
-        self._json_error(
-            HTTPStatus.NOT_FOUND,
-            "route_not_found",
-            send_body=send_body,
-        )
+            return True
+        return False
+
+    def _workbench_snapshot(self, *, send_body: bool) -> None:
+        try:
+            payload = project_workbench(str(self.server.project_root))
+            payload["csrf_token"] = self.server.csrf_token
+            self._json(HTTPStatus.OK, payload, send_body=send_body)
+        except (WorkbenchError, ProjectStoreError, ValueError):
+            self._json_error(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "project_projection_failed",
+                send_body=send_body,
+            )
+
+    def _job_snapshot(self, *, send_body: bool) -> None:
+        try:
+            self._json(
+                HTTPStatus.OK,
+                self.server.processing.snapshot(),
+                send_body=send_body,
+            )
+        except (WorkbenchProcessingError, OSError, sqlite3.Error):
+            self._json_error(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "job_store_failed",
+                send_body=send_body,
+            )
 
     def _request_is_trusted(
         self,
