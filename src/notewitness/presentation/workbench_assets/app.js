@@ -1,5 +1,4 @@
 import {
-  escapeHTML,
   humanActors,
   list,
   renderNotice,
@@ -50,10 +49,36 @@ const state = {
 const c = { state, app };
 Object.assign(c, createApi(c));
 
+function replaceMarkup(target, markup) {
+  const documentFragment = new DOMParser()
+    .parseFromString(markup, "text/html")
+    .body;
+  target.replaceChildren(...documentFragment.childNodes);
+}
+
+function renderFatalState(error) {
+  const main = document.createElement("main");
+  main.className = "fatal-state";
+  main.setAttribute("role", "alert");
+  const kicker = document.createElement("p");
+  kicker.className = "kicker";
+  kicker.textContent = "Local project unavailable";
+  const title = document.createElement("h1");
+  title.textContent = "The workbench could not open";
+  const detail = document.createElement("p");
+  detail.textContent = error?.message || "An unknown local error occurred.";
+  const retry = document.createElement("button");
+  retry.className = "primary-button";
+  retry.dataset.action = "reload";
+  retry.textContent = "Try again";
+  main.append(kicker, title, detail, retry);
+  app.replaceChildren(main);
+}
+
 function setNotice(message, kind = "info") {
   state.notice = message ? { message, kind } : null;
   const region = app.querySelector("[data-notice-region]");
-  if (region) region.innerHTML = renderNotice(state.notice);
+  if (region) replaceMarkup(region, renderNotice(state.notice));
 }
 
 function setBusy(key, busy) {
@@ -74,7 +99,7 @@ async function runMutation(key, activity, operation) {
     return true;
   } catch (error) {
     if (error.status === 409) {
-      await load({ preservePlayback: true, quiet: true }).catch(() => {});
+      await load({ preservePlayback: true, quiet: true }).catch(() => undefined);
       setNotice("The project changed in another action. The latest local version is shown; please try again.", "error");
     } else {
       setNotice(`${activity} could not be completed: ${error.message}`, "error");
@@ -86,7 +111,7 @@ async function runMutation(key, activity, operation) {
 }
 
 function render(restore = null) {
-  app.innerHTML = renderWorkbench(state);
+  replaceMarkup(app, renderWorkbench(state));
   c.bindMedia(restore);
   c.openRenderedDialog();
   if (state.pendingFocus) {
@@ -103,7 +128,7 @@ function renderPreservingPlayback() {
 
 function refreshPanel() {
   const panel = app.querySelector("[data-workspace-panel]");
-  if (panel) panel.innerHTML = renderPanel(state);
+  if (panel) replaceMarkup(panel, renderPanel(state));
   app.querySelectorAll("[data-tab]").forEach((tab) => {
     const selected = tab.dataset.tab === state.activePanel;
     if (tab.getAttribute("role") === "tab") {
@@ -115,13 +140,17 @@ function refreshPanel() {
 
 function refreshTimeline() {
   const root = app.querySelector("[data-timeline-root]");
-  if (root) root.innerHTML = renderTimeline(state);
+  if (root) replaceMarkup(root, renderTimeline(state));
   c.syncPlayback();
 }
 
 function refreshProcessing() {
   const section = app.querySelector(".processing-section");
-  if (section) section.outerHTML = renderProcessing(state);
+  if (!section) return;
+  const documentFragment = new DOMParser()
+    .parseFromString(renderProcessing(state), "text/html")
+    .body;
+  section.replaceWith(...documentFragment.childNodes);
 }
 
 function selectPanel(name, focus = false) {
@@ -147,31 +176,44 @@ Object.assign(c, createPlayback(c));
 
 async function load({ preservePlayback = false, quiet = false, skipProcessing = false } = {}) {
   const restore = preservePlayback ? c.snapshotPlayback() : null;
-  if (!quiet && !state.data) app.innerHTML = '<p class="loading-state" role="status">Opening the private lesson workbench…</p>';
+  if (!quiet && !state.data) showLoadingState();
   try {
-    const dataPromise = c.request("/api/workbench");
-    const processingPromise = skipProcessing ? Promise.resolve(state.processing)
-      : c.request("/api/jobs").catch(() => ({ runtime: {}, jobs: [] }));
-    const [data, processing] = await Promise.all([dataPromise, processingPromise]);
-    state.data = data;
-    state.processing = processing || { runtime: {}, jobs: [] };
-    if (!humanActors(state).some((actor) => actor.id === state.authorId)) state.authorId = "";
-    const media = list(state.data?.media);
-    if (!media.some((item) => item.source_id === state.activeSourceId)) {
-      state.activeSourceId = media[0]?.source_id || "";
-    }
-    state.tempo = Number(state.data?.metronome?.bpm || state.tempo || 72);
-    if (!state.visibleLaneKinds.size) {
-      state.visibleLaneKinds = new Set(list(state.data?.timeline?.lanes).map((lane) => lane.kind));
-    }
+    const [data, processing] = await loadWorkbenchData(skipProcessing);
+    applyLoadedState(data, processing);
     render(restore);
-    if (list(state.processing.jobs).some((job) => ["queued", "running", "cancelling"].includes(job.state))) {
-      c.startJobPolling();
-    }
+    startPollingWhenNeeded();
   } catch (error) {
-    app.innerHTML = `<main class="fatal-state" role="alert"><p class="kicker">Local project unavailable</p>
-      <h1>The workbench could not open</h1><p>${escapeHTML(error.message)}</p>
-      <button class="primary-button" data-action="reload">Try again</button></main>`;
+    renderFatalState(error);
+  }
+}
+
+function showLoadingState() {
+  const loading = document.createElement("p");
+  loading.className = "loading-state";
+  loading.setAttribute("role", "status");
+  loading.textContent = "Opening the private lesson workbench…";
+  app.replaceChildren(loading);
+}
+
+function loadWorkbenchData(skipProcessing) {
+  const processing = skipProcessing ? Promise.resolve(state.processing)
+    : c.request("/api/jobs").catch(() => ({ runtime: {}, jobs: [] }));
+  return Promise.all([c.request("/api/workbench"), processing]);
+}
+
+function applyLoadedState(data, processing) {
+  state.data = data;
+  state.processing = processing || { runtime: {}, jobs: [] };
+  if (!humanActors(state).some((actor) => actor.id === state.authorId)) state.authorId = "";
+  const media = list(state.data?.media);
+  if (!media.some((item) => item.source_id === state.activeSourceId)) state.activeSourceId = media[0]?.source_id || "";
+  state.tempo = Number(state.data?.metronome?.bpm || state.tempo || 72);
+  if (!state.visibleLaneKinds.size) state.visibleLaneKinds = new Set(list(state.data?.timeline?.lanes).map((lane) => lane.kind));
+}
+
+function startPollingWhenNeeded() {
+  if (list(state.processing.jobs).some((job) => ["queued", "running", "cancelling"].includes(job.state))) {
+    c.startJobPolling();
   }
 }
 
@@ -190,47 +232,36 @@ function handleClick(event) {
     c.seek(Number(seekButton.dataset.seek), seekButton.dataset.source);
     return;
   }
-  const accept = event.target.closest("[data-accept]");
-  if (accept) {
-    c.acceptSuggestion(accept.dataset.accept);
-    return;
-  }
-  const acceptRelation = event.target.closest("[data-accept-relation]");
-  if (acceptRelation) {
-    c.reviewRelation(acceptRelation.dataset.acceptRelation, "accept");
-    return;
-  }
-  const rejectRelation = event.target.closest("[data-reject-relation]");
-  if (rejectRelation) {
-    c.reviewRelation(rejectRelation.dataset.rejectRelation, "reject");
-    return;
-  }
-  const revise = event.target.closest("[data-revise]");
-  if (revise) {
-    c.openRevision(revise.dataset.revise, "revise-suggestion");
-    return;
-  }
-  const edit = event.target.closest("[data-edit]");
-  if (edit) {
-    c.openRevision(edit.dataset.edit, "revise-accepted");
-    return;
-  }
-  const cancelJob = event.target.closest("[data-cancel-job]");
-  if (cancelJob) {
-    c.jobAction(cancelJob.dataset.cancelJob, "cancel");
-    return;
-  }
-  const retryJob = event.target.closest("[data-retry-job]");
-  if (retryJob) {
-    c.jobAction(retryJob.dataset.retryJob, "retry");
-    return;
-  }
+  if (handleEvidenceAction(event.target) || handleJobAction(event.target)) return;
   const actionButton = event.target.closest("[data-action]");
   if (actionButton?.dataset.action === "open-reviewer-setup") {
     c.openReviewerSetup();
     return;
   }
   if (actionButton) c.action(actionButton.dataset.action);
+}
+
+function handleEvidenceAction(target) {
+  const actions = [
+    ["[data-accept]", (button) => c.acceptSuggestion(button.dataset.accept)],
+    ["[data-accept-relation]", (button) => c.reviewRelation(button.dataset.acceptRelation, "accept")],
+    ["[data-reject-relation]", (button) => c.reviewRelation(button.dataset.rejectRelation, "reject")],
+    ["[data-revise]", (button) => c.openRevision(button.dataset.revise, "revise-suggestion")],
+    ["[data-edit]", (button) => c.openRevision(button.dataset.edit, "revise-accepted")],
+  ];
+  const match = actions.find(([selector]) => target.closest(selector));
+  if (!match) return false;
+  const button = target.closest(match[0]);
+  match[1](button);
+  return true;
+}
+
+function handleJobAction(target) {
+  const cancel = target.closest("[data-cancel-job]");
+  if (cancel) c.jobAction(cancel.dataset.cancelJob, "cancel");
+  const retry = target.closest("[data-retry-job]");
+  if (retry) c.jobAction(retry.dataset.retryJob, "retry");
+  return Boolean(cancel || retry);
 }
 
 function handleChange(event) {
@@ -273,32 +304,39 @@ function handleSubmit(event) {
 }
 
 function handleKeydown(event) {
-  const currentTab = event.target.closest('[role="tab"]');
-  if (currentTab && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-    event.preventDefault();
-    const tabs = [...app.querySelectorAll('[role="tab"]')];
-    const index = tabs.indexOf(currentTab);
-    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
-      : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-    selectPanel(tabs[nextIndex].dataset.tab, true);
-    return;
-  }
+  if (handleTabNavigation(event)) return;
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   const editing = event.target.matches("input, textarea, select, button, [contenteditable=true]");
-  if (!editing && /^[1-7]$/.test(event.key)) {
-    const lane = app.querySelector(`[data-lane] kbd:first-child`);
-    const matching = [...app.querySelectorAll("[data-lane]")].find((item) => {
-      return item.querySelector("kbd")?.textContent?.trim() === event.key;
-    });
-    if (matching || lane) {
-      event.preventDefault();
-      (matching || lane.closest("[data-lane]"))?.scrollIntoView({ block: "nearest" });
-      (matching || lane.closest("[data-lane]"))?.querySelector("button")?.focus();
-    }
+  if (!editing && handleLaneShortcut(event)) {
+    return;
   } else if (!editing && event.key === " ") {
     event.preventDefault();
     c.action("play");
   }
+}
+
+function handleTabNavigation(event) {
+  const currentTab = event.target.closest('[role="tab"]');
+  if (!currentTab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return false;
+  event.preventDefault();
+  const tabs = [...app.querySelectorAll('[role="tab"]')];
+  const index = tabs.indexOf(currentTab);
+  const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+    : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  const nextTab = tabs.find((tab, tabIndex) => tabIndex === nextIndex);
+  if (nextTab) selectPanel(nextTab.dataset.tab, true);
+  return true;
+}
+
+function handleLaneShortcut(event) {
+  if (!/^[1-7]$/.test(event.key)) return false;
+  const lanes = [...app.querySelectorAll("[data-lane]")];
+  const lane = lanes.find((item) => item.querySelector("kbd")?.textContent?.trim() === event.key) || lanes[0];
+  if (!lane) return false;
+  event.preventDefault();
+  lane.scrollIntoView({ block: "nearest" });
+  lane.querySelector("button")?.focus();
+  return true;
 }
 
 app.addEventListener("click", handleClick);

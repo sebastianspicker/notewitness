@@ -3,15 +3,16 @@ const FALLBACK = "N/A";
 export const list = (value) => Array.isArray(value) ? value : [];
 
 export function escapeHTML(value, fallback = FALLBACK) {
+  const entities = new Map([
+    ["&", "&amp;"],
+    ["<", "&lt;"],
+    [">", "&gt;"],
+    ['"', "&quot;"],
+    ["'", "&#39;"],
+  ]);
   return String(value ?? fallback).replace(
     /[&<>"']/g,
-    (character) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      "\"": "&quot;",
-      "'": "&#39;",
-    })[character],
+    (character) => entities.get(character),
   );
 }
 
@@ -48,7 +49,9 @@ export const itemDuration = (item) => Number(playback(item).duration_us ?? 0) / 
 export const itemSource = (item) => String(playback(item).source_id || "");
 
 export function sourceDurationSeconds(state, sourceId = state.activeSourceId) {
-  const measured = Number(state.mediaDurations?.[sourceId]);
+  const measured = Number(Object.entries(state.mediaDurations || {}).find(
+    ([id]) => id === sourceId,
+  )?.[1]);
   if (Number.isFinite(measured) && measured > 0) return measured;
   const projected = Number(
     list(state.data?.media).find((item) => item.source_id === sourceId)?.duration_us,
@@ -118,14 +121,14 @@ export function sourceName(state, sourceId) {
 }
 
 export function renderActorAttributionOptions(state, selectedId, requireChoice) {
-  const prompt = requireChoice
+  const choiceOption = requireChoice
     ? '<option value="" selected disabled>Choose project actor…</option>' : "";
   const options = list(state.data?.actors).filter((actor) => actor.id).map((actor) => {
     const selected = !requireChoice && actor.id === selectedId ? "selected" : "";
     const label = actor.instrument_role ? `${actor.role} · ${actor.instrument_role}` : actor.role;
     return `<option value="${escapeHTML(actor.id)}" ${selected}>${escapeHTML(label)}</option>`;
   }).join("");
-  return prompt + options;
+  return choiceOption + options;
 }
 
 export function renderConfidence(confidence) {
@@ -143,14 +146,15 @@ export function renderPairs(pairs) {
 }
 
 export function modalityLabel(modality) {
-  return {
-    speech_transcription: "speech transcription",
-    activity_segmentation: "speech/music activity segmentation",
-    anonymous_diarization: "anonymous speaker diarization",
-    note_transcription: "note transcription",
-    instrument_detection: "instrument detection",
-    instrument_diarization: "instrument diarization",
-  }[modality] || String(modality).replaceAll("_", " ");
+  const labels = new Map([
+    ["speech_transcription", "speech transcription"],
+    ["activity_segmentation", "speech/music activity segmentation"],
+    ["anonymous_diarization", "anonymous speaker diarization"],
+    ["note_transcription", "note transcription"],
+    ["instrument_detection", "instrument detection"],
+    ["instrument_diarization", "instrument diarization"],
+  ]);
+  return labels.get(modality) || String(modality).replaceAll("_", " ");
 }
 
 export function mediaCount(state) {
@@ -168,58 +172,63 @@ export function isMultiSource(state) {
  */
 export function formatMusicalSelector(selector) {
   if (!selector || typeof selector !== "object") return "";
+  const position = formatBarAndBeat(selector);
+  return position || firstText(selector.phrase, selector.label);
+}
+
+function formatBarAndBeat(selector) {
   const barStart = selector.bar_start ?? selector.bar ?? selector.measure;
   const barEnd = selector.bar_end ?? selector.measure_end;
   const beat = selector.beat ?? selector.beat_start;
-  const parts = [];
-  if (Number.isFinite(Number(barStart)) && Number.isFinite(Number(barEnd))
-    && Number(barEnd) !== Number(barStart)) {
-    parts.push(`bars ${Number(barStart)}–${Number(barEnd)}`);
-  } else if (Number.isFinite(Number(barStart))) {
-    parts.push(`bar ${Number(barStart)}`);
+  const bar = formatBarRange(barStart, barEnd);
+  const beatLabel = finiteLabel("beat", beat);
+  return [bar, beatLabel].filter(Boolean).join(" · ");
+}
+
+function formatBarRange(start, end) {
+  if (!Number.isFinite(Number(start))) return "";
+  if (Number.isFinite(Number(end)) && Number(end) !== Number(start)) {
+    return `bars ${Number(start)}–${Number(end)}`;
   }
-  if (Number.isFinite(Number(beat))) {
-    parts.push(`beat ${Number(beat)}`);
-  }
-  if (!parts.length && typeof selector.phrase === "string" && selector.phrase.trim()) {
-    parts.push(selector.phrase.trim());
-  }
-  if (!parts.length && typeof selector.label === "string" && selector.label.trim()) {
-    parts.push(selector.label.trim());
-  }
-  return parts.join(" · ");
+  return finiteLabel("bar", start);
+}
+
+function finiteLabel(label, value) {
+  return Number.isFinite(Number(value)) ? `${label} ${Number(value)}` : "";
+}
+
+function firstText(...values) {
+  return values.find((value) => typeof value === "string" && value.trim())?.trim() || "";
 }
 
 function collectMusicalMarkers(state, sourceId = state.activeSourceId) {
-  const lesson = state.data?.lesson || {};
-  const records = [
-    ...list(lesson.activity),
-    ...list(lesson.full_transcript),
-    ...list(lesson.transcript_suggestions),
-    ...list(lesson.summary?.key_moments),
-    ...list(lesson.relation_suggestions),
-  ];
-  const markers = [];
-  for (const record of records) {
-    for (const point of list(record?.anchors).length ? list(record.anchors) : [record]) {
-      const span = point?.span || point?.playback || point;
-      const selector = point?.musical_selector;
-      const label = formatMusicalSelector(selector);
-      const sid = String(span?.source_id || point?.source_id || "");
-      if (!label || (sourceId && sid && sid !== sourceId)) continue;
-      const start = Number(span?.start_us ?? 0) / 1e6;
-      const duration = Number(span?.duration_us ?? 0) / 1e6;
-      if (!Number.isFinite(start)) continue;
-      markers.push({
-        start,
-        end: start + (Number.isFinite(duration) && duration > 0 ? duration : 0),
-        label,
-        alignment: String(point?.alignment_state || ""),
-      });
-    }
-  }
+  const markers = musicalRecords(state).flatMap((record) => musicalPoints(record)
+    .map((point) => markerForPoint(point, sourceId))
+    .filter(Boolean));
   markers.sort((a, b) => a.start - b.start || a.end - b.end);
   return markers;
+}
+
+function musicalRecords(state) {
+  const lesson = state.data?.lesson || {};
+  return [lesson.activity, lesson.full_transcript, lesson.transcript_suggestions,
+    lesson.summary?.key_moments, lesson.relation_suggestions].flatMap(list);
+}
+
+function musicalPoints(record) {
+  const anchors = list(record?.anchors);
+  return anchors.length ? anchors : [record];
+}
+
+function markerForPoint(point, sourceId) {
+  const span = point?.span || point?.playback || point;
+  const label = formatMusicalSelector(point?.musical_selector);
+  const sid = String(span?.source_id || point?.source_id || "");
+  const start = Number(span?.start_us ?? 0) / 1e6;
+  if (!label || (sourceId && sid && sid !== sourceId) || !Number.isFinite(start)) return null;
+  const duration = Number(span?.duration_us ?? 0) / 1e6;
+  return { start, end: start + (Number.isFinite(duration) && duration > 0 ? duration : 0), label,
+    alignment: String(point?.alignment_state || "") };
 }
 
 /** Whether any musical-time anchors exist for the active (or given) source. */

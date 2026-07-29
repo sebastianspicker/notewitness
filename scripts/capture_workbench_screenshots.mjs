@@ -138,9 +138,7 @@ function screenshot(htmlPath, pngPath) {
   }
 }
 
-const { renderWorkbench } = await import(
-  pathToFileURL(path.join(assetsRoot, "workbench_ui.mjs")).href
-);
+const { renderWorkbench } = await import("/assets/workbench_ui.mjs");
 
 const snapshot = exportSnapshot();
 const css = expandCss(path.join(assetsRoot, "app.css"));

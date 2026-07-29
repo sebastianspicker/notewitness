@@ -141,49 +141,44 @@ export function createActions(c) {
     const dialog = c.state.dialog;
     if (!dialog) return;
     const values = new FormData(form);
-    if (dialog.mode === "reviewer-setup") {
-      const role = String(values.get("role") || "").trim();
-      if (!role) return;
-      const bytes = new Uint8Array(12);
-      crypto.getRandomValues(bytes);
-      const actorId = `actor:local-${Array.from(bytes, (item) => item.toString(16).padStart(2, "0")).join("")}`;
-      const saved = await c.runMutation("reviewer-setup", "Creating local reviewer", async () => {
-        await c.request("/api/actors", {
-          method: "POST",
-          headers: c.actionHeaders(),
-          body: JSON.stringify({ actor_id: actorId, role, project_sha256: c.projectSha() }),
-        });
-        c.state.authorId = actorId;
-        c.state.dialog = null;
-        await c.load({ preservePlayback: true, quiet: true });
-      });
-      if (saved) c.setNotice("Local reviewer created. You can now record and review evidence.", "success");
-      return;
-    }
+    if (dialog.mode === "reviewer-setup") return submitReviewerSetup(values);
     const author = requireHumanActor();
     if (!author) return;
-    if (dialog.mode === "bookmark") {
-      const label = String(values.get("label") || "").trim();
-      if (!label) return;
-      const saved = await c.runMutation("bookmark", "Saving exact-time bookmark", async () => {
-        await c.request("/api/bookmarks", {
-          method: "POST",
-          headers: c.actionHeaders(),
-          body: JSON.stringify({
-            source_id: c.state.activeSourceId,
-            start_us: Math.round(dialog.timeSeconds * 1e6),
-            duration_us: 0,
-            label,
-            author_id: author.id,
-            project_sha256: c.projectSha(),
-          }),
-        });
-        c.state.dialog = null;
-        await c.load({ preservePlayback: true, quiet: true });
-      });
-      if (saved) c.setNotice("Bookmark saved to this private project.", "success");
-      return;
-    }
+    if (dialog.mode === "bookmark") return submitBookmark(dialog, values, author);
+    return submitRevision(dialog, values, author);
+  }
+
+  async function submitReviewerSetup(values) {
+    const role = String(values.get("role") || "").trim();
+    if (!role) return;
+    const bytes = new Uint8Array(12);
+    crypto.getRandomValues(bytes);
+    const actorId = `actor:local-${Array.from(bytes, (item) => item.toString(16).padStart(2, "0")).join("")}`;
+    const saved = await c.runMutation("reviewer-setup", "Creating local reviewer", async () => {
+      await c.request("/api/actors", { method: "POST", headers: c.actionHeaders(),
+        body: JSON.stringify({ actor_id: actorId, role, project_sha256: c.projectSha() }) });
+      c.state.authorId = actorId;
+      c.state.dialog = null;
+      await c.load({ preservePlayback: true, quiet: true });
+    });
+    if (saved) c.setNotice("Local reviewer created. You can now record and review evidence.", "success");
+  }
+
+  async function submitBookmark(dialog, values, author) {
+    const label = String(values.get("label") || "").trim();
+    if (!label) return;
+    const saved = await c.runMutation("bookmark", "Saving exact-time bookmark", async () => {
+      await c.request("/api/bookmarks", { method: "POST", headers: c.actionHeaders(), body: JSON.stringify({
+        source_id: c.state.activeSourceId, start_us: Math.round(dialog.timeSeconds * 1e6), duration_us: 0,
+        label, author_id: author.id, project_sha256: c.projectSha(),
+      }) });
+      c.state.dialog = null;
+      await c.load({ preservePlayback: true, quiet: true });
+    });
+    if (saved) c.setNotice("Bookmark saved to this private project.", "success");
+  }
+
+  async function submitRevision(dialog, values, author) {
     const replacementText = String(values.get("replacement_text") || "").trim();
     const reason = String(values.get("reason") || "").trim();
     if (!replacementText || !reason) return;
@@ -271,9 +266,7 @@ export function createActions(c) {
       );
       return;
     }
-    const extension = format === "midi" ? "mid" : "csv";
-    const timestamp = new Date().toISOString().replaceAll(":", "-");
-    const filename = `notewitness-notes-${timestamp}.${extension}`;
+    const filename = musicExportFilename(format);
     let result = null;
     const saved = await c.runMutation("music-export", `Creating ${format.toUpperCase()} export`, async () => {
       result = await c.request("/api/exports/music", {
@@ -288,13 +281,18 @@ export function createActions(c) {
         }),
       });
     });
-    if (saved) {
-      const losses = list(result?.documented_losses).length;
-      c.setNotice(
-        `${result?.filename || filename} saved locally with ${result?.record_count || 0} notes${losses ? ` and ${losses} documented projection loss${losses === 1 ? "" : "es"}` : ""}.`,
-        "success",
-      );
-    }
+    if (saved) c.setNotice(musicExportNotice(result, filename), "success");
+  }
+
+  function musicExportFilename(format) {
+    const extension = format === "midi" ? "mid" : "csv";
+    return `notewitness-notes-${new Date().toISOString().replaceAll(":", "-")}.${extension}`;
+  }
+
+  function musicExportNotice(result, filename) {
+    const losses = list(result?.documented_losses).length;
+    const lossSummary = losses ? ` and ${losses} documented projection loss${losses === 1 ? "" : "es"}` : "";
+    return `${result?.filename || filename} saved locally with ${result?.record_count || 0} notes${lossSummary}.`;
   }
 
   async function exportTranscript() {

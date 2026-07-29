@@ -31,7 +31,7 @@ export function renderWorkbench(state) {
       </div>
       <div class="workbench-layout body">
         <aside class="tool-rail col col-side col-left" aria-label="Sources, processing, and music tools">
-          ${renderSources(state, lesson)}
+          ${renderSources(state)}
           ${renderProcessing(state)}
           ${renderUtilities(state)}
         </aside>
@@ -108,7 +108,7 @@ function renderWorkspaceTabs(state) {
   </nav>`;
 }
 
-function renderSources(state, lesson) {
+function renderSources(state) {
   const media = list(state.data?.media);
   const activeName = sourceName(state, state.activeSourceId);
   const multi = media.length > 1;
