@@ -7,7 +7,7 @@ import {
   itemSource,
   itemTime,
   list,
-  renderActorAttributionOptions,
+  renderActorAttributionOptionsHTML,
   renderConfidence,
   renderPairs,
   reviewItems,
@@ -68,7 +68,7 @@ function renderReviewItem(state, item, index) {
     <blockquote class="claim">${escapeHTML(item.display_text)}</blockquote>
     <div class="review-controls adjudicate"><label class="field">Attribute to
       <select class="attribution" data-attribution="${eventId}">
-        ${renderActorAttributionOptions(state, item.actor_id, true)}
+        ${renderActorAttributionOptionsHTML(state, item.actor_id, true)}
       </select></label><div class="row-actions actions">
         ${canRevise ? `<button class="secondary-button" data-revise="${eventId}" ${actor ? "" : "disabled"}>Revise</button>` : ""}
         <button class="primary-button" data-accept="${eventId}" data-busy-key="review-${eventId}" ${actor ? "" : "disabled"}>Accept${index < reviewItems(state).length - 1 ? " & next" : ""}</button>
@@ -94,7 +94,7 @@ function renderTranscriptItem(state, item) {
       <span>${escapeHTML(item.actor_role, "unattributed")}</span><span>${escapeHTML(item.review_status, "accepted")}</span></div>
       <p class="claim">${escapeHTML(item.display_text)}</p></div>
     ${editable ? `<label class="compact-attribution">Attributed actor<select data-attribution="${eventId}">
-      ${renderActorAttributionOptions(state, item.actor_id, false)}</select></label>
+      ${renderActorAttributionOptionsHTML(state, item.actor_id, false)}</select></label>
       <button class="secondary-button" data-edit="${eventId}">Edit</button>` : ""}
   </li>`;
 }

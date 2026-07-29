@@ -194,78 +194,143 @@ def _source_filter(payload: Mapping[str, Any], source_id: str | None) -> str | N
 def _extract_notes(
     payload: Mapping[str, Any], selected_source_id: str | None
 ) -> tuple[SymbolicNote, ...]:
-    targets = {
-        item.get("id"): item
+    targets = _targets_by_id(payload)
+    events = tuple(item for item in payload.get("events", ()) if isinstance(item, Mapping))
+    accepted_sources = _accepted_note_suggestion_ids(events)
+    notes = [
+        note
+        for event in events
+        for note in _event_notes(event, targets, accepted_sources, selected_source_id)
+    ]
+    if len(notes) > MAX_EXPORTED_NOTES:
+        raise MusicExportError(f"Symbolic export is limited to {MAX_EXPORTED_NOTES} notes.")
+    return tuple(sorted(notes, key=_note_sort_key))
+
+
+def _targets_by_id(payload: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    return {
+        item["id"]: item
         for item in payload.get("targets", ())
         if isinstance(item, Mapping) and isinstance(item.get("id"), str)
     }
-    events = payload.get("events", ())
-    accepted_sources = {
+
+
+def _accepted_note_suggestion_ids(events: Iterable[Mapping[str, Any]]) -> set[str]:
+    return {
         body["source_suggestion_id"]
         for event in events
-        if isinstance(event, Mapping)
-        and event.get("type") == "local:note"
+        if event.get("type") == "local:note"
         and event.get("review_status") == "human_accepted"
         and isinstance((body := event.get("body")), Mapping)
         and isinstance(body.get("source_suggestion_id"), str)
     }
-    notes: list[SymbolicNote] = []
-    for event in events:
-        if not isinstance(event, Mapping) or event.get("type") != "local:note":
-            continue
-        if event.get("review_status") not in _EXPORTABLE_STATUSES:
-            continue
-        event_id = event.get("id")
-        body = event.get("body")
-        if not isinstance(event_id, str) or not isinstance(body, Mapping):
-            raise MusicExportError("local:note evidence must have an ID and structured body.")
-        if event.get("review_status") == "machine_suggested" and event_id in accepted_sources:
-            continue
-        value = body.get("value")
-        pitch = value.get("midi_pitch") if isinstance(value, Mapping) else None
-        if not isinstance(pitch, (int, float)) or isinstance(pitch, bool) or not math.isfinite(pitch) or not 0 <= pitch <= 127:
-            raise MusicExportError(f"Note {event_id!r} has an invalid MIDI pitch.")
-        for target_id in event.get("target_ids", ()):
-            target = targets.get(target_id)
-            if not isinstance(target, Mapping):
-                raise MusicExportError(f"Note {event_id!r} targets no source span.")
-            selector = target.get("selector")
-            if not isinstance(selector, Mapping):
-                raise MusicExportError(f"Note {event_id!r} target {target_id!r} has no source span.")
-            start_us, duration_us = selector.get("start_us"), selector.get("duration_us")
-            if any(not isinstance(item, int) or isinstance(item, bool) for item in (start_us, duration_us)) or start_us < 0 or duration_us <= 0:
-                raise MusicExportError(f"Note {event_id!r} target {target_id!r} has invalid timing.")
-            target_source_id, stream_id = target.get("source_id"), selector.get("stream_id")
-            if not isinstance(target_source_id, str) or not isinstance(stream_id, str) or not stream_id:
-                raise MusicExportError(f"Note {event_id!r} target {target_id!r} has invalid source span.")
-            if selected_source_id is not None and selected_source_id != target_source_id:
-                continue
-            track_id = _track_id(value, target)
-            frequency_hz = _optional_finite_number(value, "frequency_hz", minimum=0.0, inclusive=False)
-            amplitude = _optional_finite_number(value, "amplitude", minimum=0.0, maximum=1.0)
-            velocity = _optional_velocity(value)
-            bends, bend_unit = _pitch_bends(value)
-            notes.append(
-                SymbolicNote(
-                    event_id=event_id,
-                    target_id=target_id,
-                    source_id=target_source_id,
-                    stream_id=stream_id,
-                    start_us=start_us,
-                    duration_us=duration_us,
-                    midi_pitch=float(pitch),
-                    frequency_hz=frequency_hz,
-                    amplitude=amplitude,
-                    velocity=velocity,
-                    pitch_bend_values=bends,
-                    pitch_bend_unit=bend_unit,
-                    instrument_track_id=track_id,
-                    review_status=str(event["review_status"]),
-                )
+
+
+def _event_notes(
+    event: Mapping[str, Any],
+    targets: Mapping[str, Mapping[str, Any]],
+    accepted_sources: set[str],
+    selected_source_id: str | None,
+) -> tuple[SymbolicNote, ...]:
+    if not _is_exportable_note(event, accepted_sources):
+        return ()
+    event_id, value, status = _note_parts(event)
+    return tuple(
+        note
+        for target_id in event.get("target_ids", ())
+        if isinstance(target_id, str)
+        if (
+            note := _note_from_target(
+                event_id, status, value, target_id, targets, selected_source_id
             )
-    if len(notes) > MAX_EXPORTED_NOTES:
-        raise MusicExportError(f"Symbolic export is limited to {MAX_EXPORTED_NOTES} notes.")
-    return tuple(sorted(notes, key=lambda note: (note.start_us, note.instrument_track_id or "", note.midi_pitch, note.event_id, note.target_id)))
+        ) is not None
+    )
+
+
+def _is_exportable_note(event: Mapping[str, Any], accepted_sources: set[str]) -> bool:
+    status = event.get("review_status")
+    return (
+        event.get("type") == "local:note"
+        and status in _EXPORTABLE_STATUSES
+        and not (status == "machine_suggested" and event.get("id") in accepted_sources)
+    )
+
+
+def _note_parts(event: Mapping[str, Any]) -> tuple[str, Mapping[str, Any], str]:
+    event_id, body, status = event.get("id"), event.get("body"), event.get("review_status")
+    if not isinstance(event_id, str) or not isinstance(body, Mapping):
+        raise MusicExportError("local:note evidence must have an ID and structured body.")
+    value = body.get("value")
+    pitch = value.get("midi_pitch") if isinstance(value, Mapping) else None
+    if not _valid_midi_pitch(pitch):
+        raise MusicExportError(f"Note {event_id!r} has an invalid MIDI pitch.")
+    return event_id, value, str(status)
+
+
+def _valid_midi_pitch(value: Any) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and 0 <= value <= 127
+    )
+
+
+def _note_from_target(
+    event_id: str,
+    review_status: str,
+    value: Mapping[str, Any],
+    target_id: str,
+    targets: Mapping[str, Mapping[str, Any]],
+    selected_source_id: str | None,
+) -> SymbolicNote | None:
+    target = targets.get(target_id)
+    if target is None:
+        raise MusicExportError(f"Note {event_id!r} targets no source span.")
+    source_id, stream_id, start_us, duration_us = _target_span(event_id, target_id, target)
+    if selected_source_id is not None and source_id != selected_source_id:
+        return None
+    bends, bend_unit = _pitch_bends(value)
+    return SymbolicNote(
+        event_id, target_id, source_id, stream_id, start_us, duration_us,
+        float(value["midi_pitch"]),
+        _optional_finite_number(value, "frequency_hz", minimum=0.0, inclusive=False),
+        _optional_finite_number(value, "amplitude", minimum=0.0, maximum=1.0),
+        _optional_velocity(value), bends, bend_unit, _track_id(value, target), review_status,
+    )
+
+
+def _target_span(
+    event_id: str, target_id: str, target: Mapping[str, Any]
+) -> tuple[str, str, int, int]:
+    selector = target.get("selector")
+    if not isinstance(selector, Mapping):
+        raise MusicExportError(f"Note {event_id!r} target {target_id!r} has no source span.")
+    start_us, duration_us = selector.get("start_us"), selector.get("duration_us")
+    if not _valid_timing(start_us, duration_us):
+        raise MusicExportError(f"Note {event_id!r} target {target_id!r} has invalid timing.")
+    source_id, stream_id = target.get("source_id"), selector.get("stream_id")
+    if not isinstance(source_id, str) or not isinstance(stream_id, str) or not stream_id:
+        raise MusicExportError(f"Note {event_id!r} target {target_id!r} has invalid source span.")
+    return source_id, stream_id, start_us, duration_us
+
+
+def _valid_timing(start_us: Any, duration_us: Any) -> bool:
+    return (
+        isinstance(start_us, int)
+        and not isinstance(start_us, bool)
+        and isinstance(duration_us, int)
+        and not isinstance(duration_us, bool)
+        and start_us >= 0
+        and duration_us > 0
+    )
+
+
+def _note_sort_key(note: SymbolicNote) -> tuple[int, str, float, str, str]:
+    return (
+        note.start_us, note.instrument_track_id or "", note.midi_pitch,
+        note.event_id, note.target_id,
+    )
 
 
 def _optional_finite_number(
@@ -279,17 +344,23 @@ def _optional_finite_number(
     candidate = value.get(key) if isinstance(value, Mapping) else None
     if candidate is None:
         return None
-    valid_number = (
-        isinstance(candidate, (int, float))
-        and not isinstance(candidate, bool)
-        and math.isfinite(candidate)
-    )
-    if not valid_number:
+    if not _finite_number(candidate):
         raise MusicExportError(f"Note evidence has an invalid {key} value.")
-    lower_ok = candidate >= minimum if inclusive else candidate > minimum
-    if not lower_ok or (maximum is not None and candidate > maximum):
+    if not _within_bounds(candidate, minimum, maximum, inclusive):
         raise MusicExportError(f"Note evidence has an invalid {key} value.")
     return float(candidate)
+
+
+def _finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _within_bounds(
+    value: float, minimum: float, maximum: float | None, inclusive: bool
+) -> bool:
+    return (value >= minimum if inclusive else value > minimum) and (
+        maximum is None or value <= maximum
+    )
 
 
 def _optional_velocity(value: Mapping[str, Any] | Any) -> int | None:
@@ -305,24 +376,27 @@ def _pitch_bends(value: Mapping[str, Any] | Any) -> tuple[tuple[float, ...], str
     raw = value.get("pitch_bend_values") if isinstance(value, Mapping) else None
     unit = value.get("pitch_bend_unit") if isinstance(value, Mapping) else None
     if raw is None:
-        if unit is not None:
-            raise MusicExportError("Note evidence has a pitch-bend unit without values.")
-        return (), None
-    if (
-        not isinstance(raw, list)
-        or not raw
-        or len(raw) > 100_000
-        or any(
-            not isinstance(item, (int, float))
-            or isinstance(item, bool)
-            or not math.isfinite(item)
-            for item in raw
-        )
-        or not isinstance(unit, str)
-        or not unit
-    ):
+        return _absent_pitch_bends(unit)
+    if not _valid_pitch_bends(raw, unit):
         raise MusicExportError("Note evidence has invalid pitch-bend values or units.")
     return tuple(float(item) for item in raw), unit
+
+
+def _absent_pitch_bends(unit: Any) -> tuple[tuple[float, ...], None]:
+    if unit is not None:
+        raise MusicExportError("Note evidence has a pitch-bend unit without values.")
+    return (), None
+
+
+def _valid_pitch_bends(raw: Any, unit: Any) -> bool:
+    return (
+        isinstance(raw, list)
+        and bool(raw)
+        and len(raw) <= 100_000
+        and all(_finite_number(item) for item in raw)
+        and isinstance(unit, str)
+        and bool(unit)
+    )
 
 
 def _track_id(value: Mapping[str, Any] | Any, target: Mapping[str, Any]) -> str | None:
@@ -342,25 +416,50 @@ def _projection_losses(notes: tuple[SymbolicNote, ...], export_format: MusicExpo
     if export_format is MusicExportFormat.CSV or not notes:
         return ()
     ids = _unique_event_ids(notes)
-    losses = [ProjectionLoss("source_span_provenance", "Standard MIDI events cannot retain source, target, review, or rights provenance.", LossSeverity.LOSSY, ids)]
-    fractional = _unique_event_ids(note for note in notes if not note.midi_pitch.is_integer())
-    if fractional:
-        losses.append(ProjectionLoss("midi_pitch", "Standard MIDI 1.0 note numbers are integers; fractional pitches are rounded.", LossSeverity.LOSSY, fractional))
-    quantized = _unique_event_ids(
+    losses = [_provenance_loss(ids)]
+    for field, reason, affected in _conditional_losses(notes):
+        if affected:
+            losses.append(ProjectionLoss(field, reason, LossSeverity.LOSSY, affected))
+    return tuple(losses)
+
+
+def _provenance_loss(ids: tuple[str, ...]) -> ProjectionLoss:
+    return ProjectionLoss(
+        "source_span_provenance",
+        "Standard MIDI events cannot retain source, target, review, or rights provenance.",
+        LossSeverity.LOSSY,
+        ids,
+    )
+
+
+def _conditional_losses(
+    notes: tuple[SymbolicNote, ...],
+) -> tuple[tuple[str, str, tuple[str, ...]], ...]:
+    return (
+        ("midi_pitch", "Standard MIDI 1.0 note numbers are integers; fractional pitches are rounded.", _fractional_pitch_ids(notes)),
+        ("timing", "Standard MIDI timing is quantized to one millisecond in this deterministic projection.", _quantized_timing_ids(notes)),
+        ("amplitude", "Provider amplitude is not equivalent to MIDI velocity and is omitted from this projection.", _amplitude_ids(notes)),
+        ("pitch_bends", "Per-note pitch-bend curves require an explicit channel/range policy and are omitted from this MIDI projection.", _pitch_bend_ids(notes)),
+        ("overlapping_same_pitch", "Overlapping notes that round to the same MIDI pitch on one source track are merged to avoid premature note-off playback.", _overlapping_same_pitch_ids(notes)),
+    )
+
+
+def _fractional_pitch_ids(notes: tuple[SymbolicNote, ...]) -> tuple[str, ...]:
+    return _unique_event_ids(note for note in notes if not note.midi_pitch.is_integer())
+
+
+def _quantized_timing_ids(notes: tuple[SymbolicNote, ...]) -> tuple[str, ...]:
+    return _unique_event_ids(
         note for note in notes if note.start_us % 1_000 or note.duration_us % 1_000
     )
-    if quantized:
-        losses.append(ProjectionLoss("timing", "Standard MIDI timing is quantized to one millisecond in this deterministic projection.", LossSeverity.LOSSY, quantized))
-    amplitudes = _unique_event_ids(note for note in notes if note.amplitude is not None)
-    if amplitudes:
-        losses.append(ProjectionLoss("amplitude", "Provider amplitude is not equivalent to MIDI velocity and is omitted from this projection.", LossSeverity.LOSSY, amplitudes))
-    bends = _unique_event_ids(note for note in notes if note.pitch_bend_values)
-    if bends:
-        losses.append(ProjectionLoss("pitch_bends", "Per-note pitch-bend curves require an explicit channel/range policy and are omitted from this MIDI projection.", LossSeverity.LOSSY, bends))
-    overlaps = _overlapping_same_pitch_ids(notes)
-    if overlaps:
-        losses.append(ProjectionLoss("overlapping_same_pitch", "Overlapping notes that round to the same MIDI pitch on one source track are merged to avoid premature note-off playback.", LossSeverity.LOSSY, overlaps))
-    return tuple(losses)
+
+
+def _amplitude_ids(notes: tuple[SymbolicNote, ...]) -> tuple[str, ...]:
+    return _unique_event_ids(note for note in notes if note.amplitude is not None)
+
+
+def _pitch_bend_ids(notes: tuple[SymbolicNote, ...]) -> tuple[str, ...]:
+    return _unique_event_ids(note for note in notes if note.pitch_bend_values)
 
 
 def _unique_event_ids(notes: Iterable[SymbolicNote]) -> tuple[str, ...]:

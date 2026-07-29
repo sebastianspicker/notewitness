@@ -26,9 +26,15 @@ class BridgeError(RuntimeError):
 def main_request(argv: list[str], allowed_stages: set[str]) -> dict[str, Any]:
     if argv != ["--request", "request.json"]:
         raise BridgeError("expected exactly: --request request.json")
-    path = Path("request.json")
+    payload = _load_request()
+    _validate_request_shape(payload)
+    _validate_request_contract(payload, allowed_stages)
+    return payload
+
+
+def _load_request() -> dict[str, Any]:
     try:
-        raw = path.read_bytes()
+        raw = Path("request.json").read_bytes()
     except OSError as exc:
         raise BridgeError("request.json is unavailable") from exc
     if len(raw) > MAX_BYTES:
@@ -37,8 +43,17 @@ def main_request(argv: list[str], allowed_stages: set[str]) -> dict[str, Any]:
         payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
     except (UnicodeDecodeError, json.JSONDecodeError, BridgeError) as exc:
         raise BridgeError("request.json must be valid unique-key UTF-8 JSON") from exc
+    if not isinstance(payload, dict):
+        raise BridgeError("request.json does not match analysis-suite JSON v1")
+    return payload
+
+
+def _validate_request_shape(payload: dict[str, Any]) -> None:
     if not isinstance(payload, dict) or set(payload) != REQUEST_KEYS:
         raise BridgeError("request.json does not match analysis-suite JSON v1")
+
+
+def _validate_request_contract(payload: dict[str, Any], allowed_stages: set[str]) -> None:
     if payload.get("schema_version") != 1:
         raise BridgeError("unsupported request schema_version")
     stage = payload.get("stage")
@@ -52,18 +67,20 @@ def main_request(argv: list[str], allowed_stages: set[str]) -> dict[str, Any]:
     _identity(payload.get("model"), "model")
     if payload["media"]["source_id"] != payload["source_id"]:
         raise BridgeError("media source_id must match request source_id")
-    spans = payload.get("spans")
-    if not isinstance(spans, list) or not spans or len(spans) > MAX_ITEMS:
-        raise BridgeError("spans must be a non-empty bounded array")
-    for span in spans:
-        _span(span)
+    _validate_spans(payload.get("spans"))
     if payload.get("score") is not None:
         _identity(payload["score"], "score")
     if not isinstance(payload.get("parameters"), dict):
         raise BridgeError("parameters must be an object")
     if payload.get("continuation_token") is not None:
         _bounded_string(payload["continuation_token"], "continuation_token")
-    return payload
+
+
+def _validate_spans(spans: Any) -> None:
+    if not isinstance(spans, list) or not spans or len(spans) > MAX_ITEMS:
+        raise BridgeError("spans must be a non-empty bounded array")
+    for span in spans:
+        _span(span)
 
 
 def media_path(request: Mapping[str, Any]) -> str:
@@ -125,14 +142,26 @@ def _identity(value: Any, label: str) -> None:
     if not isinstance(value, dict) or set(value) != IDENTITY_KEYS:
         raise BridgeError(f"{label} must be a runtime-owned identity object")
     _bounded_string(value.get("source_id"), f"{label}.source_id")
-    path = value.get("path")
-    if not isinstance(path, str) or not Path(path).is_absolute():
+    _identity_path(value.get("path"), label)
+    _identity_checksum(value.get("sha256"), label)
+    _positive_integer(value.get("size_bytes"), f"{label}.size_bytes")
+
+
+def _identity_path(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not Path(value).is_absolute():
         raise BridgeError(f"{label}.path must be absolute")
-    checksum = value.get("sha256")
-    if not isinstance(checksum, str) or len(checksum) != 64 or any(c not in "0123456789abcdef" for c in checksum):
+
+
+def _identity_checksum(value: Any, label: str) -> None:
+    if not isinstance(value, str) or len(value) != 64 or any(
+        character not in "0123456789abcdef" for character in value
+    ):
         raise BridgeError(f"{label}.sha256 must be a lowercase SHA-256")
-    if not isinstance(value.get("size_bytes"), int) or isinstance(value["size_bytes"], bool) or value["size_bytes"] <= 0:
-        raise BridgeError(f"{label}.size_bytes must be positive")
+
+
+def _positive_integer(value: Any, label: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise BridgeError(f"{label} must be positive")
 
 
 def _span(value: Any) -> None:

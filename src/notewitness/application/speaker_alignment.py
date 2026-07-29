@@ -7,7 +7,7 @@ import hashlib
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from notewitness.project_store import ProjectSnapshot, ProjectStore
+from notewitness.project_store import ProjectStore
 
 
 class SpeakerAlignmentError(RuntimeError):

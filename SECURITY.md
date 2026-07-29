@@ -12,9 +12,9 @@ not attach lesson media, participant identifiers, API keys, model artifacts, pro
 restricted scores.
 
 Before a public alpha is published, the maintainer must enable and verify GitHub private
-vulnerability reporting or document another specific private channel. No such channel can be
-verified in this local repository because it has no remote. This is a publication blocker recorded
-in [`RELEASE_STATUS.md`](RELEASE_STATUS.md).
+vulnerability reporting. If that service is unavailable, the maintainer may establish and document
+another specific private channel. Until one of those channels is verified, the release remains
+blocked as recorded in the repository release status.
 
 If you are reviewing this local candidate, share security details only through a private channel
 that you have independently established with the maintainer. Use synthetic data and include only the
@@ -40,8 +40,9 @@ identities.
 On macOS, NoteWitness refuses external local-tool execution when its network-deny sandbox is
 unavailable. Approved tools run with network operations denied, bounded arguments, environment,
 time, output, resource use, and process-group cleanup, with executable identity checked around
-execution. Filesystem reads and writes are not sandbox-restricted. Operators must treat approved
-executables and model loaders as trusted with the invoking user's filesystem authority.
+execution. Filesystem reads and writes are not sandbox-restricted. Unless an operator supplies a
+separate filesystem sandbox, approved executables and model loaders therefore need to be trusted
+with the invoking user's filesystem authority.
 
 The optional OpenAI path is outside strict local mode. It requires project policy
 `remote_explicit`, source and evidence rights, explicit confirmation for each call, selected text,

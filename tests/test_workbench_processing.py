@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import sys
 from tempfile import TemporaryDirectory
 import threading
 import time
@@ -18,7 +17,11 @@ from notewitness.application.workbench_processing import (
     WorkbenchProcessingService,
 )
 from notewitness.media_ingest import ingest_media
-from notewitness.local_tools import BoundedLocalToolRunner, LocalTool, LocalToolCancelled
+from notewitness.local_tools import (
+    BoundedLocalToolRunner,
+    LocalToolCancelled,
+    discover_local_tool,
+)
 from notewitness.project import initialize_project
 
 
@@ -114,7 +117,7 @@ class _TermIgnoringToolExecutor:
     ) -> None:
         assert callable(cancellation_requested)
         assert callable(report_progress)
-        tool = LocalTool(name="python", executable=Path(sys.executable))
+        tool = discover_local_tool("python3", "/usr/bin/python3")
         script = (
             "import os, pathlib, signal, sys, time\n"
             "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"

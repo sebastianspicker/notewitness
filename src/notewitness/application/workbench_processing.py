@@ -13,7 +13,6 @@ from pathlib import Path, PurePosixPath
 import sqlite3
 import stat
 import threading
-import time
 from typing import Callable, Iterator, Mapping, Protocol
 from uuid import uuid4
 

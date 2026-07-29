@@ -56,32 +56,15 @@ class WhisperCLISettings:
             maximum_bytes=MAX_MODEL_BYTES,
         )
         object.__setattr__(self, "model_checkpoint", model)
-        if not self.model_license.strip():
-            raise ValueError("Whisper model checkpoint requires an explicit license.")
-        if not self.adapter_license.strip():
-            raise ValueError("Whisper executable requires an explicit license.")
+        _required_license(self.model_license, "Whisper model checkpoint requires an explicit license.")
+        _required_license(self.adapter_license, "Whisper executable requires an explicit license.")
         if self.language is not None and not _LANGUAGE.fullmatch(self.language):
             raise ValueError("Whisper language must be a normalized BCP-47 tag.")
-        if (
-            not isinstance(self.beam_size, int)
-            or isinstance(self.beam_size, bool)
-            or not 1 <= self.beam_size <= 100
-        ):
-            raise ValueError("Whisper beam_size must be in [1, 100].")
-        if (
-            not isinstance(self.threads, int)
-            or isinstance(self.threads, bool)
-            or not 0 <= self.threads <= 256
-        ):
-            raise ValueError("Whisper threads must be in [0, 256].")
+        _integer_range(self.beam_size, 1, 100, "Whisper beam_size must be in [1, 100].")
+        _integer_range(self.threads, 0, 256, "Whisper threads must be in [0, 256].")
         if self.device not in {"cpu", "cuda", "mps"}:
             raise ValueError("Whisper device must be cpu, cuda, or mps.")
-        if (
-            not isinstance(self.timeout_seconds, int)
-            or isinstance(self.timeout_seconds, bool)
-            or not 1 <= self.timeout_seconds <= 43_200
-        ):
-            raise ValueError("Whisper timeout must be in [1, 43200] seconds.")
+        _integer_range(self.timeout_seconds, 1, 43_200, "Whisper timeout must be in [1, 43200] seconds.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +92,29 @@ class WhisperCLIResult:
         return self.launcher
 
 
+def _required_license(value: str, message: str) -> None:
+    if not value.strip():
+        raise ValueError(message)
+
+
+def _integer_range(value: object, minimum: int, maximum: int, message: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
+        raise ValueError(message)
+
+
+def _validate_ffmpeg(ffmpeg: LocalTool | None, settings: WhisperCLISettings) -> None:
+    if ffmpeg is None:
+        return
+    if ffmpeg.name != "ffmpeg":
+        raise ValueError("WhisperCLIAdapter requires an ffmpeg tool.")
+    if ffmpeg.executable.name != "ffmpeg":
+        raise ValueError(
+            "WhisperCLIAdapter requires the approved ffmpeg executable "
+            "to have the exact basename 'ffmpeg'."
+        )
+    _required_license(settings.ffmpeg_license or "", "The explicit ffmpeg executable requires a license.")
+
+
 class WhisperCLIAdapter:
     """Run one explicit local checkpoint; model names/downloads are not accepted."""
 
@@ -121,15 +127,7 @@ class WhisperCLIAdapter:
     ) -> None:
         if tool.name != "whisper":
             raise ValueError("WhisperCLIAdapter requires the whisper tool.")
-        if ffmpeg is not None and ffmpeg.name != "ffmpeg":
-            raise ValueError("WhisperCLIAdapter requires an ffmpeg tool.")
-        if ffmpeg is not None and ffmpeg.executable.name != "ffmpeg":
-            raise ValueError(
-                "WhisperCLIAdapter requires the approved ffmpeg executable "
-                "to have the exact basename 'ffmpeg'."
-            )
-        if ffmpeg is not None and not (settings.ffmpeg_license or "").strip():
-            raise ValueError("The explicit ffmpeg executable requires a license.")
+        _validate_ffmpeg(ffmpeg, settings)
         self.tool = tool
         self.settings = settings
         self.ffmpeg = ffmpeg
@@ -286,89 +284,31 @@ def _normalize_document(
     requested_language: str | None,
     duration_us: int,
 ) -> TranscriptDocument:
-    detected = payload.get("language")
-    language = detected if isinstance(detected, str) else requested_language or "und"
-    language = language.strip().replace("_", "-")
-    if not _LANGUAGE.fullmatch(language):
-        raise WhisperCLIError("Whisper output language is not a normalized tag.")
+    language = _normalized_language(payload, requested_language)
     raw_segments = payload.get("segments")
     if not isinstance(raw_segments, list) or len(raw_segments) > MAX_SEGMENTS:
         raise WhisperCLIError("Whisper output has invalid or unbounded segments.")
-
+    context = _NormalizationContext(source_id, stream_id, language, duration_us, hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:16])
     segments: list[TranscriptSegment] = []
     words: list[TranscriptWord] = []
     word_index = 0
     previous_segment_start: int | None = None
-    run_token = hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:16]
     for segment_index, raw_segment in enumerate(raw_segments):
-        if not isinstance(raw_segment, dict):
-            raise WhisperCLIError("Whisper segments must be JSON objects.")
-        text = _text(raw_segment.get("text"))
-        if text is None:
+        normalized = _normalize_segment(raw_segment, segment_index, context, word_index, len(words))
+        if normalized is None:
             continue
-        segment_start = _seconds_to_microseconds(raw_segment.get("start"), "segment start")
-        segment_end = _seconds_to_microseconds(raw_segment.get("end"), "segment end")
-        raw_words = raw_segment.get("words", [])
-        if not isinstance(raw_words, list):
-            raise WhisperCLIError("Whisper segment words must be an array.")
-        if len(words) + len(raw_words) > MAX_WORDS:
-            raise WhisperCLIError("Whisper output exceeds the normalized word bound.")
-        segment_words: list[TranscriptWord] = []
-        previous_word_start: int | None = None
-        for raw_word in raw_words:
-            if not isinstance(raw_word, dict):
-                raise WhisperCLIError("Whisper words must be JSON objects.")
-            word_text = _text(raw_word.get("word"))
-            if word_text is None:
-                continue
-            word_start = _seconds_to_microseconds(raw_word.get("start"), "word start")
-            word_end = _seconds_to_microseconds(raw_word.get("end"), "word end")
-            if previous_word_start is not None and word_start < previous_word_start:
-                raise WhisperCLIError("Whisper words must use nondecreasing start times.")
-            previous_word_start = word_start
-            confidence = _probability(raw_word.get("probability"), "word probability")
-            word_index += 1
-            segment_words.append(
-                TranscriptWord(
-                    word_id=f"word:{run_token}:{word_index}",
-                    source_id=source_id,
-                    stream_id=stream_id,
-                    start_us=word_start,
-                    end_us=word_end,
-                    text=word_text,
-                    language=language,
-                    confidence=confidence,
-                )
-            )
-        if segment_words:
-            segment_start = min(segment_start, segment_words[0].start_us)
-            segment_end = max(segment_end, segment_words[-1].end_us)
-        if segment_start < 0 or segment_end <= segment_start or segment_end > duration_us:
+        segment, segment_words, word_index = normalized
+        if segment.start_us < 0 or segment.end_us <= segment.start_us or segment.end_us > duration_us:
             raise WhisperCLIError("Whisper segment timing is outside the source duration.")
-        if previous_segment_start is not None and segment_start < previous_segment_start:
+        if previous_segment_start is not None and segment.start_us < previous_segment_start:
             raise WhisperCLIError("Whisper segments must use nondecreasing start times.")
-        previous_segment_start = segment_start
-        if any(
-            word.start_us < segment_start or word.end_us > segment_end
-            for word in segment_words
-        ):
+        previous_segment_start = segment.start_us
+        if any(word.start_us < segment.start_us or word.end_us > segment.end_us for word in segment_words):
             raise WhisperCLIError("Whisper word timing is outside its segment.")
         words.extend(segment_words)
-        segments.append(
-            TranscriptSegment(
-                segment_id=f"segment:{run_token}:{segment_index + 1}",
-                source_id=source_id,
-                stream_id=stream_id,
-                start_us=segment_start,
-                end_us=segment_end,
-                text=text,
-                language=language,
-                confidence=_segment_confidence(raw_segment),
-                word_ids=tuple(word.word_id for word in segment_words),
-            )
-        )
+        segments.append(segment)
     return TranscriptDocument(
-        document_id=f"transcript:{run_token}",
+        document_id=f"transcript:{context.run_token}",
         source_id=source_id,
         stream_id=stream_id,
         raw_artifact_id=raw_artifact_id,
@@ -377,6 +317,72 @@ def _normalize_document(
         segments=tuple(segments),
         words=tuple(words),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _NormalizationContext:
+    source_id: str
+    stream_id: str
+    language: str
+    duration_us: int
+    run_token: str
+
+
+def _normalized_language(payload: dict[str, Any], requested_language: str | None) -> str:
+    detected = payload.get("language")
+    language = detected if isinstance(detected, str) else requested_language or "und"
+    normalized = language.strip().replace("_", "-")
+    if not _LANGUAGE.fullmatch(normalized):
+        raise WhisperCLIError("Whisper output language is not a normalized tag.")
+    return normalized
+
+
+def _normalize_segment(raw_segment: Any, index: int, context: _NormalizationContext, word_index: int, total_words: int) -> tuple[TranscriptSegment, list[TranscriptWord], int] | None:
+    if not isinstance(raw_segment, dict):
+        raise WhisperCLIError("Whisper segments must be JSON objects.")
+    text = _text(raw_segment.get("text"))
+    if text is None:
+        return None
+    start = _seconds_to_microseconds(raw_segment.get("start"), "segment start")
+    end = _seconds_to_microseconds(raw_segment.get("end"), "segment end")
+    words, word_index = _normalize_words(raw_segment.get("words", []), context, word_index, total_words)
+    if words:
+        start, end = min(start, words[0].start_us), max(end, words[-1].end_us)
+    segment = TranscriptSegment(
+        segment_id=f"segment:{context.run_token}:{index + 1}", source_id=context.source_id,
+        stream_id=context.stream_id, start_us=start, end_us=end, text=text,
+        language=context.language, confidence=_segment_confidence(raw_segment),
+        word_ids=tuple(word.word_id for word in words),
+    )
+    return segment, words, word_index
+
+
+def _normalize_words(raw_words: Any, context: _NormalizationContext, word_index: int, total_words: int) -> tuple[list[TranscriptWord], int]:
+    if not isinstance(raw_words, list):
+        raise WhisperCLIError("Whisper segment words must be an array.")
+    if total_words + len(raw_words) > MAX_WORDS:
+        raise WhisperCLIError("Whisper output exceeds the normalized word bound.")
+    words: list[TranscriptWord] = []
+    previous_start: int | None = None
+    for raw_word in raw_words:
+        word, previous_start = _normalize_word(raw_word, context, word_index + 1, previous_start)
+        if word is not None:
+            word_index += 1
+            words.append(word)
+    return words, word_index
+
+
+def _normalize_word(raw_word: Any, context: _NormalizationContext, index: int, previous_start: int | None) -> tuple[TranscriptWord | None, int | None]:
+    if not isinstance(raw_word, dict):
+        raise WhisperCLIError("Whisper words must be JSON objects.")
+    text = _text(raw_word.get("word"))
+    if text is None:
+        return None, previous_start
+    start = _seconds_to_microseconds(raw_word.get("start"), "word start")
+    if previous_start is not None and start < previous_start:
+        raise WhisperCLIError("Whisper words must use nondecreasing start times.")
+    end = _seconds_to_microseconds(raw_word.get("end"), "word end")
+    return TranscriptWord(word_id=f"word:{context.run_token}:{index}", source_id=context.source_id, stream_id=context.stream_id, start_us=start, end_us=end, text=text, language=context.language, confidence=_probability(raw_word.get("probability"), "word probability")), start
 
 
 def _read_raw_output(path: Path) -> tuple[dict[str, Any], WhisperArtifactIdentity]:

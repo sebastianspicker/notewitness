@@ -6,19 +6,13 @@ const DEFAULTS = Object.freeze({
 });
 
 export function estimatePitch(samples, sampleRate, options = {}) {
-  if (!samples || !Number.isFinite(sampleRate) || sampleRate <= 0) return null;
+  if (!validInput(samples, sampleRate)) return null;
   const settings = { ...DEFAULTS, ...options };
-  if (samples.length < 128 || settings.minHz <= 0 || settings.maxHz <= settings.minHz) {
-    return null;
-  }
+  if (!validSettings(samples, settings)) return null;
   const values = removeMeanAndWindow(samples);
   const rms = rootMeanSquare(values);
   if (rms < settings.rmsThreshold) return null;
-  const minimumTau = Math.max(2, Math.floor(sampleRate / settings.maxHz));
-  const maximumTau = Math.min(
-    Math.floor(sampleRate / settings.minHz),
-    Math.floor(values.length / 2),
-  );
+  const { minimumTau, maximumTau } = periodBounds(values.length, sampleRate, settings);
   if (minimumTau >= maximumTau) return null;
   const difference = yinDifference(values, maximumTau);
   const normalized = cumulativeMeanNormalizedDifference(difference, maximumTau);
@@ -29,6 +23,21 @@ export function estimatePitch(samples, sampleRate, options = {}) {
   const confidence = Math.max(0, Math.min(1, 1 - normalized[tau]));
   if (!Number.isFinite(frequencyHz) || confidence < 0.65) return null;
   return { confidence, frequencyHz, rms };
+}
+
+function validInput(samples, sampleRate) {
+  return Boolean(samples) && Number.isFinite(sampleRate) && sampleRate > 0;
+}
+
+function validSettings(samples, settings) {
+  return samples.length >= 128 && settings.minHz > 0 && settings.maxHz > settings.minHz;
+}
+
+function periodBounds(sampleCount, sampleRate, settings) {
+  return {
+    minimumTau: Math.max(2, Math.floor(sampleRate / settings.maxHz)),
+    maximumTau: Math.min(Math.floor(sampleRate / settings.minHz), Math.floor(sampleCount / 2)),
+  };
 }
 
 function removeMeanAndWindow(samples) {
@@ -78,9 +87,17 @@ function cumulativeMeanNormalizedDifference(difference, maximumTau) {
 function selectPeriod(normalized, minimumTau, maximumTau, threshold) {
   for (let tau = minimumTau; tau < maximumTau; tau += 1) {
     if (normalized[tau] >= threshold) continue;
-    while (tau + 1 <= maximumTau && normalized[tau + 1] < normalized[tau]) tau += 1;
-    return tau;
+    return descendToMinimum(normalized, tau, maximumTau);
   }
+  return bestPeriod(normalized, minimumTau, maximumTau);
+}
+
+function descendToMinimum(normalized, tau, maximumTau) {
+  while (tau + 1 <= maximumTau && normalized[tau + 1] < normalized[tau]) tau += 1;
+  return tau;
+}
+
+function bestPeriod(normalized, minimumTau, maximumTau) {
   let bestTau = 0;
   for (let tau = minimumTau; tau <= maximumTau; tau += 1) {
     if (!bestTau || normalized[tau] < normalized[bestTau]) bestTau = tau;

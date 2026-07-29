@@ -41,7 +41,9 @@ export function createPlayback(c) {
           Number(restore.currentTime || 0),
           Number.isFinite(duration) ? duration : Number.MAX_SAFE_INTEGER,
         );
-        if (!restore.paused) c.state.media.play().catch(() => {});
+        if (!restore.paused) c.state.media.play().catch((error) => {
+          c.setNotice(`Playback could not be restored: ${error.message}`, "warning");
+        });
         restore = null;
       }
       syncPlayback();

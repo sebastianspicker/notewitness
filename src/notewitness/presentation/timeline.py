@@ -66,8 +66,27 @@ class TimelineViewModel:
 
     @classmethod
     def from_lesson_notes(cls, notes: LessonNotes) -> "TimelineViewModel":
-        source_items = _source_timeline_items(notes)
-        activity_items = tuple(
+        return cls(project_id=notes.project_id, title=notes.title, lanes=_timeline_lanes(notes))
+
+
+def _timeline_lanes(notes: LessonNotes) -> tuple[TimelineLane, ...]:
+    return (
+        _lane("source", TimelineLaneKind.SOURCE, "Source and playback", "1", _source_timeline_items(notes)),
+        _lane("activity", TimelineLaneKind.ACTIVITY, "Speech and music activity", "2", _activity_items(notes)),
+        _lane("transcript", TimelineLaneKind.TRANSCRIPT, "Full speech and music transcript", "3", _transcript_items(notes)),
+        _lane("performance", TimelineLaneKind.PERFORMANCE, "Pitch, notes, beats, and performance evidence", "4", _performance_items(notes)),
+        _lane("score", TimelineLaneKind.SCORE, "Score and musical time", "5", _score_items(notes)),
+        _lane("episodes", TimelineLaneKind.EPISODES, "Pedagogical episodes and relations", "6", _episode_items(notes)),
+        _lane("research", TimelineLaneKind.RESEARCH, "Codes, memos, and interpretations", "7", _research_items(notes)),
+    )
+
+
+def _lane(lane_id: str, kind: TimelineLaneKind, label: str, shortcut: str, items: tuple[TimelineItem, ...]) -> TimelineLane:
+    return TimelineLane(f"lane:{lane_id}", kind, label, shortcut, items)
+
+
+def _activity_items(notes: LessonNotes) -> tuple[TimelineItem, ...]:
+    return tuple(
             TimelineItem(
                 item_id=f"activity:{segment.event_id}:{anchor.target_id}",
                 label=segment.kind.value.replace("_", " "),
@@ -81,7 +100,10 @@ class TimelineViewModel:
             for segment in notes.activity
             for anchor in segment.anchors
         )
-        transcript_items = tuple(
+
+
+def _transcript_items(notes: LessonNotes) -> tuple[TimelineItem, ...]:
+    return tuple(
             TimelineItem(
                 item_id=f"full-transcript:{entry.event_id}:{anchor.target_id}",
                 label=entry.display_text,
@@ -95,7 +117,10 @@ class TimelineViewModel:
             for entry in notes.full_transcript
             for anchor in entry.anchors
         )
-        performance_items = tuple(
+
+
+def _performance_items(notes: LessonNotes) -> tuple[TimelineItem, ...]:
+    return tuple(
             TimelineItem(
                 item_id=f"performance:{entry.event_id}:{anchor.target_id}",
                 label=entry.display_text,
@@ -118,7 +143,10 @@ class TimelineViewModel:
             }
             for anchor in entry.anchors
         )
-        score_items = tuple(
+
+
+def _score_items(notes: LessonNotes) -> tuple[TimelineItem, ...]:
+    return tuple(
             TimelineItem(
                 item_id=f"score:{entry.event_id}:{anchor.target_id}",
                 label=entry.display_text,
@@ -133,7 +161,10 @@ class TimelineViewModel:
             for anchor in entry.anchors
             if anchor.musical_selector is not None
         )
-        episode_items = tuple(
+
+
+def _episode_items(notes: LessonNotes) -> tuple[TimelineItem, ...]:
+    return tuple(
             TimelineItem(
                 item_id=f"episode:{moment.relation_id}:{anchor.target_id}",
                 label=moment.label,
@@ -147,7 +178,10 @@ class TimelineViewModel:
             for moment in notes.summary.key_moments
             for anchor in moment.anchors
         )
-        research_items = tuple(
+
+
+def _research_items(notes: LessonNotes) -> tuple[TimelineItem, ...]:
+    return tuple(
             [
                 TimelineItem(
                     item_id=f"review-event:{entry.event_id}:{anchor.target_id}",
@@ -177,58 +211,6 @@ class TimelineViewModel:
                 for anchor in moment.anchors
             ]
         )
-        lanes = (
-            TimelineLane(
-                lane_id="lane:source",
-                kind=TimelineLaneKind.SOURCE,
-                label="Source and playback",
-                keyboard_shortcut="1",
-                items=source_items,
-            ),
-            TimelineLane(
-                lane_id="lane:activity",
-                kind=TimelineLaneKind.ACTIVITY,
-                label="Speech and music activity",
-                keyboard_shortcut="2",
-                items=activity_items,
-            ),
-            TimelineLane(
-                lane_id="lane:transcript",
-                kind=TimelineLaneKind.TRANSCRIPT,
-                label="Full speech and music transcript",
-                keyboard_shortcut="3",
-                items=transcript_items,
-            ),
-            TimelineLane(
-                lane_id="lane:performance",
-                kind=TimelineLaneKind.PERFORMANCE,
-                label="Pitch, notes, beats, and performance evidence",
-                keyboard_shortcut="4",
-                items=performance_items,
-            ),
-            TimelineLane(
-                lane_id="lane:score",
-                kind=TimelineLaneKind.SCORE,
-                label="Score and musical time",
-                keyboard_shortcut="5",
-                items=score_items,
-            ),
-            TimelineLane(
-                lane_id="lane:episodes",
-                kind=TimelineLaneKind.EPISODES,
-                label="Pedagogical episodes and relations",
-                keyboard_shortcut="6",
-                items=episode_items,
-            ),
-            TimelineLane(
-                lane_id="lane:research",
-                kind=TimelineLaneKind.RESEARCH,
-                label="Codes, memos, and interpretations",
-                keyboard_shortcut="7",
-                items=research_items,
-            ),
-        )
-        return cls(project_id=notes.project_id, title=notes.title, lanes=lanes)
 
 
 def _source_timeline_items(notes: LessonNotes) -> tuple[TimelineItem, ...]:

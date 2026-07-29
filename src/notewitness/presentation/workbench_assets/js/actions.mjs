@@ -141,49 +141,44 @@ export function createActions(c) {
     const dialog = c.state.dialog;
     if (!dialog) return;
     const values = new FormData(form);
-    if (dialog.mode === "reviewer-setup") {
-      const role = String(values.get("role") || "").trim();
-      if (!role) return;
-      const bytes = new Uint8Array(12);
-      crypto.getRandomValues(bytes);
-      const actorId = `actor:local-${Array.from(bytes, (item) => item.toString(16).padStart(2, "0")).join("")}`;
-      const saved = await c.runMutation("reviewer-setup", "Creating local reviewer", async () => {
-        await c.request("/api/actors", {
-          method: "POST",
-          headers: c.actionHeaders(),
-          body: JSON.stringify({ actor_id: actorId, role, project_sha256: c.projectSha() }),
-        });
-        c.state.authorId = actorId;
-        c.state.dialog = null;
-        await c.load({ preservePlayback: true, quiet: true });
-      });
-      if (saved) c.setNotice("Local reviewer created. You can now record and review evidence.", "success");
-      return;
-    }
+    if (dialog.mode === "reviewer-setup") return submitReviewerSetup(values);
     const author = requireHumanActor();
     if (!author) return;
-    if (dialog.mode === "bookmark") {
-      const label = String(values.get("label") || "").trim();
-      if (!label) return;
-      const saved = await c.runMutation("bookmark", "Saving exact-time bookmark", async () => {
-        await c.request("/api/bookmarks", {
-          method: "POST",
-          headers: c.actionHeaders(),
-          body: JSON.stringify({
-            source_id: c.state.activeSourceId,
-            start_us: Math.round(dialog.timeSeconds * 1e6),
-            duration_us: 0,
-            label,
-            author_id: author.id,
-            project_sha256: c.projectSha(),
-          }),
-        });
-        c.state.dialog = null;
-        await c.load({ preservePlayback: true, quiet: true });
-      });
-      if (saved) c.setNotice("Bookmark saved to this private project.", "success");
-      return;
-    }
+    if (dialog.mode === "bookmark") return submitBookmark(dialog, values, author);
+    return submitRevision(dialog, values, author);
+  }
+
+  async function submitReviewerSetup(values) {
+    const role = String(values.get("role") || "").trim();
+    if (!role) return;
+    const bytes = new Uint8Array(12);
+    crypto.getRandomValues(bytes);
+    const actorId = `actor:local-${Array.from(bytes, (item) => item.toString(16).padStart(2, "0")).join("")}`;
+    const saved = await c.runMutation("reviewer-setup", "Creating local reviewer", async () => {
+      await c.request("/api/actors", { method: "POST", headers: c.actionHeaders(),
+        body: JSON.stringify({ actor_id: actorId, role, project_sha256: c.projectSha() }) });
+      c.state.authorId = actorId;
+      c.state.dialog = null;
+      await c.load({ preservePlayback: true, quiet: true });
+    });
+    if (saved) c.setNotice("Local reviewer created. You can now record and review evidence.", "success");
+  }
+
+  async function submitBookmark(dialog, values, author) {
+    const label = String(values.get("label") || "").trim();
+    if (!label) return;
+    const saved = await c.runMutation("bookmark", "Saving exact-time bookmark", async () => {
+      await c.request("/api/bookmarks", { method: "POST", headers: c.actionHeaders(), body: JSON.stringify({
+        source_id: c.state.activeSourceId, start_us: Math.round(dialog.timeSeconds * 1e6), duration_us: 0,
+        label, author_id: author.id, project_sha256: c.projectSha(),
+      }) });
+      c.state.dialog = null;
+      await c.load({ preservePlayback: true, quiet: true });
+    });
+    if (saved) c.setNotice("Bookmark saved to this private project.", "success");
+  }
+
+  async function submitRevision(dialog, values, author) {
     const replacementText = String(values.get("replacement_text") || "").trim();
     const reason = String(values.get("reason") || "").trim();
     if (!replacementText || !reason) return;
@@ -271,9 +266,7 @@ export function createActions(c) {
       );
       return;
     }
-    const extension = format === "midi" ? "mid" : "csv";
-    const timestamp = new Date().toISOString().replaceAll(":", "-");
-    const filename = `notewitness-notes-${timestamp}.${extension}`;
+    const filename = musicExportFilename(format);
     let result = null;
     const saved = await c.runMutation("music-export", `Creating ${format.toUpperCase()} export`, async () => {
       result = await c.request("/api/exports/music", {
@@ -288,65 +281,120 @@ export function createActions(c) {
         }),
       });
     });
-    if (saved) {
-      const losses = list(result?.documented_losses).length;
-      c.setNotice(
-        `${result?.filename || filename} saved locally with ${result?.record_count || 0} notes${losses ? ` and ${losses} documented projection loss${losses === 1 ? "" : "es"}` : ""}.`,
-        "success",
-      );
-    }
+    if (saved) c.setNotice(musicExportNotice(result, filename), "success");
+  }
+
+  function musicExportFilename(format) {
+    const extension = format === "midi" ? "mid" : "csv";
+    return `notewitness-notes-${new Date().toISOString().replaceAll(":", "-")}.${extension}`;
+  }
+
+  function musicExportNotice(result, filename) {
+    const losses = list(result?.documented_losses).length;
+    const lossSummary = losses ? ` and ${losses} documented projection loss${losses === 1 ? "" : "es"}` : "";
+    return `${result?.filename || filename} saved locally with ${result?.record_count || 0} notes${lossSummary}.`;
   }
 
   async function exportTranscript() {
-    const format = c.app.querySelector("[data-transcript-format]")?.value || "html";
-    const evidenceLayer = c.app.querySelector("[data-transcript-layer]")?.value || "accepted_only";
-    const rights = Boolean(c.app.querySelector("[data-transcript-rights]")?.checked);
-    const losses = Boolean(c.app.querySelector("[data-transcript-losses]")?.checked);
-    if (!rights || !losses) {
+    const options = transcriptExportOptions();
+    if (!options.rights || !options.losses) {
       c.setNotice("Confirm rights authorization and format-loss acknowledgement before export.", "error");
       return;
     }
-    const extension = format === "webvtt" ? "vtt" : format === "text" ? "txt" : "html";
-    const timestamp = new Date().toISOString().replaceAll(":", "-");
-    const pauseValue = c.app.querySelector("[data-transcript-pause]")?.value || "";
-    const interval = Number(c.app.querySelector("[data-transcript-interval]")?.value || 60000);
     let result = null;
     const saved = await c.runMutation("transcript-export", "Creating transcript export", async () => {
       result = await c.request("/api/exports/transcript", {
-        method: "POST", headers: c.actionHeaders(), body: JSON.stringify({
-          format, filename: `notewitness-transcript-${timestamp}.${extension}`,
-          source_id: c.state.activeSourceId, evidence_layer: evidenceLayer,
-          authorize_local_export: rights, acknowledge_export_losses: losses,
-          visible_timestamps: format === "webvtt" ? false : Boolean(c.app.querySelector("[data-transcript-timestamps]")?.checked),
-          timestamp_interval_ms: Number.isInteger(interval) && interval > 0 ? interval : 60000,
-          pause_threshold_ms: format === "webvtt" || !pauseValue ? null : Number(pauseValue),
-        }),
+        method: "POST",
+        headers: c.actionHeaders(),
+        body: JSON.stringify(transcriptExportPayload(options)),
       });
     });
     if (saved) c.setNotice(`${result?.filename || "Transcript"} saved locally from ${result?.evidence_layer === "include_machine_suggestions" ? "accepted and machine-suggested" : "accepted"} evidence.`, "success");
   }
 
+  function transcriptExportOptions() {
+    return {
+      format: selectedValue("[data-transcript-format]", "html"),
+      evidenceLayer: selectedValue("[data-transcript-layer]", "accepted_only"),
+      rights: checked("[data-transcript-rights]"),
+      losses: checked("[data-transcript-losses]"),
+      pauseValue: selectedValue("[data-transcript-pause]", ""),
+      interval: Number(selectedValue("[data-transcript-interval]", 60000)),
+      visibleTimestamps: checked("[data-transcript-timestamps]"),
+    };
+  }
+
+  function selectedValue(selector, fallback) {
+    return c.app.querySelector(selector)?.value || fallback;
+  }
+
+  function checked(selector) {
+    return Boolean(c.app.querySelector(selector)?.checked);
+  }
+
+  function transcriptExportPayload(options) {
+    const extension = options.format === "webvtt" ? "vtt"
+      : options.format === "text" ? "txt" : "html";
+    const timestamp = new Date().toISOString().replaceAll(":", "-");
+    return {
+      format: options.format,
+      filename: `notewitness-transcript-${timestamp}.${extension}`,
+      source_id: c.state.activeSourceId,
+      evidence_layer: options.evidenceLayer,
+      authorize_local_export: options.rights,
+      acknowledge_export_losses: options.losses,
+      visible_timestamps: options.format === "webvtt" ? false : options.visibleTimestamps,
+      timestamp_interval_ms: validTimestampInterval(options.interval),
+      pause_threshold_ms: transcriptPauseThreshold(options),
+    };
+  }
+
+  function validTimestampInterval(interval) {
+    return Number.isInteger(interval) && interval > 0 ? interval : 60000;
+  }
+
+  function transcriptPauseThreshold(options) {
+    return options.format === "webvtt" || !options.pauseValue
+      ? null : Number(options.pauseValue);
+  }
+
+  const actionHandlers = new Map([
+    ["play", togglePlayback],
+    ["seek-back", () => c.seek((c.state.media?.currentTime || 0) - 5)],
+    ["seek-forward", () => c.seek((c.state.media?.currentTime || 0) + 5)],
+    ["open-bookmark", openBookmarkDialog],
+    ["dismiss-notice", () => c.setNotice("")],
+    ["close-dialog", closeDialog],
+    ["record", toggleRecording],
+    ["cancel-recording", cancelRecording],
+    ["tuner", toggleTuner],
+    ["metronome", toggleMetronome],
+    ["tempo-down", () => setTempo(-1)],
+    ["tempo-up", () => setTempo(1)],
+    ["enqueue-job", c.enqueueJob],
+    ["export-csv", () => exportMusic("csv")],
+    ["export-midi", () => exportMusic("midi")],
+    ["export-transcript", exportTranscript],
+    ["reload", c.load],
+  ]);
+
   async function action(name) {
-    if (name === "play") {
-      if (!c.state.media) return;
-      if (c.state.media.paused) await c.state.media.play().catch((error) => c.setNotice(error.message, "error"));
-      else c.state.media.pause();
-    } else if (name === "seek-back") c.seek((c.state.media?.currentTime || 0) - 5);
-    else if (name === "seek-forward") c.seek((c.state.media?.currentTime || 0) + 5);
-    else if (name === "open-bookmark") openBookmarkDialog();
-    else if (name === "dismiss-notice") c.setNotice("");
-    else if (name === "close-dialog") closeDialog();
-    else if (name === "record") await toggleRecording();
-    else if (name === "cancel-recording") cancelRecording();
-    else if (name === "tuner") await toggleTuner();
-    else if (name === "metronome") await toggleMetronome();
-    else if (name === "tempo-down") setTempo(-1);
-    else if (name === "tempo-up") setTempo(1);
-    else if (name === "enqueue-job") await c.enqueueJob();
-    else if (name === "export-csv") await exportMusic("csv");
-    else if (name === "export-midi") await exportMusic("midi");
-    else if (name === "export-transcript") await exportTranscript();
-    else if (name === "reload") await c.load();
+    const handler = actionHandlers.get(name);
+    if (!handler) return;
+    try {
+      await handler();
+    } catch (error) {
+      c.setNotice(`Action failed: ${error.message}`, "error");
+    }
+  }
+
+  async function togglePlayback() {
+    if (!c.state.media) return;
+    if (c.state.media.paused) {
+      await c.state.media.play().catch((error) => c.setNotice(error.message, "error"));
+    } else {
+      c.state.media.pause();
+    }
   }
 
   function setTempo(change) {
@@ -409,11 +457,19 @@ export function createActions(c) {
     const discard = c.app.querySelector('[data-action="cancel-recording"]');
     button?.classList.toggle("is-recording", recording);
     if (button) button.setAttribute("aria-label", recording ? "Stop and save recording" : "Start local recording");
-    if (label) label.textContent = c.state.captureState === "saving" ? "Saving recording…"
-      : recording ? "Recording locally" : "New local take";
-    if (duration) duration.textContent = recording
-      ? formatTime((Date.now() - c.state.captureStartedAt) / 1000, false) : "Microphone off";
+    if (label) label.textContent = recordingLabel(recording);
+    if (duration) duration.textContent = recordingDuration(recording);
     if (discard) discard.hidden = !recording;
+  }
+
+  function recordingLabel(recording) {
+    if (c.state.captureState === "saving") return "Saving recording…";
+    return recording ? "Recording locally" : "New local take";
+  }
+
+  function recordingDuration(recording) {
+    if (!recording) return "Microphone off";
+    return formatTime((Date.now() - c.state.captureStartedAt) / 1000, false);
   }
 
   async function uploadCapture() {
@@ -611,34 +667,12 @@ export function createActions(c) {
   }
 
   return {
-    acceptSuggestion,
-    reviewRelation,
-    openRevision,
-    openBookmarkDialog,
-    openReviewerSetup,
-    openRenderedDialog,
-    closeDialog,
-    submitDialog,
-    updatePractice,
-    importMedia,
-    exportMusic,
-    exportTranscript,
-    action,
-    setTempo,
-    toggleRecording,
-    cancelRecording,
-    refreshRecordingUI,
-    uploadCapture,
-    toggleTuner,
-    sendTuner,
-    renderTunerReading,
-    toggleMetronome,
-    startMetronome,
-    scheduleClicks,
-    scheduleClick,
-    stopMetronome,
-    restartMetronome,
-    requireHumanActor,
-    attributedActorId,
+    acceptSuggestion, reviewRelation, openRevision, openBookmarkDialog,
+    openReviewerSetup, openRenderedDialog, closeDialog, submitDialog,
+    updatePractice, importMedia, exportMusic, exportTranscript, action, setTempo,
+    toggleRecording, cancelRecording, refreshRecordingUI, uploadCapture,
+    toggleTuner, sendTuner, renderTunerReading, toggleMetronome, startMetronome,
+    scheduleClicks, scheduleClick, stopMetronome, restartMetronome,
+    requireHumanActor, attributedActorId,
   };
 }

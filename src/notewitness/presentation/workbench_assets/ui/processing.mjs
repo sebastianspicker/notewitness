@@ -9,15 +9,25 @@ export function renderProcessing(state) {
   const jobs = list(state.processing?.jobs);
   const activeJob = jobs.find((job) => ["queued", "running", "cancelling"].includes(job.state));
   const modalities = runtime.modalities || {};
-  const modalityReady = (name, fallback = false) => modalities[name] === true || (fallback && runtime[fallback] === true);
-  const speechReady = modalityReady("speech_transcription", "transcription_ready");
+  const speechReady = modalities.speech_transcription === true || runtime.transcription_ready === true;
+  const activityReady = modalities.activity_segmentation === true;
+  const speakerReady = modalities.anonymous_diarization === true;
+  const notesReady = modalities.note_transcription === true;
+  const instrumentsReady = modalities.instrument_detection === true;
+  const instrumentSpeakersReady = modalities.instrument_diarization === true;
   const analysisReady = runtime.analysis_ready === true;
   const completeReady = runtime.complete_ready === true;
   const available = speechReady || analysisReady;
   const missingComplete = list(runtime.missing_complete_modalities).length
     ? list(runtime.missing_complete_modalities)
     : ["speech_transcription", "activity_segmentation", "anonymous_diarization", "note_transcription", "instrument_diarization"]
-      .filter((name) => !modalityReady(name, name === "speech_transcription" ? "transcription_ready" : false));
+      .filter((name) => !new Map([
+        ["speech_transcription", speechReady],
+        ["activity_segmentation", activityReady],
+        ["anonymous_diarization", speakerReady],
+        ["note_transcription", notesReady],
+        ["instrument_diarization", instrumentSpeakersReady],
+      ]).get(name));
   const defaultKind = completeReady
     ? "complete" : speechReady ? "transcription" : "analysis";
   return `<section class="rail-section processing-section" id="processing-panel">
@@ -26,11 +36,11 @@ export function renderProcessing(state) {
       <span class="readiness ${available ? "ready" : ""}">${available ? "Ready" : "Setup needed"}</span></div>
     <ul class="engine-status quiet-list" aria-label="Local engine readiness">
       ${renderEngineStatus("Speech transcription", speechReady)}
-      ${renderEngineStatus("Speech/music activity", modalityReady("activity_segmentation"))}
-      ${renderEngineStatus("Anonymous speaker diarization", modalityReady("anonymous_diarization"))}
-      ${renderEngineStatus("Note transcription", modalityReady("note_transcription"))}
-      ${renderEngineStatus("Instrument detection", modalityReady("instrument_detection"))}
-      ${renderEngineStatus("Instrument diarization", modalityReady("instrument_diarization"))}
+      ${renderEngineStatus("Speech/music activity", activityReady)}
+      ${renderEngineStatus("Anonymous speaker diarization", speakerReady)}
+      ${renderEngineStatus("Note transcription", notesReady)}
+      ${renderEngineStatus("Instrument detection", instrumentsReady)}
+      ${renderEngineStatus("Instrument diarization", instrumentSpeakersReady)}
     </ul>
     <label class="field-label" for="run-kind">Run</label>
     <select id="run-kind" class="full-select" data-run-kind ${activeJob ? "disabled" : ""}>
