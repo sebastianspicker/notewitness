@@ -193,17 +193,44 @@ def _validate_manifest_snapshots(manifest: TranscriptionRunManifest) -> None:
         raise ValueError("Run manifests require a validated job snapshot.")
     if not isinstance(manifest.resolved_model_profile, ResolvedModelProfile):
         raise ValueError("Run manifests require a resolved model profile.")
-    if not isinstance(manifest.code_artifact, ResolvedRunArtifact) or any(not isinstance(artifact, ResolvedRunArtifact) for artifact in manifest.model_artifacts) or any(not isinstance(artifact, ResolvedRunArtifact) for artifact in manifest.runtime_artifacts):
+    _validate_artifact_snapshots(manifest)
+    _validate_evidence_snapshots(manifest)
+
+
+def _validate_artifact_snapshots(manifest: TranscriptionRunManifest) -> None:
+    artifacts = (
+        manifest.code_artifact,
+        *manifest.model_artifacts,
+        *manifest.runtime_artifacts,
+    )
+    if any(not isinstance(artifact, ResolvedRunArtifact) for artifact in artifacts):
         raise ValueError("Run manifests require resolved artifact snapshots.")
-    if any(not isinstance(checksum, SourceChecksum) for checksum in manifest.source_checksums) or any(not isinstance(language, DetectedLanguage) for language in manifest.detected_languages):
+
+
+def _validate_evidence_snapshots(manifest: TranscriptionRunManifest) -> None:
+    checksums_are_typed = all(
+        isinstance(checksum, SourceChecksum) for checksum in manifest.source_checksums
+    )
+    languages_are_typed = all(
+        isinstance(language, DetectedLanguage) for language in manifest.detected_languages
+    )
+    if not checksums_are_typed or not languages_are_typed:
         raise ValueError("Run manifests require typed checksum and language evidence.")
 
 
 def _validate_manifest_sources_and_artifacts(manifest: TranscriptionRunManifest) -> None:
+    _validate_source_checksums(manifest)
+    _validate_artifact_identities(manifest)
+
+
+def _validate_source_checksums(manifest: TranscriptionRunManifest) -> None:
     source_ids = {span.source_id for span in manifest.job.spans}
     checksum_ids = {checksum.source_id for checksum in manifest.source_checksums}
     if source_ids != checksum_ids or len(checksum_ids) != len(manifest.source_checksums):
         raise ValueError("Run manifests require one checksum per input source.")
+
+
+def _validate_artifact_identities(manifest: TranscriptionRunManifest) -> None:
     if not manifest.model_artifacts:
         raise ValueError("Run manifests require code and model artifacts.")
     artifact_ids = (manifest.code_artifact.artifact_id, *(artifact.artifact_id for artifact in manifest.model_artifacts), *(artifact.artifact_id for artifact in manifest.runtime_artifacts))
@@ -252,13 +279,44 @@ def _validate_manifest_state(manifest: TranscriptionRunManifest) -> None:
 
 
 def _validate_state_timestamps(manifest: TranscriptionRunManifest) -> None:
-    if manifest.state is TranscriptionRunState.QUEUED and (manifest.started_at is not None or manifest.finished_at is not None):
+    _validate_queued_timestamps(manifest)
+    _validate_completed_timestamps(manifest)
+    _validate_active_timestamps(manifest)
+    _validate_failed_or_cancelled_timestamps(manifest)
+
+
+def _validate_queued_timestamps(manifest: TranscriptionRunManifest) -> None:
+    has_timestamp = manifest.started_at is not None or manifest.finished_at is not None
+    if manifest.state is TranscriptionRunState.QUEUED and has_timestamp:
         raise ValueError("A queued run cannot have execution timestamps.")
-    if manifest.state is TranscriptionRunState.COMPLETED and (manifest.started_at is None or manifest.finished_at is None):
+
+
+def _validate_completed_timestamps(manifest: TranscriptionRunManifest) -> None:
+    missing_timestamp = manifest.started_at is None or manifest.finished_at is None
+    if manifest.state is TranscriptionRunState.COMPLETED and missing_timestamp:
         raise ValueError("A completed run requires start and finish timestamps.")
-    if manifest.state in {TranscriptionRunState.CONVERTING, TranscriptionRunState.DIARIZING, TranscriptionRunState.TRANSCRIBING, TranscriptionRunState.NORMALIZING, TranscriptionRunState.REVIEW} and manifest.started_at is None:
+
+
+def _validate_active_timestamps(manifest: TranscriptionRunManifest) -> None:
+    active_states = {
+        TranscriptionRunState.CONVERTING,
+        TranscriptionRunState.DIARIZING,
+        TranscriptionRunState.TRANSCRIBING,
+        TranscriptionRunState.NORMALIZING,
+        TranscriptionRunState.REVIEW,
+    }
+    if manifest.state in active_states and manifest.started_at is None:
         raise ValueError("An active transcription run requires a start timestamp.")
-    if manifest.state in {TranscriptionRunState.CANCELLED, TranscriptionRunState.FAILED} and manifest.started_at is not None and manifest.finished_at is None:
+
+
+def _validate_failed_or_cancelled_timestamps(
+    manifest: TranscriptionRunManifest,
+) -> None:
+    terminal_states = {TranscriptionRunState.CANCELLED, TranscriptionRunState.FAILED}
+    started_without_finish = (
+        manifest.started_at is not None and manifest.finished_at is None
+    )
+    if manifest.state in terminal_states and started_without_finish:
         raise ValueError("A started terminal run requires a finish timestamp.")
 
 

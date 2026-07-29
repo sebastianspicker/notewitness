@@ -436,12 +436,30 @@ def _conditional_losses(
     notes: tuple[SymbolicNote, ...],
 ) -> tuple[tuple[str, str, tuple[str, ...]], ...]:
     return (
-        ("midi_pitch", "Standard MIDI 1.0 note numbers are integers; fractional pitches are rounded.", _unique_event_ids(note for note in notes if not note.midi_pitch.is_integer())),
-        ("timing", "Standard MIDI timing is quantized to one millisecond in this deterministic projection.", _unique_event_ids(note for note in notes if note.start_us % 1_000 or note.duration_us % 1_000)),
-        ("amplitude", "Provider amplitude is not equivalent to MIDI velocity and is omitted from this projection.", _unique_event_ids(note for note in notes if note.amplitude is not None)),
-        ("pitch_bends", "Per-note pitch-bend curves require an explicit channel/range policy and are omitted from this MIDI projection.", _unique_event_ids(note for note in notes if note.pitch_bend_values)),
+        ("midi_pitch", "Standard MIDI 1.0 note numbers are integers; fractional pitches are rounded.", _fractional_pitch_ids(notes)),
+        ("timing", "Standard MIDI timing is quantized to one millisecond in this deterministic projection.", _quantized_timing_ids(notes)),
+        ("amplitude", "Provider amplitude is not equivalent to MIDI velocity and is omitted from this projection.", _amplitude_ids(notes)),
+        ("pitch_bends", "Per-note pitch-bend curves require an explicit channel/range policy and are omitted from this MIDI projection.", _pitch_bend_ids(notes)),
         ("overlapping_same_pitch", "Overlapping notes that round to the same MIDI pitch on one source track are merged to avoid premature note-off playback.", _overlapping_same_pitch_ids(notes)),
     )
+
+
+def _fractional_pitch_ids(notes: tuple[SymbolicNote, ...]) -> tuple[str, ...]:
+    return _unique_event_ids(note for note in notes if not note.midi_pitch.is_integer())
+
+
+def _quantized_timing_ids(notes: tuple[SymbolicNote, ...]) -> tuple[str, ...]:
+    return _unique_event_ids(
+        note for note in notes if note.start_us % 1_000 or note.duration_us % 1_000
+    )
+
+
+def _amplitude_ids(notes: tuple[SymbolicNote, ...]) -> tuple[str, ...]:
+    return _unique_event_ids(note for note in notes if note.amplitude is not None)
+
+
+def _pitch_bend_ids(notes: tuple[SymbolicNote, ...]) -> tuple[str, ...]:
+    return _unique_event_ids(note for note in notes if note.pitch_bend_values)
 
 
 def _unique_event_ids(notes: Iterable[SymbolicNote]) -> tuple[str, ...]:

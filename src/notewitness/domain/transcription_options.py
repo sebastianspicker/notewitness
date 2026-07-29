@@ -173,15 +173,30 @@ def _validate_common_adapter_settings(settings: Mapping[str, Any]) -> None:
 
 
 def _validate_job_identity_and_spans(job: TranscriptionJobSpec) -> None:
-    if not isinstance(job.job_id, str) or not isinstance(job.model_profile_id, str) or not job.job_id or not job.model_profile_id:
+    _validate_job_identity(job)
+    _validate_job_span_collection(job.spans)
+    _validate_job_span_values(job.spans)
+
+
+def _validate_job_identity(job: TranscriptionJobSpec) -> None:
+    identifiers = (job.job_id, job.model_profile_id)
+    if any(not isinstance(value, str) or not value for value in identifiers):
         raise ValueError("Transcription jobs require job and model profile IDs.")
-    if not isinstance(job.spans, tuple) or any(not isinstance(span, MediaSpan) for span in job.spans) or not job.spans or len(job.spans) > MAX_TRANSCRIPTION_SOURCES:
+
+
+def _validate_job_span_collection(spans: object) -> None:
+    if not isinstance(spans, tuple) or not spans or len(spans) > MAX_TRANSCRIPTION_SOURCES:
         raise ValueError(f"Transcription jobs require 1-{MAX_TRANSCRIPTION_SOURCES} spans.")
-    if any(span.duration_us <= 0 for span in job.spans):
+    if any(not isinstance(span, MediaSpan) for span in spans):
+        raise ValueError("Transcription jobs require typed media spans.")
+
+
+def _validate_job_span_values(spans: tuple[MediaSpan, ...]) -> None:
+    if any(span.duration_us <= 0 for span in spans):
         raise ValueError("Transcription spans require positive duration.")
-    if len(job.spans) != len(set(job.spans)):
+    if len(spans) != len(set(spans)):
         raise ValueError("Transcription spans must not contain duplicates.")
-    if len({span.source_id for span in job.spans}) != 1:
+    if len({span.source_id for span in spans}) != 1:
         raise ValueError("One transcription job may contain spans from only one source; use a queue for batch work.")
 
 
@@ -195,12 +210,24 @@ def _validate_job_options(job: TranscriptionJobSpec) -> None:
 
 
 def _validate_job_language_and_diarization(job: TranscriptionJobSpec) -> None:
-    if job.requested_language is not None and (not isinstance(job.requested_language, str) or not job.requested_language.strip()):
+    _validate_requested_language(job.requested_language)
+    _validate_language_mode(job)
+    _validate_diarization_mode(job)
+
+
+def _validate_requested_language(value: object) -> None:
+    if value is not None and (not isinstance(value, str) or not value.strip()):
         raise ValueError("requested_language must be a non-empty string.")
+
+
+def _validate_language_mode(job: TranscriptionJobSpec) -> None:
     if job.language_mode is LanguageMode.FIXED and not job.requested_language:
         raise ValueError("Fixed language mode requires requested_language.")
     if job.language_mode is not LanguageMode.FIXED and job.requested_language:
         raise ValueError("requested_language is only valid for fixed language mode.")
+
+
+def _validate_diarization_mode(job: TranscriptionJobSpec) -> None:
     if job.diarization_mode is DiarizationMode.EXACT:
         _validate_exact_speaker_count(job.exact_speaker_count)
     elif job.exact_speaker_count is not None:

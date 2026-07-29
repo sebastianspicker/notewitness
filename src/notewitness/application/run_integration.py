@@ -332,15 +332,28 @@ def _artifact_relative_path(value: str) -> str:
 
 
 def _unsafe_artifact_path(relative: PurePosixPath, value: str) -> bool:
-    return (
-        relative.is_absolute()
-        or "\\" in value
-        or not relative.parts
-        or len(relative.parts) > 2
-        or any(part in {"", ".", ".."} for part in relative.parts)
-        or relative.name == PUBLICATION_FILENAME
-        or (len(relative.parts) == 2 and relative.parts[0] != "raw")
+    return any(
+        (
+            _invalid_artifact_root(relative, value),
+            _invalid_artifact_parts(relative),
+            relative.name == PUBLICATION_FILENAME,
+            _invalid_nested_artifact(relative),
+        )
     )
+
+
+def _invalid_artifact_root(relative: PurePosixPath, value: str) -> bool:
+    return relative.is_absolute() or "\\" in value or not relative.parts
+
+
+def _invalid_artifact_parts(relative: PurePosixPath) -> bool:
+    return len(relative.parts) > 2 or any(
+        part in {"", ".", ".."} for part in relative.parts
+    )
+
+
+def _invalid_nested_artifact(relative: PurePosixPath) -> bool:
+    return len(relative.parts) == 2 and relative.parts[0] != "raw"
 
 
 def _verify_completed_artifacts(

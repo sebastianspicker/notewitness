@@ -157,12 +157,31 @@ class TranscriptDocument:
 def _validate_document_records(
     segments: object, words: object
 ) -> None:
+    typed_segments, typed_words = _validate_document_record_collections(segments, words)
+    _validate_document_record_limits(typed_segments, typed_words)
+    _validate_document_record_types(typed_segments, typed_words)
+
+
+def _validate_document_record_collections(
+    segments: object, words: object
+) -> tuple[tuple[object, ...], tuple[object, ...]]:
     if not isinstance(segments, tuple):
         raise ValueError("Transcript document segments must be an immutable tuple.")
     if not isinstance(words, tuple):
         raise ValueError("Transcript document words must be an immutable tuple.")
+    return segments, words
+
+
+def _validate_document_record_limits(
+    segments: tuple[object, ...], words: tuple[object, ...]
+) -> None:
     if len(segments) > MAX_SEGMENTS or len(words) > MAX_WORDS:
         raise ValueError("Transcript document exceeds its bounded record limit.")
+
+
+def _validate_document_record_types(
+    segments: tuple[object, ...], words: tuple[object, ...]
+) -> None:
     if any(not isinstance(segment, TranscriptSegment) for segment in segments):
         raise ValueError("Transcript documents require typed segments.")
     if any(not isinstance(word, TranscriptWord) for word in words):

@@ -120,15 +120,15 @@ export function sourceName(state, sourceId) {
   return name.length > 42 ? `${name.slice(0, 39)}…` : name;
 }
 
-export function renderActorAttributionOptions(state, selectedId, requireChoice) {
-  const choiceOption = requireChoice
+export function renderActorAttributionOptionsHTML(state, selectedId, requireChoice) {
+  let optionsHTML = requireChoice
     ? '<option value="" selected disabled>Choose project actor…</option>' : "";
-  const options = list(state.data?.actors).filter((actor) => actor.id).map((actor) => {
+  for (const actor of list(state.data?.actors).filter((item) => item.id)) {
     const selected = !requireChoice && actor.id === selectedId ? "selected" : "";
     const label = actor.instrument_role ? `${actor.role} · ${actor.instrument_role}` : actor.role;
-    return `<option value="${escapeHTML(actor.id)}" ${selected}>${escapeHTML(label)}</option>`;
-  }).join("");
-  return choiceOption + options;
+    optionsHTML += `<option value="${escapeHTML(actor.id)}" ${selected}>${escapeHTML(label)}</option>`;
+  }
+  return optionsHTML;
 }
 
 export function renderConfidence(confidence) {

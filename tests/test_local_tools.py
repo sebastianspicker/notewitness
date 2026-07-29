@@ -20,6 +20,7 @@ from notewitness.local_tools import (
     LocalToolProcessLeak,
     LocalToolUnavailable,
     MAX_TOOL_OUTPUT_BYTES,
+    _trusted_python_launcher,
     discover_local_tool,
 )
 
@@ -106,6 +107,19 @@ class LocalToolTests(unittest.TestCase):
         self.assertEqual("helper-ran", result.stdout.strip())
         self.assertEqual(1, len(calls))
         self.assertNotIn("preexec_fn", calls[0])
+
+    def test_runner_falls_back_from_a_mutable_runtime_interpreter(self) -> None:
+        with TemporaryDirectory() as temporary:
+            mutable_interpreter = Path(temporary) / "python3"
+            mutable_interpreter.write_bytes(b"mutable interpreter placeholder")
+            mutable_interpreter.chmod(0o722)
+            with mock.patch(
+                "notewitness.local_tools.sys.executable",
+                str(mutable_interpreter),
+            ):
+                selected = _trusted_python_launcher()
+
+        self.assertEqual(Path("/usr/bin/python3").resolve(), selected)
 
     def test_runner_concurrent_cancellations_complete_without_hanging(self) -> None:
         with TemporaryDirectory() as temporary:

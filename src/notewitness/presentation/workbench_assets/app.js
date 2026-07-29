@@ -204,11 +204,31 @@ function loadWorkbenchData(skipProcessing) {
 function applyLoadedState(data, processing) {
   state.data = data;
   state.processing = processing || { runtime: {}, jobs: [] };
-  if (!humanActors(state).some((actor) => actor.id === state.authorId)) state.authorId = "";
+  retainAvailableAuthor();
+  retainAvailableSource();
+  updateWorkbenchPreferences();
+}
+
+function retainAvailableAuthor() {
+  if (!humanActors(state).some((actor) => actor.id === state.authorId)) {
+    state.authorId = "";
+  }
+}
+
+function retainAvailableSource() {
   const media = list(state.data?.media);
-  if (!media.some((item) => item.source_id === state.activeSourceId)) state.activeSourceId = media[0]?.source_id || "";
+  if (!media.some((item) => item.source_id === state.activeSourceId)) {
+    state.activeSourceId = media[0]?.source_id || "";
+  }
+}
+
+function updateWorkbenchPreferences() {
   state.tempo = Number(state.data?.metronome?.bpm || state.tempo || 72);
-  if (!state.visibleLaneKinds.size) state.visibleLaneKinds = new Set(list(state.data?.timeline?.lanes).map((lane) => lane.kind));
+  if (!state.visibleLaneKinds.size) {
+    state.visibleLaneKinds = new Set(
+      list(state.data?.timeline?.lanes).map((lane) => lane.kind),
+    );
+  }
 }
 
 function startPollingWhenNeeded() {

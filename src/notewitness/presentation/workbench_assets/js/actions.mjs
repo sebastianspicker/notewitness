@@ -296,55 +296,105 @@ export function createActions(c) {
   }
 
   async function exportTranscript() {
-    const format = c.app.querySelector("[data-transcript-format]")?.value || "html";
-    const evidenceLayer = c.app.querySelector("[data-transcript-layer]")?.value || "accepted_only";
-    const rights = Boolean(c.app.querySelector("[data-transcript-rights]")?.checked);
-    const losses = Boolean(c.app.querySelector("[data-transcript-losses]")?.checked);
-    if (!rights || !losses) {
+    const options = transcriptExportOptions();
+    if (!options.rights || !options.losses) {
       c.setNotice("Confirm rights authorization and format-loss acknowledgement before export.", "error");
       return;
     }
-    const extension = format === "webvtt" ? "vtt" : format === "text" ? "txt" : "html";
-    const timestamp = new Date().toISOString().replaceAll(":", "-");
-    const pauseValue = c.app.querySelector("[data-transcript-pause]")?.value || "";
-    const interval = Number(c.app.querySelector("[data-transcript-interval]")?.value || 60000);
     let result = null;
     const saved = await c.runMutation("transcript-export", "Creating transcript export", async () => {
       result = await c.request("/api/exports/transcript", {
-        method: "POST", headers: c.actionHeaders(), body: JSON.stringify({
-          format, filename: `notewitness-transcript-${timestamp}.${extension}`,
-          source_id: c.state.activeSourceId, evidence_layer: evidenceLayer,
-          authorize_local_export: rights, acknowledge_export_losses: losses,
-          visible_timestamps: format === "webvtt" ? false : Boolean(c.app.querySelector("[data-transcript-timestamps]")?.checked),
-          timestamp_interval_ms: Number.isInteger(interval) && interval > 0 ? interval : 60000,
-          pause_threshold_ms: format === "webvtt" || !pauseValue ? null : Number(pauseValue),
-        }),
+        method: "POST",
+        headers: c.actionHeaders(),
+        body: JSON.stringify(transcriptExportPayload(options)),
       });
     });
     if (saved) c.setNotice(`${result?.filename || "Transcript"} saved locally from ${result?.evidence_layer === "include_machine_suggestions" ? "accepted and machine-suggested" : "accepted"} evidence.`, "success");
   }
 
+  function transcriptExportOptions() {
+    return {
+      format: selectedValue("[data-transcript-format]", "html"),
+      evidenceLayer: selectedValue("[data-transcript-layer]", "accepted_only"),
+      rights: checked("[data-transcript-rights]"),
+      losses: checked("[data-transcript-losses]"),
+      pauseValue: selectedValue("[data-transcript-pause]", ""),
+      interval: Number(selectedValue("[data-transcript-interval]", 60000)),
+      visibleTimestamps: checked("[data-transcript-timestamps]"),
+    };
+  }
+
+  function selectedValue(selector, fallback) {
+    return c.app.querySelector(selector)?.value || fallback;
+  }
+
+  function checked(selector) {
+    return Boolean(c.app.querySelector(selector)?.checked);
+  }
+
+  function transcriptExportPayload(options) {
+    const extension = options.format === "webvtt" ? "vtt"
+      : options.format === "text" ? "txt" : "html";
+    const timestamp = new Date().toISOString().replaceAll(":", "-");
+    return {
+      format: options.format,
+      filename: `notewitness-transcript-${timestamp}.${extension}`,
+      source_id: c.state.activeSourceId,
+      evidence_layer: options.evidenceLayer,
+      authorize_local_export: options.rights,
+      acknowledge_export_losses: options.losses,
+      visible_timestamps: options.format === "webvtt" ? false : options.visibleTimestamps,
+      timestamp_interval_ms: validTimestampInterval(options.interval),
+      pause_threshold_ms: transcriptPauseThreshold(options),
+    };
+  }
+
+  function validTimestampInterval(interval) {
+    return Number.isInteger(interval) && interval > 0 ? interval : 60000;
+  }
+
+  function transcriptPauseThreshold(options) {
+    return options.format === "webvtt" || !options.pauseValue
+      ? null : Number(options.pauseValue);
+  }
+
+  const actionHandlers = new Map([
+    ["play", togglePlayback],
+    ["seek-back", () => c.seek((c.state.media?.currentTime || 0) - 5)],
+    ["seek-forward", () => c.seek((c.state.media?.currentTime || 0) + 5)],
+    ["open-bookmark", openBookmarkDialog],
+    ["dismiss-notice", () => c.setNotice("")],
+    ["close-dialog", closeDialog],
+    ["record", toggleRecording],
+    ["cancel-recording", cancelRecording],
+    ["tuner", toggleTuner],
+    ["metronome", toggleMetronome],
+    ["tempo-down", () => setTempo(-1)],
+    ["tempo-up", () => setTempo(1)],
+    ["enqueue-job", c.enqueueJob],
+    ["export-csv", () => exportMusic("csv")],
+    ["export-midi", () => exportMusic("midi")],
+    ["export-transcript", exportTranscript],
+    ["reload", c.load],
+  ]);
+
   async function action(name) {
-    if (name === "play") {
-      if (!c.state.media) return;
-      if (c.state.media.paused) await c.state.media.play().catch((error) => c.setNotice(error.message, "error"));
-      else c.state.media.pause();
-    } else if (name === "seek-back") c.seek((c.state.media?.currentTime || 0) - 5);
-    else if (name === "seek-forward") c.seek((c.state.media?.currentTime || 0) + 5);
-    else if (name === "open-bookmark") openBookmarkDialog();
-    else if (name === "dismiss-notice") c.setNotice("");
-    else if (name === "close-dialog") closeDialog();
-    else if (name === "record") await toggleRecording();
-    else if (name === "cancel-recording") cancelRecording();
-    else if (name === "tuner") await toggleTuner();
-    else if (name === "metronome") await toggleMetronome();
-    else if (name === "tempo-down") setTempo(-1);
-    else if (name === "tempo-up") setTempo(1);
-    else if (name === "enqueue-job") await c.enqueueJob();
-    else if (name === "export-csv") await exportMusic("csv");
-    else if (name === "export-midi") await exportMusic("midi");
-    else if (name === "export-transcript") await exportTranscript();
-    else if (name === "reload") await c.load();
+    const handler = actionHandlers.get(name);
+    if (!handler) return;
+    try {
+      await handler();
+    } catch (error) {
+      c.setNotice(`Action failed: ${error.message}`, "error");
+    }
+  }
+
+  async function togglePlayback() {
+    if (!c.state.media) return;
+    if (c.state.media.paused) {
+      await c.state.media.play().catch((error) => c.setNotice(error.message, "error"));
+    } else {
+      c.state.media.pause();
+    }
   }
 
   function setTempo(change) {
@@ -407,11 +457,19 @@ export function createActions(c) {
     const discard = c.app.querySelector('[data-action="cancel-recording"]');
     button?.classList.toggle("is-recording", recording);
     if (button) button.setAttribute("aria-label", recording ? "Stop and save recording" : "Start local recording");
-    if (label) label.textContent = c.state.captureState === "saving" ? "Saving recording…"
-      : recording ? "Recording locally" : "New local take";
-    if (duration) duration.textContent = recording
-      ? formatTime((Date.now() - c.state.captureStartedAt) / 1000, false) : "Microphone off";
+    if (label) label.textContent = recordingLabel(recording);
+    if (duration) duration.textContent = recordingDuration(recording);
     if (discard) discard.hidden = !recording;
+  }
+
+  function recordingLabel(recording) {
+    if (c.state.captureState === "saving") return "Saving recording…";
+    return recording ? "Recording locally" : "New local take";
+  }
+
+  function recordingDuration(recording) {
+    if (!recording) return "Microphone off";
+    return formatTime((Date.now() - c.state.captureStartedAt) / 1000, false);
   }
 
   async function uploadCapture() {
@@ -609,34 +667,12 @@ export function createActions(c) {
   }
 
   return {
-    acceptSuggestion,
-    reviewRelation,
-    openRevision,
-    openBookmarkDialog,
-    openReviewerSetup,
-    openRenderedDialog,
-    closeDialog,
-    submitDialog,
-    updatePractice,
-    importMedia,
-    exportMusic,
-    exportTranscript,
-    action,
-    setTempo,
-    toggleRecording,
-    cancelRecording,
-    refreshRecordingUI,
-    uploadCapture,
-    toggleTuner,
-    sendTuner,
-    renderTunerReading,
-    toggleMetronome,
-    startMetronome,
-    scheduleClicks,
-    scheduleClick,
-    stopMetronome,
-    restartMetronome,
-    requireHumanActor,
-    attributedActorId,
+    acceptSuggestion, reviewRelation, openRevision, openBookmarkDialog,
+    openReviewerSetup, openRenderedDialog, closeDialog, submitDialog,
+    updatePractice, importMedia, exportMusic, exportTranscript, action, setTempo,
+    toggleRecording, cancelRecording, refreshRecordingUI, uploadCapture,
+    toggleTuner, sendTuner, renderTunerReading, toggleMetronome, startMetronome,
+    scheduleClicks, scheduleClick, stopMetronome, restartMetronome,
+    requireHumanActor, attributedActorId,
   };
 }

@@ -221,13 +221,41 @@ def _entry_for_event(
 
 def _eligible_event(event: Mapping[str, Any], layer: TranscriptEvidenceLayer, accepted_sources: set[str], superseded: set[str]) -> bool:
     event_id, status, body = event.get("id"), event.get("review_status"), event.get("body")
-    return (
-        event.get("type") in {"speech", "speech_over_music"}
-        and status in {"human_accepted", "human_created", "machine_suggested"}
-        and event_id not in superseded
-        and not (status == "machine_suggested" and (layer is TranscriptEvidenceLayer.ACCEPTED_ONLY or event_id in accepted_sources))
-        and isinstance(body, Mapping) and isinstance(body.get("value"), str) and bool(body["value"].strip())
+    return all(
+        (
+            _eligible_speech_type(event.get("type")),
+            _eligible_review_status(status, event_id, layer, accepted_sources, superseded),
+            _has_transcript_text(body),
+        )
     )
+
+
+def _eligible_speech_type(value: object) -> bool:
+    return value in {"speech", "speech_over_music"}
+
+
+def _eligible_review_status(
+    status: object,
+    event_id: object,
+    layer: TranscriptEvidenceLayer,
+    accepted_sources: set[str],
+    superseded: set[str],
+) -> bool:
+    if status not in {"human_accepted", "human_created", "machine_suggested"}:
+        return False
+    if event_id in superseded:
+        return False
+    return not (
+        status == "machine_suggested"
+        and (layer is TranscriptEvidenceLayer.ACCEPTED_ONLY or event_id in accepted_sources)
+    )
+
+
+def _has_transcript_text(body: object) -> bool:
+    if not isinstance(body, Mapping):
+        return False
+    value = body.get("value")
+    return isinstance(value, str) and bool(value.strip())
 
 
 def _require_entries(entries: list[tuple[Mapping[str, Any], Mapping[str, Any]]], layer: TranscriptEvidenceLayer) -> None:

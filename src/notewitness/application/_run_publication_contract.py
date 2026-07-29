@@ -92,34 +92,58 @@ class RunPublication:
 def _validate_publication_identity(publication: RunPublication) -> None:
     if publication.kind not in {"analysis", "transcription"}:
         raise ValueError("Publication kind is invalid.")
+    _validate_run_identity(publication)
+    if not isinstance(publication.source, PublicationSourceIdentity):
+        raise ValueError("Publication source identity is invalid.")
+    _validate_model_identities(publication.model_sha256s)
+
+
+def _validate_run_identity(publication: RunPublication) -> None:
     match = RUN_ID_PATTERN.fullmatch(publication.run_id)
     if match is None or (match.group(1) == "analysis") != (
         publication.kind == "analysis"
     ):
         raise ValueError("Publication run_id does not match its kind.")
-    if not isinstance(publication.source, PublicationSourceIdentity):
-        raise ValueError("Publication source identity is invalid.")
+
+
+def _validate_model_identities(model_sha256s: tuple[str, ...]) -> None:
     if (
-        not publication.model_sha256s
-        or tuple(sorted(set(publication.model_sha256s))) != publication.model_sha256s
-        or any(
-            not SHA256_PATTERN.fullmatch(item) for item in publication.model_sha256s
-        )
+        not model_sha256s
+        or tuple(sorted(set(model_sha256s))) != model_sha256s
+        or any(not SHA256_PATTERN.fullmatch(item) for item in model_sha256s)
     ):
         raise ValueError("Publication model identities are invalid.")
 
 
 def _validate_artifact_map(kind: str, artifacts: Mapping[str, str]) -> None:
-    if not isinstance(artifacts, Mapping) or any(
-        not isinstance(path, str)
-        or not isinstance(digest, str)
-        or not SHA256_PATTERN.fullmatch(digest)
-        for path, digest in artifacts.items()
-    ):
+    if not isinstance(artifacts, Mapping):
         raise ValueError("Publication artifact identities are invalid.")
+    _validate_artifact_identities(artifacts)
+    _validate_artifact_paths(artifacts)
+    _validate_required_artifacts(kind, artifacts)
+
+
+def _validate_artifact_identities(artifacts: Mapping[str, str]) -> None:
+    if any(not _valid_artifact_identity(item) for item in artifacts.items()):
+        raise ValueError("Publication artifact identities are invalid.")
+
+
+def _valid_artifact_identity(item: tuple[object, object]) -> bool:
+    path, digest = item
+    return (
+        isinstance(path, str)
+        and isinstance(digest, str)
+        and SHA256_PATTERN.fullmatch(digest) is not None
+    )
+
+
+def _validate_artifact_paths(artifacts: Mapping[str, str]) -> None:
     normalized = tuple(_artifact_relative_path(path) for path in artifacts)
     if len(normalized) != len(set(normalized)):
         raise ValueError("Publication artifact paths are not unique.")
+
+
+def _validate_required_artifacts(kind: str, artifacts: Mapping[str, str]) -> None:
     required = {"manifest.completed.json", _normalized_artifact_name(kind)}
     if kind == "transcription":
         required.add("transcript.evidence.json")
@@ -133,17 +157,34 @@ def _normalized_artifact_name(kind: str) -> str:
 
 def _artifact_relative_path(value: str) -> str:
     relative = PurePosixPath(value)
-    if (
-        relative.is_absolute()
-        or "\\" in value
-        or not relative.parts
-        or len(relative.parts) > 2
-        or any(part in {"", ".", ".."} for part in relative.parts)
-        or relative.name == "publication.completed.json"
-        or (len(relative.parts) == 2 and relative.parts[0] != "raw")
-    ):
+    if _unsafe_artifact_path(relative, value):
         raise ValueError("Publication artifact path is unsafe.")
     return relative.as_posix()
+
+
+def _unsafe_artifact_path(relative: PurePosixPath, value: str) -> bool:
+    return any(
+        (
+            _invalid_artifact_root(relative, value),
+            _invalid_artifact_parts(relative),
+            relative.name == "publication.completed.json",
+            _invalid_nested_artifact(relative),
+        )
+    )
+
+
+def _invalid_artifact_root(relative: PurePosixPath, value: str) -> bool:
+    return relative.is_absolute() or "\\" in value or not relative.parts
+
+
+def _invalid_artifact_parts(relative: PurePosixPath) -> bool:
+    return len(relative.parts) > 2 or any(
+        part in {"", ".", ".."} for part in relative.parts
+    )
+
+
+def _invalid_nested_artifact(relative: PurePosixPath) -> bool:
+    return len(relative.parts) == 2 and relative.parts[0] != "raw"
 
 
 def _validate_records(publication: RunPublication) -> None:
@@ -162,18 +203,24 @@ def _validate_record_collections(records: Mapping[str, tuple[Mapping[str, Any], 
         raise ValueError("Publication record collections are invalid.")
     record_ids: list[str] = []
     for collection in PUBLICATION_COLLECTIONS:
-        items = records[collection]
-        if not isinstance(items, tuple):
-            raise ValueError("Publication record collections must be immutable.")
-        for record in items:
-            if not isinstance(record, Mapping):
-                raise ValueError("Publication records must be mappings.")
-            record_id = record.get("id")
-            if not isinstance(record_id, str) or not ID_PATTERN.fullmatch(record_id):
-                raise ValueError("Publication record ID is invalid.")
-            record_ids.append(record_id)
+        record_ids.extend(_validated_collection_ids(records[collection]))
     if len(record_ids) != len(set(record_ids)):
         raise ValueError("Publication record IDs must be globally unique.")
+
+
+def _validated_collection_ids(items: object) -> tuple[str, ...]:
+    if not isinstance(items, tuple):
+        raise ValueError("Publication record collections must be immutable.")
+    return tuple(_validated_record_id(record) for record in items)
+
+
+def _validated_record_id(record: object) -> str:
+    if not isinstance(record, Mapping):
+        raise ValueError("Publication records must be mappings.")
+    record_id = record.get("id")
+    if not isinstance(record_id, str) or not ID_PATTERN.fullmatch(record_id):
+        raise ValueError("Publication record ID is invalid.")
+    return record_id
 
 
 def _validate_finite_json(publication: RunPublication) -> None:

@@ -14,7 +14,6 @@ from notewitness.evidence_contract import (
 from notewitness.evidence_validation_assertions import (
     validate_events,
     validate_relations,
-    validate_review_provenance,
 )
 from notewitness.evidence_validation_common import (
     reject_unknown_fields,
@@ -30,6 +29,7 @@ from notewitness.evidence_validation_records import (
     validate_sources,
     validate_targets,
 )
+from notewitness.evidence_validation_review import validate_review_provenance
 from notewitness.evidence_validation_revisions import validate_revisions
 from notewitness.network import NetworkMode
 

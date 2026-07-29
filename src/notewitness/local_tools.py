@@ -450,17 +450,7 @@ def _resource_limited_launcher_command(
     if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) & 0o022:
         raise LocalToolError("Local tool launcher is unavailable.")
 
-    try:
-        interpreter = Path(sys.executable).resolve(strict=True)
-        interpreter_metadata = interpreter.stat()
-    except OSError as exc:
-        raise LocalToolError("Local Python launcher is unavailable.") from exc
-    if (
-        not stat.S_ISREG(interpreter_metadata.st_mode)
-        or not os.access(interpreter, os.X_OK)
-        or stat.S_IMODE(interpreter_metadata.st_mode) & 0o022
-    ):
-        raise LocalToolError("Local Python launcher is unavailable.")
+    interpreter = _trusted_python_launcher()
 
     cpu_seconds = min(MAX_TOOL_TIMEOUT_SECONDS, max(2, timeout_seconds * 2))
     return (
@@ -471,6 +461,24 @@ def _resource_limited_launcher_command(
         "--",
         *command,
     )
+
+
+def _trusted_python_launcher() -> Path:
+    """Select an immutable interpreter for the fixed resource-limit helper."""
+
+    for candidate in dict.fromkeys((Path(sys.executable), Path("/usr/bin/python3"))):
+        try:
+            interpreter = candidate.resolve(strict=True)
+            metadata = interpreter.stat()
+        except OSError:
+            continue
+        if (
+            stat.S_ISREG(metadata.st_mode)
+            and os.access(interpreter, os.X_OK)
+            and not stat.S_IMODE(metadata.st_mode) & 0o022
+        ):
+            return interpreter
+    raise LocalToolError("Local Python launcher is unavailable.")
 
 
 def _communicate_bounded(

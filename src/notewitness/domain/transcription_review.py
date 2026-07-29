@@ -78,15 +78,29 @@ class SpeakerCorrection:
 
 
 def _validate_speaker_correction_basics(correction: SpeakerCorrection) -> None:
+    _validate_speaker_correction_identity(correction)
+    _validate_speaker_correction_parents(correction)
+    _validate_speaker_correction_clusters(correction)
+    _validate_speaker_correction_spans(correction)
+    _validate_speaker_correction_assignment_types(correction)
+
+
+def _validate_speaker_correction_identity(correction: SpeakerCorrection) -> None:
     if not correction.correction_id or not correction.cluster_ids or not correction.author_id:
         raise ValueError("Speaker corrections require identity, clusters, and author.")
     if not correction.reason:
         raise ValueError("Speaker corrections require a reason.")
+    _validate_timestamp(correction.created_at, "created_at", required=True)
+
+
+def _validate_speaker_correction_parents(correction: SpeakerCorrection) -> None:
     if not correction.parent_revision_ids:
         raise ValueError("Speaker corrections require a parent revision.")
     if len(correction.parent_revision_ids) != len(set(correction.parent_revision_ids)):
         raise ValueError("Speaker correction parent revisions must be unique.")
-    _validate_timestamp(correction.created_at, "created_at", required=True)
+
+
+def _validate_speaker_correction_clusters(correction: SpeakerCorrection) -> None:
     if len(correction.cluster_ids) != len(set(correction.cluster_ids)):
         raise ValueError("Speaker correction cluster IDs must be unique.")
     if not correction.result_cluster_ids or any(
@@ -95,10 +109,18 @@ def _validate_speaker_correction_basics(correction: SpeakerCorrection) -> None:
         raise ValueError("Speaker corrections require result cluster IDs.")
     if len(correction.result_cluster_ids) != len(set(correction.result_cluster_ids)):
         raise ValueError("Speaker result cluster IDs must be unique.")
+
+
+def _validate_speaker_correction_spans(correction: SpeakerCorrection) -> None:
     if any(not isinstance(span, MediaSpan) for span in correction.spans):
         raise ValueError("Speaker correction spans must contain MediaSpan values.")
     if len(correction.spans) != len(set(correction.spans)):
         raise ValueError("Speaker correction spans must be unique.")
+
+
+def _validate_speaker_correction_assignment_types(
+    correction: SpeakerCorrection,
+) -> None:
     if not correction.result_span_assignments:
         raise ValueError("Speaker corrections require explicit result-to-span assignments.")
     if any(
