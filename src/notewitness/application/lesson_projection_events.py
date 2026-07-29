@@ -14,7 +14,6 @@ from notewitness.domain.lesson import (
     PlaybackBookmark,
     TimelineExtent,
     TranscriptTurn,
-    text_body,
 )
 from notewitness.domain.timeline import EvidenceAnchor, MediaSpan
 
@@ -221,41 +220,62 @@ def event_display_text(event_type: str, body: object) -> str:
         return value
     if not isinstance(value, Mapping):
         return event_type.replace("_", " ")
-    if event_type == "local:note":
-        parts = []
-        midi = value.get("midi_pitch")
-        frequency = value.get("frequency_hz")
-        track = value.get("source_track_id")
-        if isinstance(midi, (int, float)) and not isinstance(midi, bool):
-            parts.append(f"MIDI {float(midi):.2f}")
-        if isinstance(frequency, (int, float)) and not isinstance(frequency, bool):
-            parts.append(f"{float(frequency):.2f} Hz")
-        if isinstance(track, str) and track:
-            parts.append(f"track {track}")
-        return " · ".join(parts) or "Detected note"
-    if event_type == "local:pitch":
-        frequency = value.get("frequency_hz")
-        if isinstance(frequency, (int, float)) and not isinstance(frequency, bool):
-            return f"Pitch {float(frequency):.2f} Hz"
-    if event_type == "local:instrument":
-        label = value.get("instrument_label")
-        track = value.get("anonymous_instrument_track_id")
-        if isinstance(label, str) and label:
-            suffix = f" · track {track}" if isinstance(track, str) and track else ""
-            return f"Instrument: {label}{suffix}"
-    if event_type == "local:diarization":
-        cluster = value.get("anonymous_cluster_id")
-        if isinstance(cluster, str) and cluster:
-            return f"Anonymous speaker {cluster}"
-    if event_type == "local:score_alignment":
-        score_id = value.get("score_id")
-        position = value.get("score_position")
-        if isinstance(score_id, str) and isinstance(position, Mapping):
-            location = ", ".join(
-                f"{key} {position[key]}" for key in sorted(position)
-            )
-            return f"{score_id}: {location}"
-    return event_type.replace("_", " ")
+    renderer = _EVENT_DISPLAY_RENDERERS.get(event_type)
+    display = renderer(value) if renderer is not None else None
+    return display or event_type.replace("_", " ")
+
+
+def _note_display_text(value: Mapping[object, object]) -> str:
+    parts = []
+    midi = value.get("midi_pitch")
+    frequency = value.get("frequency_hz")
+    track = value.get("source_track_id")
+    if isinstance(midi, (int, float)) and not isinstance(midi, bool):
+        parts.append(f"MIDI {float(midi):.2f}")
+    if isinstance(frequency, (int, float)) and not isinstance(frequency, bool):
+        parts.append(f"{float(frequency):.2f} Hz")
+    if isinstance(track, str) and track:
+        parts.append(f"track {track}")
+    return " · ".join(parts) or "Detected note"
+
+
+def _pitch_display_text(value: Mapping[object, object]) -> str | None:
+    frequency = value.get("frequency_hz")
+    if isinstance(frequency, (int, float)) and not isinstance(frequency, bool):
+        return f"Pitch {float(frequency):.2f} Hz"
+    return None
+
+
+def _instrument_display_text(value: Mapping[object, object]) -> str | None:
+    label = value.get("instrument_label")
+    if not isinstance(label, str) or not label:
+        return None
+    track = value.get("anonymous_instrument_track_id")
+    suffix = f" · track {track}" if isinstance(track, str) and track else ""
+    return f"Instrument: {label}{suffix}"
+
+
+def _diarization_display_text(value: Mapping[object, object]) -> str | None:
+    cluster = value.get("anonymous_cluster_id")
+    return f"Anonymous speaker {cluster}" if isinstance(cluster, str) and cluster else None
+
+
+def _score_alignment_display_text(value: Mapping[object, object]) -> str | None:
+    score_id = value.get("score_id")
+    position = value.get("score_position")
+    if not isinstance(score_id, str) or not isinstance(position, Mapping):
+        return None
+    location = ", ".join(f"{key} {position[key]}" for key in sorted(position))
+    return f"{score_id}: {location}"
+
+
+_EVENT_DISPLAY_RENDERERS = {
+    "local:note": _note_display_text,
+    "local:pitch": _pitch_display_text,
+    "local:instrument": _instrument_display_text,
+    "local:diarization": _diarization_display_text,
+    "local:score_alignment": _score_alignment_display_text,
+}
 
 
 def is_accepted_record(record: Mapping[str, Any]) -> bool:
