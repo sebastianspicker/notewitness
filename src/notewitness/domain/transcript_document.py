@@ -149,61 +149,98 @@ class TranscriptDocument:
         _require_identifier(self.raw_artifact_id, "raw_artifact_id")
         _require_identifier(self.run_id, "run_id")
         _require_language(self.language, "language")
-        if not isinstance(self.segments, tuple):
-            raise ValueError("Transcript document segments must be an immutable tuple.")
-        if not isinstance(self.words, tuple):
-            raise ValueError("Transcript document words must be an immutable tuple.")
-        if len(self.segments) > MAX_SEGMENTS or len(self.words) > MAX_WORDS:
-            raise ValueError("Transcript document exceeds its bounded record limit.")
-        if any(not isinstance(segment, TranscriptSegment) for segment in self.segments):
-            raise ValueError("Transcript documents require typed segments.")
-        if any(not isinstance(word, TranscriptWord) for word in self.words):
-            raise ValueError("Transcript documents require typed words.")
+        _validate_document_records(self.segments, self.words)
+        _validate_document_ids(self.segments, self.words)
+        _validate_document_word_links(self)
 
-        segment_ids = tuple(segment.segment_id for segment in self.segments)
-        word_ids = tuple(word.word_id for word in self.words)
-        if len(segment_ids) != len(set(segment_ids)):
-            raise ValueError("Transcript segment IDs must be unique.")
-        if len(word_ids) != len(set(word_ids)):
-            raise ValueError("Transcript word IDs must be unique.")
-        if set(segment_ids) & set(word_ids):
-            raise ValueError("Transcript segment and word IDs must not collide.")
 
-        words_by_id = {word.word_id: word for word in self.words}
-        linked_word_ids: list[str] = []
-        previous_segment_start: int | None = None
-        for segment in self.segments:
-            if (
-                previous_segment_start is not None
-                and segment.start_us < previous_segment_start
-            ):
-                raise ValueError("Transcript segments must use nondecreasing start times.")
-            previous_segment_start = segment.start_us
-            if (segment.source_id, segment.stream_id) != (self.source_id, self.stream_id):
-                raise ValueError("Every segment must belong to the document source stream.")
-            if self.language != "mul" and segment.language != self.language:
-                raise ValueError("Every segment must use the document language.")
-            previous_word_start: int | None = None
-            for word_id in segment.word_ids:
-                word = words_by_id.get(word_id)
-                if word is None:
-                    raise ValueError("Transcript segment references an unknown word ID.")
-                if (word.source_id, word.stream_id) != (
-                    segment.source_id,
-                    segment.stream_id,
-                ):
-                    raise ValueError("Transcript words must share their segment source stream.")
-                if word.language != segment.language:
-                    raise ValueError("Transcript words must share their segment language.")
-                if word.start_us < segment.start_us or word.end_us > segment.end_us:
-                    raise ValueError("Transcript words must be contained by their segment.")
-                if previous_word_start is not None and word.start_us < previous_word_start:
-                    raise ValueError("Segment words must use nondecreasing start times.")
-                previous_word_start = word.start_us
-                linked_word_ids.append(word_id)
-        if len(linked_word_ids) != len(set(linked_word_ids)):
-            raise ValueError("Each normalized word must belong to one segment.")
-        if set(linked_word_ids) != set(word_ids):
-            raise ValueError("Every normalized word must be linked by a segment.")
-        if tuple(linked_word_ids) != word_ids:
-            raise ValueError("Document words must follow segment and word-link order.")
+def _validate_document_records(
+    segments: object, words: object
+) -> None:
+    if not isinstance(segments, tuple):
+        raise ValueError("Transcript document segments must be an immutable tuple.")
+    if not isinstance(words, tuple):
+        raise ValueError("Transcript document words must be an immutable tuple.")
+    if len(segments) > MAX_SEGMENTS or len(words) > MAX_WORDS:
+        raise ValueError("Transcript document exceeds its bounded record limit.")
+    if any(not isinstance(segment, TranscriptSegment) for segment in segments):
+        raise ValueError("Transcript documents require typed segments.")
+    if any(not isinstance(word, TranscriptWord) for word in words):
+        raise ValueError("Transcript documents require typed words.")
+
+
+def _validate_document_ids(
+    segments: tuple[TranscriptSegment, ...], words: tuple[TranscriptWord, ...]
+) -> None:
+    segment_ids = tuple(segment.segment_id for segment in segments)
+    word_ids = tuple(word.word_id for word in words)
+    if len(segment_ids) != len(set(segment_ids)):
+        raise ValueError("Transcript segment IDs must be unique.")
+    if len(word_ids) != len(set(word_ids)):
+        raise ValueError("Transcript word IDs must be unique.")
+    if set(segment_ids) & set(word_ids):
+        raise ValueError("Transcript segment and word IDs must not collide.")
+
+
+def _validate_document_word_links(document: TranscriptDocument) -> None:
+    words_by_id = {word.word_id: word for word in document.words}
+    linked_word_ids: list[str] = []
+    previous_segment_start: int | None = None
+    for segment in document.segments:
+        _validate_segment_context(document, segment, previous_segment_start)
+        previous_segment_start = segment.start_us
+        _validate_segment_words(segment, words_by_id, linked_word_ids)
+    _validate_linked_word_ids(linked_word_ids, document.words)
+
+
+def _validate_segment_context(
+    document: TranscriptDocument,
+    segment: TranscriptSegment,
+    previous_start: int | None,
+) -> None:
+    if previous_start is not None and segment.start_us < previous_start:
+        raise ValueError("Transcript segments must use nondecreasing start times.")
+    if (segment.source_id, segment.stream_id) != (document.source_id, document.stream_id):
+        raise ValueError("Every segment must belong to the document source stream.")
+    if document.language != "mul" and segment.language != document.language:
+        raise ValueError("Every segment must use the document language.")
+
+
+def _validate_segment_words(
+    segment: TranscriptSegment,
+    words_by_id: dict[str, TranscriptWord],
+    linked_word_ids: list[str],
+) -> None:
+    previous_word_start: int | None = None
+    for word_id in segment.word_ids:
+        word = words_by_id.get(word_id)
+        _validate_segment_word(segment, word, previous_word_start)
+        previous_word_start = word.start_us
+        linked_word_ids.append(word_id)
+
+
+def _validate_segment_word(
+    segment: TranscriptSegment, word: TranscriptWord | None, previous_start: int | None
+) -> None:
+    if word is None:
+        raise ValueError("Transcript segment references an unknown word ID.")
+    if (word.source_id, word.stream_id) != (segment.source_id, segment.stream_id):
+        raise ValueError("Transcript words must share their segment source stream.")
+    if word.language != segment.language:
+        raise ValueError("Transcript words must share their segment language.")
+    if word.start_us < segment.start_us or word.end_us > segment.end_us:
+        raise ValueError("Transcript words must be contained by their segment.")
+    if previous_start is not None and word.start_us < previous_start:
+        raise ValueError("Segment words must use nondecreasing start times.")
+
+
+def _validate_linked_word_ids(
+    linked_word_ids: list[str], words: tuple[TranscriptWord, ...]
+) -> None:
+    word_ids = tuple(word.word_id for word in words)
+    if len(linked_word_ids) != len(set(linked_word_ids)):
+        raise ValueError("Each normalized word must belong to one segment.")
+    if set(linked_word_ids) != set(word_ids):
+        raise ValueError("Every normalized word must be linked by a segment.")
+    if tuple(linked_word_ids) != word_ids:
+        raise ValueError("Document words must follow segment and word-link order.")

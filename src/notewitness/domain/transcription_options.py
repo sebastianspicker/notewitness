@@ -70,76 +70,12 @@ class TranscriptionJobSpec:
     adapter_settings: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if not isinstance(self.job_id, str) or not isinstance(
-            self.model_profile_id, str
-        ) or not self.job_id or not self.model_profile_id:
-            raise ValueError("Transcription jobs require job and model profile IDs.")
-        if (
-            not isinstance(self.spans, tuple)
-            or any(not isinstance(span, MediaSpan) for span in self.spans)
-            or not self.spans
-            or len(self.spans) > MAX_TRANSCRIPTION_SOURCES
-        ):
-            raise ValueError(
-                f"Transcription jobs require 1-{MAX_TRANSCRIPTION_SOURCES} spans."
-            )
-        if any(span.duration_us <= 0 for span in self.spans):
-            raise ValueError("Transcription spans require positive duration.")
-        if len(self.spans) != len(set(self.spans)):
-            raise ValueError("Transcription spans must not contain duplicates.")
-        if len({span.source_id for span in self.spans}) != 1:
-            raise ValueError(
-                "One transcription job may contain spans from only one source; "
-                "use a queue for batch work."
-            )
-        _require_enum(self.language_mode, LanguageMode, "language_mode")
-        _require_enum(self.diarization_mode, DiarizationMode, "diarization_mode")
-        _require_enum(self.disfluency_policy, DisfluencyPolicy, "disfluency_policy")
-        _require_enum(self.output_format, TranscriptExportFormat, "output_format")
-        _require_bool(self.detect_overlap, "detect_overlap")
-        _require_bool(self.visible_timestamps, "visible_timestamps")
-        if self.requested_language is not None and (
-            not isinstance(self.requested_language, str)
-            or not self.requested_language.strip()
-        ):
-            raise ValueError("requested_language must be a non-empty string.")
-        if self.language_mode is LanguageMode.FIXED and not self.requested_language:
-            raise ValueError("Fixed language mode requires requested_language.")
-        if self.language_mode is not LanguageMode.FIXED and self.requested_language:
-            raise ValueError(
-                "requested_language is only valid for fixed language mode."
-            )
-        if self.diarization_mode is DiarizationMode.EXACT:
-            if (
-                not isinstance(self.exact_speaker_count, int)
-                or isinstance(self.exact_speaker_count, bool)
-                or not 1 <= self.exact_speaker_count <= MAX_EXACT_SPEAKERS
-            ):
-                raise ValueError(
-                    "Exact diarization requires a speaker count from 1 to 10."
-                )
-        elif self.exact_speaker_count is not None:
-            raise ValueError("exact_speaker_count requires exact diarization mode.")
-        if (
-            self.pause_threshold_ms is not None
-            and self.pause_threshold_ms not in _PAUSE_THRESHOLDS_MS
-        ):
-            raise ValueError("Pause threshold must be off, 1000, 2000, or 3000 ms.")
-        if (
-            not isinstance(self.timestamp_interval_ms, int)
-            or isinstance(self.timestamp_interval_ms, bool)
-            or self.timestamp_interval_ms <= 0
-        ):
-            raise ValueError("timestamp_interval_ms must be a positive integer.")
-        for artifact_id in (
-            self.model_vocabulary_artifact_id,
-            self.adapter_prompt_artifact_id,
-            self.project_lexicon_id,
-        ):
-            if artifact_id is not None and not artifact_id.strip():
-                raise ValueError("Optional vocabulary and prompt IDs must not be empty.")
-        if not isinstance(self.adapter_settings, Mapping):
-            raise ValueError("adapter_settings must be a JSON object.")
+        _validate_job_identity_and_spans(self)
+        _validate_job_options(self)
+        _validate_job_language_and_diarization(self)
+        _validate_job_output(self)
+        _validate_optional_artifact_ids(self)
+        _validate_adapter_settings(self.adapter_settings)
         _validate_common_adapter_settings(self.adapter_settings)
         object.__setattr__(
             self,
@@ -231,20 +167,84 @@ class TranscriptionQueuePlan:
 
 
 def _validate_common_adapter_settings(settings: Mapping[str, Any]) -> None:
-    beam_size = settings.get("beam_size")
+    _validate_beam_size(settings.get("beam_size"))
+    _validate_vad_threshold(settings.get("vad_threshold"))
+    _validate_adapter_setting_strings(settings)
+
+
+def _validate_job_identity_and_spans(job: TranscriptionJobSpec) -> None:
+    if not isinstance(job.job_id, str) or not isinstance(job.model_profile_id, str) or not job.job_id or not job.model_profile_id:
+        raise ValueError("Transcription jobs require job and model profile IDs.")
+    if not isinstance(job.spans, tuple) or any(not isinstance(span, MediaSpan) for span in job.spans) or not job.spans or len(job.spans) > MAX_TRANSCRIPTION_SOURCES:
+        raise ValueError(f"Transcription jobs require 1-{MAX_TRANSCRIPTION_SOURCES} spans.")
+    if any(span.duration_us <= 0 for span in job.spans):
+        raise ValueError("Transcription spans require positive duration.")
+    if len(job.spans) != len(set(job.spans)):
+        raise ValueError("Transcription spans must not contain duplicates.")
+    if len({span.source_id for span in job.spans}) != 1:
+        raise ValueError("One transcription job may contain spans from only one source; use a queue for batch work.")
+
+
+def _validate_job_options(job: TranscriptionJobSpec) -> None:
+    _require_enum(job.language_mode, LanguageMode, "language_mode")
+    _require_enum(job.diarization_mode, DiarizationMode, "diarization_mode")
+    _require_enum(job.disfluency_policy, DisfluencyPolicy, "disfluency_policy")
+    _require_enum(job.output_format, TranscriptExportFormat, "output_format")
+    _require_bool(job.detect_overlap, "detect_overlap")
+    _require_bool(job.visible_timestamps, "visible_timestamps")
+
+
+def _validate_job_language_and_diarization(job: TranscriptionJobSpec) -> None:
+    if job.requested_language is not None and (not isinstance(job.requested_language, str) or not job.requested_language.strip()):
+        raise ValueError("requested_language must be a non-empty string.")
+    if job.language_mode is LanguageMode.FIXED and not job.requested_language:
+        raise ValueError("Fixed language mode requires requested_language.")
+    if job.language_mode is not LanguageMode.FIXED and job.requested_language:
+        raise ValueError("requested_language is only valid for fixed language mode.")
+    if job.diarization_mode is DiarizationMode.EXACT:
+        _validate_exact_speaker_count(job.exact_speaker_count)
+    elif job.exact_speaker_count is not None:
+        raise ValueError("exact_speaker_count requires exact diarization mode.")
+
+
+def _validate_exact_speaker_count(value: object) -> None:
+    if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= MAX_EXACT_SPEAKERS:
+        raise ValueError("Exact diarization requires a speaker count from 1 to 10.")
+
+
+def _validate_job_output(job: TranscriptionJobSpec) -> None:
+    if job.pause_threshold_ms is not None and job.pause_threshold_ms not in _PAUSE_THRESHOLDS_MS:
+        raise ValueError("Pause threshold must be off, 1000, 2000, or 3000 ms.")
+    if not isinstance(job.timestamp_interval_ms, int) or isinstance(job.timestamp_interval_ms, bool) or job.timestamp_interval_ms <= 0:
+        raise ValueError("timestamp_interval_ms must be a positive integer.")
+
+
+def _validate_optional_artifact_ids(job: TranscriptionJobSpec) -> None:
+    for artifact_id in (job.model_vocabulary_artifact_id, job.adapter_prompt_artifact_id, job.project_lexicon_id):
+        if artifact_id is not None and not artifact_id.strip():
+            raise ValueError("Optional vocabulary and prompt IDs must not be empty.")
+
+
+def _validate_adapter_settings(settings: object) -> None:
+    if not isinstance(settings, Mapping):
+        raise ValueError("adapter_settings must be a JSON object.")
+
+
+def _validate_beam_size(beam_size: object) -> None:
     if beam_size is not None and (
         not isinstance(beam_size, int)
         or isinstance(beam_size, bool)
         or not 1 <= beam_size <= 100
     ):
         raise ValueError("beam_size must be an integer in [1, 100].")
-    vad_threshold = settings.get("vad_threshold")
+def _validate_vad_threshold(vad_threshold: object) -> None:
     if vad_threshold is not None and (
         isinstance(vad_threshold, bool)
         or not isinstance(vad_threshold, (int, float))
         or not 0.0 <= vad_threshold <= 1.0
     ):
         raise ValueError("vad_threshold must be in [0, 1].")
+def _validate_adapter_setting_strings(settings: Mapping[str, Any]) -> None:
     for key in ("compute_type", "device", "backend"):
         value = settings.get(key)
         if value is not None and (

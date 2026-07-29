@@ -150,133 +150,22 @@ class TranscriptionRunManifest:
     runtime_artifacts: tuple[ResolvedRunArtifact, ...] = ()
 
     def __post_init__(self) -> None:
-        if not all(
-            (
-                self.run_id,
-                self.adapter_id,
-                self.adapter_version,
-            )
-        ):
-            raise ValueError(
-                "Run manifests require run, adapter, and resolved profile identity."
-            )
+        _validate_manifest_identity(self)
         _require_enum(self.state, TranscriptionRunState, "state")
         _require_bool(self.partial, "partial")
-        if not isinstance(self.job, TranscriptionJobSpec):
-            raise ValueError("Run manifests require a validated job snapshot.")
-        if not isinstance(self.resolved_model_profile, ResolvedModelProfile):
-            raise ValueError("Run manifests require a resolved model profile.")
-        if not isinstance(self.code_artifact, ResolvedRunArtifact) or any(
-            not isinstance(artifact, ResolvedRunArtifact)
-            for artifact in self.model_artifacts
-        ) or any(
-            not isinstance(artifact, ResolvedRunArtifact)
-            for artifact in self.runtime_artifacts
-        ):
-            raise ValueError("Run manifests require resolved artifact snapshots.")
-        if any(
-            not isinstance(checksum, SourceChecksum)
-            for checksum in self.source_checksums
-        ) or any(
-            not isinstance(language, DetectedLanguage)
-            for language in self.detected_languages
-        ):
-            raise ValueError(
-                "Run manifests require typed checksum and language evidence."
-            )
-        source_ids = {span.source_id for span in self.job.spans}
-        checksum_ids = {checksum.source_id for checksum in self.source_checksums}
-        if source_ids != checksum_ids or len(checksum_ids) != len(self.source_checksums):
-            raise ValueError("Run manifests require one checksum per input source.")
-        if not self.model_artifacts:
-            raise ValueError("Run manifests require code and model artifacts.")
-        artifact_ids = (
-            self.code_artifact.artifact_id,
-            *(artifact.artifact_id for artifact in self.model_artifacts),
-            *(artifact.artifact_id for artifact in self.runtime_artifacts),
-        )
-        if len(artifact_ids) != len(set(artifact_ids)):
-            raise ValueError("Run manifest artifact IDs must be unique.")
-        if not _SHA256.fullmatch(self.runtime_fingerprint_sha256):
-            raise ValueError("Run manifests require a runtime fingerprint SHA-256.")
+        _validate_manifest_snapshots(self)
+        _validate_manifest_sources_and_artifacts(self)
+        _validate_runtime_fingerprint(self.runtime_fingerprint_sha256)
         object.__setattr__(
             self,
             "effective_settings",
             _freeze_settings(self.effective_settings, "effective_settings"),
         )
-        if self.resolved_model_profile.requested_profile_id != self.job.model_profile_id:
-            raise ValueError("Resolved profile does not match the requested profile.")
-        if self.resolved_model_profile.adapter_id != self.adapter_id:
-            raise ValueError("Resolved profile does not match the run adapter.")
-        if self.resolved_model_profile.model_artifact_ids != tuple(
-            artifact.artifact_id for artifact in self.model_artifacts
-        ):
-            raise ValueError("Resolved profile does not match run model artifacts.")
-        effective_settings_sha256 = transcription_settings_sha256(
-            self.effective_settings
-        )
-        if (
-            self.resolved_model_profile.effective_settings_sha256
-            != effective_settings_sha256
-        ):
-            raise ValueError("Resolved profile does not match effective settings.")
-        for detected in self.detected_languages:
-            if detected.span is not None and not any(
-                _span_contains(job_span, detected.span) for job_span in self.job.spans
-            ):
-                raise ValueError(
-                    "Detected-language spans must be inside a requested input span."
-                )
-        started = _validate_timestamp(self.started_at, "started_at")
-        finished = _validate_timestamp(self.finished_at, "finished_at")
-        if self.finished_at is not None and self.started_at is None:
-            raise ValueError("A finished run requires a start timestamp.")
-        if started is not None and finished is not None and finished < started:
-            raise ValueError("A run cannot finish before it starts.")
-        if self.state is TranscriptionRunState.QUEUED and (
-            self.started_at is not None or self.finished_at is not None
-        ):
-            raise ValueError("A queued run cannot have execution timestamps.")
-        if self.state is TranscriptionRunState.COMPLETED and (
-            self.started_at is None or self.finished_at is None
-        ):
-            raise ValueError("A completed run requires start and finish timestamps.")
-        if self.state in {
-            TranscriptionRunState.CONVERTING,
-            TranscriptionRunState.DIARIZING,
-            TranscriptionRunState.TRANSCRIBING,
-            TranscriptionRunState.NORMALIZING,
-            TranscriptionRunState.REVIEW,
-        } and self.started_at is None:
-            raise ValueError("An active transcription run requires a start timestamp.")
-        if self.state in {
-            TranscriptionRunState.CANCELLED,
-            TranscriptionRunState.FAILED,
-        } and self.started_at is not None and self.finished_at is None:
-            raise ValueError("A started terminal run requires a finish timestamp.")
-        if (
-            self.state is TranscriptionRunState.COMPLETED
-            and self.job.language_mode
-            in {LanguageMode.AUTO, LanguageMode.MULTILINGUAL}
-            and not self.detected_languages
-        ):
-            raise ValueError(
-                "Completed automatic-language runs require detected language evidence."
-            )
-        if self.state not in {
-            TranscriptionRunState.COMPLETED,
-            TranscriptionRunState.CANCELLED,
-            TranscriptionRunState.FAILED,
-        } and self.finished_at is not None:
-            raise ValueError("Only terminal runs may have a finish timestamp.")
-        if self.state is TranscriptionRunState.COMPLETED and self.partial:
-            raise ValueError("A completed transcription run cannot be partial.")
-        if self.state is TranscriptionRunState.FAILED and not self.failure_code:
-            raise ValueError("Failed transcription runs require a failure code.")
-        if self.state is not TranscriptionRunState.FAILED and self.failure_code:
-            raise ValueError("failure_code is only valid for failed runs.")
-        if self.retry_parent_run_id == self.run_id:
-            raise ValueError("A transcription run cannot retry itself.")
+        _validate_resolved_profile(self)
+        _validate_detected_languages(self)
+        _validate_manifest_timestamps(self)
+        _validate_manifest_state(self)
+        _validate_manifest_failure_and_retry(self)
 
     @property
     def code_artifact_id(self) -> str:
@@ -292,6 +181,104 @@ class TranscriptionRunManifest:
 
     def as_dict(self) -> dict[str, Any]:
         return _json_ready(asdict(self))
+
+
+def _validate_manifest_identity(manifest: TranscriptionRunManifest) -> None:
+    if not all((manifest.run_id, manifest.adapter_id, manifest.adapter_version)):
+        raise ValueError("Run manifests require run, adapter, and resolved profile identity.")
+
+
+def _validate_manifest_snapshots(manifest: TranscriptionRunManifest) -> None:
+    if not isinstance(manifest.job, TranscriptionJobSpec):
+        raise ValueError("Run manifests require a validated job snapshot.")
+    if not isinstance(manifest.resolved_model_profile, ResolvedModelProfile):
+        raise ValueError("Run manifests require a resolved model profile.")
+    if not isinstance(manifest.code_artifact, ResolvedRunArtifact) or any(not isinstance(artifact, ResolvedRunArtifact) for artifact in manifest.model_artifacts) or any(not isinstance(artifact, ResolvedRunArtifact) for artifact in manifest.runtime_artifacts):
+        raise ValueError("Run manifests require resolved artifact snapshots.")
+    if any(not isinstance(checksum, SourceChecksum) for checksum in manifest.source_checksums) or any(not isinstance(language, DetectedLanguage) for language in manifest.detected_languages):
+        raise ValueError("Run manifests require typed checksum and language evidence.")
+
+
+def _validate_manifest_sources_and_artifacts(manifest: TranscriptionRunManifest) -> None:
+    source_ids = {span.source_id for span in manifest.job.spans}
+    checksum_ids = {checksum.source_id for checksum in manifest.source_checksums}
+    if source_ids != checksum_ids or len(checksum_ids) != len(manifest.source_checksums):
+        raise ValueError("Run manifests require one checksum per input source.")
+    if not manifest.model_artifacts:
+        raise ValueError("Run manifests require code and model artifacts.")
+    artifact_ids = (manifest.code_artifact.artifact_id, *(artifact.artifact_id for artifact in manifest.model_artifacts), *(artifact.artifact_id for artifact in manifest.runtime_artifacts))
+    if len(artifact_ids) != len(set(artifact_ids)):
+        raise ValueError("Run manifest artifact IDs must be unique.")
+
+
+def _validate_runtime_fingerprint(value: str) -> None:
+    if not _SHA256.fullmatch(value):
+        raise ValueError("Run manifests require a runtime fingerprint SHA-256.")
+
+
+def _validate_resolved_profile(manifest: TranscriptionRunManifest) -> None:
+    profile = manifest.resolved_model_profile
+    if profile.requested_profile_id != manifest.job.model_profile_id:
+        raise ValueError("Resolved profile does not match the requested profile.")
+    if profile.adapter_id != manifest.adapter_id:
+        raise ValueError("Resolved profile does not match the run adapter.")
+    if profile.model_artifact_ids != tuple(artifact.artifact_id for artifact in manifest.model_artifacts):
+        raise ValueError("Resolved profile does not match run model artifacts.")
+    if profile.effective_settings_sha256 != transcription_settings_sha256(manifest.effective_settings):
+        raise ValueError("Resolved profile does not match effective settings.")
+
+
+def _validate_detected_languages(manifest: TranscriptionRunManifest) -> None:
+    for detected in manifest.detected_languages:
+        if detected.span is not None and not any(_span_contains(job_span, detected.span) for job_span in manifest.job.spans):
+            raise ValueError("Detected-language spans must be inside a requested input span.")
+
+
+def _validate_manifest_timestamps(manifest: TranscriptionRunManifest) -> None:
+    started = _validate_timestamp(manifest.started_at, "started_at")
+    finished = _validate_timestamp(manifest.finished_at, "finished_at")
+    if manifest.finished_at is not None and manifest.started_at is None:
+        raise ValueError("A finished run requires a start timestamp.")
+    if started is not None and finished is not None and finished < started:
+        raise ValueError("A run cannot finish before it starts.")
+
+
+def _validate_manifest_state(manifest: TranscriptionRunManifest) -> None:
+    _validate_state_timestamps(manifest)
+    _validate_completed_language_evidence(manifest)
+    _validate_terminal_finish_timestamp(manifest)
+    if manifest.state is TranscriptionRunState.COMPLETED and manifest.partial:
+        raise ValueError("A completed transcription run cannot be partial.")
+
+
+def _validate_state_timestamps(manifest: TranscriptionRunManifest) -> None:
+    if manifest.state is TranscriptionRunState.QUEUED and (manifest.started_at is not None or manifest.finished_at is not None):
+        raise ValueError("A queued run cannot have execution timestamps.")
+    if manifest.state is TranscriptionRunState.COMPLETED and (manifest.started_at is None or manifest.finished_at is None):
+        raise ValueError("A completed run requires start and finish timestamps.")
+    if manifest.state in {TranscriptionRunState.CONVERTING, TranscriptionRunState.DIARIZING, TranscriptionRunState.TRANSCRIBING, TranscriptionRunState.NORMALIZING, TranscriptionRunState.REVIEW} and manifest.started_at is None:
+        raise ValueError("An active transcription run requires a start timestamp.")
+    if manifest.state in {TranscriptionRunState.CANCELLED, TranscriptionRunState.FAILED} and manifest.started_at is not None and manifest.finished_at is None:
+        raise ValueError("A started terminal run requires a finish timestamp.")
+
+
+def _validate_completed_language_evidence(manifest: TranscriptionRunManifest) -> None:
+    if manifest.state is TranscriptionRunState.COMPLETED and manifest.job.language_mode in {LanguageMode.AUTO, LanguageMode.MULTILINGUAL} and not manifest.detected_languages:
+        raise ValueError("Completed automatic-language runs require detected language evidence.")
+
+
+def _validate_terminal_finish_timestamp(manifest: TranscriptionRunManifest) -> None:
+    if manifest.state not in {TranscriptionRunState.COMPLETED, TranscriptionRunState.CANCELLED, TranscriptionRunState.FAILED} and manifest.finished_at is not None:
+        raise ValueError("Only terminal runs may have a finish timestamp.")
+
+
+def _validate_manifest_failure_and_retry(manifest: TranscriptionRunManifest) -> None:
+    if manifest.state is TranscriptionRunState.FAILED and not manifest.failure_code:
+        raise ValueError("Failed transcription runs require a failure code.")
+    if manifest.state is not TranscriptionRunState.FAILED and manifest.failure_code:
+        raise ValueError("failure_code is only valid for failed runs.")
+    if manifest.retry_parent_run_id == manifest.run_id:
+        raise ValueError("A transcription run cannot retry itself.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -400,19 +387,21 @@ def _same_retry_contract(
     parent: TranscriptionRunManifest,
     child: TranscriptionRunManifest,
 ) -> bool:
-    return bool(
-        parent.job.as_dict() == child.job.as_dict()
-        and parent.source_checksums == child.source_checksums
-        and parent.adapter_id == child.adapter_id
-        and parent.adapter_version == child.adapter_version
-        and parent.code_artifact == child.code_artifact
-        and parent.model_artifacts == child.model_artifacts
-        and parent.runtime_artifacts == child.runtime_artifacts
-        and parent.resolved_model_profile == child.resolved_model_profile
-        and parent.runtime_fingerprint_sha256
-        == child.runtime_fingerprint_sha256
-        and _json_ready(parent.effective_settings)
-        == _json_ready(child.effective_settings)
+    return _retry_contract(parent) == _retry_contract(child)
+
+
+def _retry_contract(manifest: TranscriptionRunManifest) -> tuple[object, ...]:
+    return (
+        manifest.job.as_dict(),
+        manifest.source_checksums,
+        manifest.adapter_id,
+        manifest.adapter_version,
+        manifest.code_artifact,
+        manifest.model_artifacts,
+        manifest.runtime_artifacts,
+        manifest.resolved_model_profile,
+        manifest.runtime_fingerprint_sha256,
+        _json_ready(manifest.effective_settings),
     )
 
 
