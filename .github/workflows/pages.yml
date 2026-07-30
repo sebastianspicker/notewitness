@@ -35,6 +35,8 @@ jobs:
         with:
           python-version: "3.11"
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - run: bash scripts/build_pages_demo.sh
       - uses: actions/upload-pages-artifact@v4
         with:
