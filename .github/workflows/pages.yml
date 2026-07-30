@@ -6,10 +6,10 @@ on:
     paths:
       - ".github/workflows/pages.yml"
       - "fixtures/synthetic_lesson/**"
-      - "scripts/build_pages_demo.mjs"
+      - "scripts/build_pages_demo.sh"
       - "scripts/export_screenshot_state.py"
-      - "scripts/pages_demo.css"
       - "scripts/pages_demo_client.js"
+      - "scripts/render_pages_demo.mjs"
       - "src/notewitness/**"
   workflow_dispatch:
 
@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: "3.11"
       - uses: actions/configure-pages@v5
-      - run: node scripts/build_pages_demo.mjs
+      - run: bash scripts/build_pages_demo.sh
       - uses: actions/upload-pages-artifact@v4
         with:
           path: _site

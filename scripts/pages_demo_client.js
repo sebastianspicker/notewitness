@@ -19,14 +19,14 @@ function markSimulatedCommands(root = app) {
     if (control.matches("input")) {
       const label = control.closest("label");
       if (label && !label.querySelector(".demo-action-label")) {
-        label.insertAdjacentHTML("beforeend", '<span class="demo-action-label">Simulated</span>');
+        label.append(simulationLabel());
       }
       return;
     }
     if (control.matches(".record-button")) {
       const group = control.closest(".record-group")?.querySelector("div");
       if (group && !group.querySelector(".demo-action-label")) {
-        group.insertAdjacentHTML("beforeend", '<span class="demo-action-label">Simulated</span>');
+        group.append(simulationLabel());
       }
       return;
     }
@@ -37,19 +37,42 @@ function markSimulatedCommands(root = app) {
     input.disabled = true;
     const label = input.closest("label");
     if (label && !label.querySelector(".demo-action-label")) {
-      label.querySelector("span")?.insertAdjacentHTML("beforeend", '<span class="demo-action-label">Simulated</span>');
+      label.querySelector("span")?.append(simulationLabel());
     }
   });
   const source = root.querySelector(".source-section");
   if (source && !source.querySelector(".demo-command-help")) {
-    source.insertAdjacentHTML("beforeend", '<p class="demo-command-help"><strong>Static walkthrough.</strong> Navigation changes this page only. Marked actions never run commands, access devices, upload, save, or export.</p>');
+    const help = document.createElement("p");
+    help.className = "demo-command-help";
+    const heading = document.createElement("strong");
+    heading.textContent = "Static walkthrough. ";
+    help.append(heading, "Navigation changes this page only. Marked actions never run commands, access devices, upload, save, or export.");
+    source.append(help);
   }
+}
+
+function simulationLabel() {
+  const label = document.createElement("span");
+  label.className = "demo-action-label";
+  label.textContent = "Simulated";
+  return label;
 }
 
 function showNotice(message, kind = "info") {
   const region = app.querySelector("[data-notice-region]");
   if (!region) return;
-  region.innerHTML = `<div class="notice" data-kind="${kind}" role="status"><span>${message}</span><button type="button" data-demo-dismiss>Dismiss</button></div>`;
+  const notice = document.createElement("div");
+  notice.className = "notice";
+  notice.dataset.kind = ["success", "error", "warning"].includes(kind) ? kind : "info";
+  notice.setAttribute("role", "status");
+  const text = document.createElement("span");
+  text.textContent = message;
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.dataset.demoDismiss = "";
+  dismiss.textContent = "Dismiss";
+  notice.append(text, dismiss);
+  region.replaceChildren(notice);
 }
 
 function selectPanel(name, focus = false) {
@@ -73,7 +96,14 @@ function applyAcceptedState() {
   if (count) count.textContent = "0";
   const list = app.querySelector(".review-list");
   if (list && !list.children.length) {
-    list.innerHTML = '<li class="empty-state"><strong>Simulation complete</strong><p>The suggestion was removed from this browser-only queue. No evidence was saved.</p></li>';
+    const empty = document.createElement("li");
+    empty.className = "empty-state";
+    const title = document.createElement("strong");
+    title.textContent = "Simulation complete";
+    const detail = document.createElement("p");
+    detail.textContent = "The suggestion was removed from this browser-only queue. No evidence was saved.";
+    empty.append(title, detail);
+    list.append(empty);
   }
   const kicker = app.querySelector("#panel-review .panel-header .kicker");
   if (kicker) kicker.textContent = "0 items";
@@ -103,6 +133,20 @@ function selectTime(seconds) {
   });
 }
 
+function simulateTransport(control) {
+  if (control.dataset.action === "play") {
+    const label = control.querySelector("[data-play-icon]");
+    if (label) label.textContent = label.textContent === "Play" ? "Pause" : "Play";
+    showNotice("Simulated transport only. The synthetic fixture contains no playable media.");
+    return true;
+  }
+  if (control.dataset.action === "seek-back" || control.dataset.action === "seek-forward") {
+    selectTime(demoState.currentSeconds + (control.dataset.action === "seek-back" ? -5 : 5));
+    return true;
+  }
+  return false;
+}
+
 function simulateCommand(control) {
   if (control.matches("[data-accept]")) {
     demoState.accepted = true;
@@ -114,16 +158,7 @@ function simulateCommand(control) {
     showNotice("Simulated practice-state change only. Nothing was saved.");
     return;
   }
-  if (control.dataset.action === "play") {
-    const label = control.querySelector("[data-play-icon]");
-    if (label) label.textContent = label.textContent === "Play" ? "Pause" : "Play";
-    showNotice("Simulated transport only. The synthetic fixture contains no playable media.");
-    return;
-  }
-  if (control.dataset.action === "seek-back" || control.dataset.action === "seek-forward") {
-    selectTime(demoState.currentSeconds + (control.dataset.action === "seek-back" ? -5 : 5));
-    return;
-  }
+  if (simulateTransport(control)) return;
   showNotice("Simulated action only. The published demo cannot run commands, access devices, save, upload, or export.");
 }
 
@@ -171,7 +206,8 @@ app.addEventListener("keydown", (event) => {
   const index = tabs.indexOf(current);
   const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
     : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-  selectPanel(tabs[nextIndex].dataset.tab, true);
+  const nextTab = tabs.find((tab, tabIndex) => tabIndex === nextIndex);
+  if (nextTab) selectPanel(nextTab.dataset.tab, true);
 });
 
 markSimulatedCommands();
