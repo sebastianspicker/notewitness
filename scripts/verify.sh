@@ -50,5 +50,9 @@ node --check src/notewitness/presentation/workbench_assets/js/api.mjs
 node --check src/notewitness/presentation/workbench_assets/js/playback.mjs
 node --check src/notewitness/presentation/workbench_assets/js/processing.mjs
 node --check src/notewitness/presentation/workbench_assets/js/actions.mjs
+node --check scripts/render_pages_demo.mjs
+node --check scripts/pages_demo_client.js
+python3 -m py_compile scripts/assemble_pages_demo.py
 node tests/javascript/test_tuner.mjs
 node tests/javascript/test_workbench_ui.mjs
+bash scripts/build_pages_demo.sh
