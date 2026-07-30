@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/pages.yml"
       - "fixtures/synthetic_lesson/**"
+      - "scripts/assemble_pages_demo.py"
       - "scripts/build_pages_demo.sh"
       - "scripts/export_screenshot_state.py"
       - "scripts/pages_demo_client.js"

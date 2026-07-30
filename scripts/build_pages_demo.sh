@@ -15,6 +15,7 @@ cp "$script_dir/pages_demo_client.js" "$site_dir/assets/pages-demo.js"
 
 PYTHONPATH="$repo_dir/src" python3 "$script_dir/export_screenshot_state.py" \
   | node "$script_dir/render_pages_demo.mjs" \
+  | python3 "$script_dir/assemble_pages_demo.py" \
   | sed 's#/assets/#./assets/#g' > "$site_dir/index.html"
 touch "$site_dir/.nojekyll"
 
