@@ -1,0 +1,64 @@
+/* Static-demo framing layered on the real workbench visual system. */
+.demo-disclosure {
+  margin: 0 0 3px;
+  color: var(--indigo);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+[data-demo-command="simulated"]::after,
+.demo-action-label {
+  display: inline-block;
+  margin-left: 6px;
+  color: currentColor;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+[data-demo-command="simulated"]::after {
+  content: "Simulated";
+}
+
+.file-button .demo-action-label {
+  margin-left: 4px;
+}
+
+.record-group .demo-action-label,
+.practice-list .demo-action-label,
+.quick-plan .demo-action-label {
+  margin: 3px 0 0;
+}
+
+.demo-command-help {
+  margin: 8px 0 0;
+  color: var(--mute);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.demo-command-help strong {
+  color: var(--indigo-deep);
+  font-weight: 650;
+}
+
+.demo-hidden {
+  display: none !important;
+}
+
+.full-select.is-hidden {
+  width: 1px;
+  min-height: 0;
+}
+
+@media (max-width: 780px) {
+  .demo-disclosure {
+    margin-top: 2px;
+  }
+
+}

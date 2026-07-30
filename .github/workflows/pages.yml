@@ -1,0 +1,43 @@
+name: deploy static demo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages.yml"
+      - "fixtures/synthetic_lesson/**"
+      - "scripts/build_pages_demo.mjs"
+      - "scripts/export_screenshot_state.py"
+      - "scripts/pages_demo.css"
+      - "scripts/pages_demo_client.js"
+      - "src/notewitness/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - uses: actions/configure-pages@v5
+      - run: node scripts/build_pages_demo.mjs
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
