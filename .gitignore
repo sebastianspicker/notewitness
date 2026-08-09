@@ -79,8 +79,10 @@ Thumbs.db
 /.serena/
 /.codacy/
 /.codegraph/
+/.continue/
 /.impeccable/
 
 # Private workspace guidance and local historical packets
 /AGENTS.md
+/WIP.md
 /archive/
