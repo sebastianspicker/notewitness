@@ -78,11 +78,14 @@ Thumbs.db
 /.codex/
 /.serena/
 /.codacy/
+/.claude/
+/.cursor/
 /.codegraph/
 /.continue/
 /.impeccable/
 
 # Private workspace guidance and local historical packets
+/docs/agent/
 /AGENTS.md
 /WIP.md
 /archive/
