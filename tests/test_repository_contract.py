@@ -106,6 +106,7 @@ class RepositoryContractTests(unittest.TestCase):
         allowed_roots = {
             "network.py": network_capable_modules,
             "local_tools.py": {"subprocess"},
+            "_local_tool_process.py": {"subprocess"},
             "workbench_server.py": {"http", "urllib"},
         }
         offenders: list[str] = []

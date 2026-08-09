@@ -28,6 +28,7 @@ lcov.info
 /tests/failure-artifacts/
 /dist/
 /build/
+/_site/
 /*.egg-info/
 /src/*.egg-info/
 /.venv/

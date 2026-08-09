@@ -114,7 +114,7 @@ class LocalToolTests(unittest.TestCase):
             mutable_interpreter.write_bytes(b"mutable interpreter placeholder")
             mutable_interpreter.chmod(0o722)
             with mock.patch(
-                "notewitness.local_tools.sys.executable",
+                "notewitness._local_tool_policy.sys.executable",
                 str(mutable_interpreter),
             ):
                 selected = _trusted_python_launcher()

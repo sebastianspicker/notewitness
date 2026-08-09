@@ -40,6 +40,12 @@ The screenshots below show the repository's 1440 by 900 workbench fixtures. The
 capture path uses the application UI with synthetic project state. They are
 design references, not evidence of a packaged release.
 
+[Open the static interface demo](https://sebastianspicker.github.io/notewitness/).
+It is generated from the same workbench renderer and synthetic fixture used by
+the screenshot path. Navigation runs in the browser; every command-capable
+control is marked as simulated and cannot access media, run tools, upload,
+persist, or export data.
+
 ![Workbench overview](docs/screenshots/workbench-overview.png)
 
 ![Lesson notes](docs/screenshots/lesson-notes.png)

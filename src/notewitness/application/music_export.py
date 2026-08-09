@@ -76,6 +76,23 @@ class MusicExportResult:
     documented_losses: tuple[ProjectionLoss, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _NoteContext:
+    event_id: str
+    review_status: str
+    value: Mapping[str, Any]
+    targets: Mapping[str, Mapping[str, Any]]
+    selected_source_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _NumberBounds:
+    key: str
+    minimum: float
+    maximum: float | None = None
+    inclusive: bool = True
+
+
 class SymbolicMusicExportService:
     """Projects validated project evidence into private, new-only CSV or SMF files."""
 
@@ -217,13 +234,22 @@ def _targets_by_id(payload: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
 
 def _accepted_note_suggestion_ids(events: Iterable[Mapping[str, Any]]) -> set[str]:
     return {
-        body["source_suggestion_id"]
+        suggestion_id
         for event in events
-        if event.get("type") == "local:note"
-        and event.get("review_status") == "human_accepted"
-        and isinstance((body := event.get("body")), Mapping)
-        and isinstance(body.get("source_suggestion_id"), str)
+        if (suggestion_id := _accepted_note_suggestion_id(event)) is not None
     }
+
+
+def _accepted_note_suggestion_id(event: Mapping[str, Any]) -> str | None:
+    if event.get("type") != "local:note":
+        return None
+    if event.get("review_status") != "human_accepted":
+        return None
+    body = event.get("body")
+    if not isinstance(body, Mapping):
+        return None
+    suggestion_id = body.get("source_suggestion_id")
+    return suggestion_id if isinstance(suggestion_id, str) else None
 
 
 def _event_notes(
@@ -235,15 +261,18 @@ def _event_notes(
     if not _is_exportable_note(event, accepted_sources):
         return ()
     event_id, value, status = _note_parts(event)
+    context = _NoteContext(
+        event_id,
+        status,
+        value,
+        targets,
+        selected_source_id,
+    )
     return tuple(
         note
         for target_id in event.get("target_ids", ())
         if isinstance(target_id, str)
-        if (
-            note := _note_from_target(
-                event_id, status, value, target_id, targets, selected_source_id
-            )
-        ) is not None
+        if (note := _note_from_target(context, target_id)) is not None
     )
 
 
@@ -277,26 +306,31 @@ def _valid_midi_pitch(value: Any) -> bool:
 
 
 def _note_from_target(
-    event_id: str,
-    review_status: str,
-    value: Mapping[str, Any],
+    context: _NoteContext,
     target_id: str,
-    targets: Mapping[str, Mapping[str, Any]],
-    selected_source_id: str | None,
 ) -> SymbolicNote | None:
-    target = targets.get(target_id)
+    target = context.targets.get(target_id)
     if target is None:
-        raise MusicExportError(f"Note {event_id!r} targets no source span.")
-    source_id, stream_id, start_us, duration_us = _target_span(event_id, target_id, target)
-    if selected_source_id is not None and source_id != selected_source_id:
+        raise MusicExportError(f"Note {context.event_id!r} targets no source span.")
+    source_id, stream_id, start_us, duration_us = _target_span(
+        context.event_id, target_id, target
+    )
+    if context.selected_source_id is not None and source_id != context.selected_source_id:
         return None
-    bends, bend_unit = _pitch_bends(value)
+    bends, bend_unit = _pitch_bends(context.value)
     return SymbolicNote(
-        event_id, target_id, source_id, stream_id, start_us, duration_us,
-        float(value["midi_pitch"]),
-        _optional_finite_number(value, "frequency_hz", minimum=0.0, inclusive=False),
-        _optional_finite_number(value, "amplitude", minimum=0.0, maximum=1.0),
-        _optional_velocity(value), bends, bend_unit, _track_id(value, target), review_status,
+        context.event_id, target_id, source_id, stream_id, start_us, duration_us,
+        float(context.value["midi_pitch"]),
+        _optional_finite_number(
+            context.value,
+            _NumberBounds("frequency_hz", 0.0, inclusive=False),
+        ),
+        _optional_finite_number(
+            context.value,
+            _NumberBounds("amplitude", 0.0, maximum=1.0),
+        ),
+        _optional_velocity(context.value), bends, bend_unit,
+        _track_id(context.value, target), context.review_status,
     )
 
 
@@ -335,19 +369,20 @@ def _note_sort_key(note: SymbolicNote) -> tuple[int, str, float, str, str]:
 
 def _optional_finite_number(
     value: Mapping[str, Any] | Any,
-    key: str,
-    *,
-    minimum: float,
-    maximum: float | None = None,
-    inclusive: bool = True,
+    bounds: _NumberBounds,
 ) -> float | None:
-    candidate = value.get(key) if isinstance(value, Mapping) else None
+    candidate = value.get(bounds.key) if isinstance(value, Mapping) else None
     if candidate is None:
         return None
     if not _finite_number(candidate):
-        raise MusicExportError(f"Note evidence has an invalid {key} value.")
-    if not _within_bounds(candidate, minimum, maximum, inclusive):
-        raise MusicExportError(f"Note evidence has an invalid {key} value.")
+        raise MusicExportError(f"Note evidence has an invalid {bounds.key} value.")
+    if not _within_bounds(
+        candidate,
+        bounds.minimum,
+        bounds.maximum,
+        bounds.inclusive,
+    ):
+        raise MusicExportError(f"Note evidence has an invalid {bounds.key} value.")
     return float(candidate)
 
 
@@ -522,6 +557,17 @@ def _rounded_midi_pitch(note: SymbolicNote) -> int:
 def _merged_midi_notes(
     notes: Iterable[SymbolicNote],
 ) -> tuple[tuple[int, int, int, int], ...]:
+    merged = [
+        interval
+        for pitch, intervals in _midi_intervals_by_pitch(notes).items()
+        for interval in _merge_pitch_intervals(pitch, intervals)
+    ]
+    return tuple(sorted(merged))
+
+
+def _midi_intervals_by_pitch(
+    notes: Iterable[SymbolicNote],
+) -> dict[int, list[tuple[int, int, int]]]:
     by_pitch: dict[int, list[tuple[int, int, int]]] = {}
     for note in notes:
         start = _rounded_tick(note.start_us)
@@ -529,20 +575,28 @@ def _merged_midi_notes(
         by_pitch.setdefault(_rounded_midi_pitch(note), []).append(
             (start, end, note.velocity if note.velocity is not None else 96)
         )
+    return by_pitch
+
+
+def _merge_pitch_intervals(
+    pitch: int,
+    intervals: Iterable[tuple[int, int, int]],
+) -> tuple[tuple[int, int, int, int], ...]:
     merged: list[tuple[int, int, int, int]] = []
-    for pitch, intervals in by_pitch.items():
-        current: list[int] | None = None
-        for start, end, velocity in sorted(intervals):
-            if current is not None and start < current[1]:
-                current[1] = max(current[1], end)
-                current[2] = max(current[2], velocity)
-                continue
-            if current is not None:
-                merged.append((current[0], current[1], pitch, current[2]))
+    current: list[int] | None = None
+    for start, end, velocity in sorted(intervals):
+        if current is None:
             current = [start, end, velocity]
-        if current is not None:
-            merged.append((current[0], current[1], pitch, current[2]))
-    return tuple(sorted(merged))
+            continue
+        if start < current[1]:
+            current[1] = max(current[1], end)
+            current[2] = max(current[2], velocity)
+            continue
+        merged.append((current[0], current[1], pitch, current[2]))
+        current = [start, end, velocity]
+    if current is not None:
+        merged.append((current[0], current[1], pitch, current[2]))
+    return tuple(merged)
 
 
 def _overlapping_same_pitch_ids(

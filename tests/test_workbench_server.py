@@ -164,18 +164,36 @@ class WorkbenchServerTests(unittest.TestCase):
         self.assertEqual(200, status)
         status, _, actions = self._request("GET", "/assets/js/actions.mjs")
         self.assertEqual(200, status)
+        status, _, review_actions = self._request(
+            "GET", "/assets/js/review_actions.mjs"
+        )
+        self.assertEqual(200, status)
+        status, _, capture_actions = self._request(
+            "GET", "/assets/js/capture_actions.mjs"
+        )
+        self.assertEqual(200, status)
         status, _, processing = self._request("GET", "/assets/js/processing.mjs")
         self.assertEqual(200, status)
         status, _, api_module = self._request("GET", "/assets/js/api.mjs")
         self.assertEqual(200, status)
         status, _, playback = self._request("GET", "/assets/js/playback.mjs")
         self.assertEqual(200, status)
-        client = script + actions + processing + api_module + playback
-        self.assertIn(b"actor_id: actorId", actions)
-        self.assertIn(b"author_id: author.id", actions)
-        self.assertIn(b'/api/imports', actions)
+        client = (
+            script
+            + actions
+            + review_actions
+            + capture_actions
+            + processing
+            + api_module
+            + playback
+        )
+        self.assertIn(b"actor_id: actorId", review_actions)
+        self.assertIn(b"author_id: author.id", review_actions)
+        self.assertIn(b'/api/imports', capture_actions)
         self.assertIn(b'/api/jobs', processing)
-        submit_dialog = actions[actions.index(b"async function submitDialog"):]
+        submit_dialog = review_actions[
+            review_actions.index(b"async function submitDialog"):
+        ]
         self.assertLess(
             submit_dialog.index(b'if (dialog.mode === "reviewer-setup")'),
             submit_dialog.index(b"const author = requireHumanActor();"),
@@ -197,6 +215,10 @@ class WorkbenchServerTests(unittest.TestCase):
         ui_parts = [barrel]
         for module_path in (
             "/assets/ui/utils.mjs",
+            "/assets/ui/value_utils.mjs",
+            "/assets/ui/filter_utils.mjs",
+            "/assets/ui/render_utils.mjs",
+            "/assets/ui/timeline_utils.mjs",
             "/assets/ui/shell.mjs",
             "/assets/ui/timeline.mjs",
             "/assets/ui/panels.mjs",
@@ -221,7 +243,7 @@ class WorkbenchServerTests(unittest.TestCase):
         self.assertIn(b'const canRevise = typeof item.body_value === "string"', ui)
         self.assertIn(b'${canRevise ? `<button class="secondary-button" data-revise=', ui)
         self.assertIn(b"Set up reviewer", ui)
-        self.assertIn(b"/api/actors", actions)
+        self.assertIn(b"/api/actors", review_actions)
 
         status, _, raw = self._request("GET", "/api/workbench")
         snapshot = json.loads(raw)
