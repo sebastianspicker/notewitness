@@ -24,6 +24,7 @@ from notewitness.local_tools import (
     BoundedLocalToolRunner,
     LocalTool,
     LocalToolIdentityChanged,
+    LocalToolResult,
 )
 
 
@@ -90,6 +91,24 @@ class WhisperCLIResult:
     def adapter_code(self) -> WhisperArtifactIdentity:
         """Compatibility alias for launcher bytes, not complete runtime provenance."""
         return self.launcher
+
+
+@dataclass(frozen=True, slots=True)
+class _WhisperSuccessfulRun:
+    media: Path
+    raw_output_path: Path
+    media_stat: os.stat_result
+    model: WhisperArtifactIdentity
+    model_stat: os.stat_result
+    launcher: WhisperArtifactIdentity
+    launcher_stat: os.stat_result
+    ffmpeg: WhisperArtifactIdentity | None
+    ffmpeg_stat: os.stat_result | None
+    source_id: str
+    stream_id: str
+    run_id: str
+    raw_artifact_id: str
+    duration_us: int
 
 
 def _required_license(value: str, message: str) -> None:
@@ -178,6 +197,84 @@ class WhisperCLIAdapter:
             ffmpeg_before, ffmpeg_stat = _stable_artifact_identity(
                 self.ffmpeg.executable, "ffmpeg executable"
             )
+        successful_run = _WhisperSuccessfulRun(
+            media=media,
+            raw_output_path=expected_raw,
+            media_stat=media_stat,
+            model=model_before,
+            model_stat=model_stat,
+            launcher=launcher_before,
+            launcher_stat=launcher_stat,
+            ffmpeg=ffmpeg_before,
+            ffmpeg_stat=ffmpeg_stat,
+            source_id=source_id,
+            stream_id=stream_id,
+            run_id=run_id,
+            raw_artifact_id=raw_artifact_id,
+            duration_us=duration_us,
+        )
+        result = self._run_whisper(media, output, cancellation_requested)
+        return self._finalize_successful_run(successful_run, result)
+
+    def _finalize_successful_run(
+        self,
+        successful_run: _WhisperSuccessfulRun,
+        result: LocalToolResult,
+    ) -> WhisperCLIResult:
+        _require_unchanged(
+            self.settings.model_checkpoint,
+            successful_run.model_stat,
+            "Whisper model checkpoint",
+        )
+        _require_unchanged(
+            self.tool.executable,
+            successful_run.launcher_stat,
+            "Whisper launcher",
+        )
+        if self.ffmpeg is not None and successful_run.ffmpeg_stat is not None:
+            _require_unchanged(
+                self.ffmpeg.executable,
+                successful_run.ffmpeg_stat,
+                "ffmpeg executable",
+            )
+        _require_unchanged(
+            successful_run.media,
+            successful_run.media_stat,
+            "Whisper media source",
+        )
+        raw_payload, raw_identity = _read_raw_output(successful_run.raw_output_path)
+        document = _normalize_document(
+            raw_payload,
+            source_id=successful_run.source_id,
+            stream_id=successful_run.stream_id,
+            run_id=successful_run.run_id,
+            raw_artifact_id=successful_run.raw_artifact_id,
+            requested_language=self.settings.language,
+            duration_us=successful_run.duration_us,
+        )
+        return WhisperCLIResult(
+            document=document,
+            raw_output_path=successful_run.raw_output_path,
+            raw_output=raw_identity,
+            model=successful_run.model,
+            launcher=successful_run.launcher,
+            ffmpeg=successful_run.ffmpeg,
+            runtime_fingerprint_sha256=_runtime_fingerprint(
+                successful_run.model,
+                successful_run.launcher,
+                successful_run.ffmpeg,
+                self.settings,
+            ),
+            duration_ms=result.duration_ms,
+            network_isolated=result.network_isolated,
+        )
+
+    def _run_whisper(
+        self,
+        media: Path,
+        output: Path,
+        cancellation_requested: Callable[[], bool] | None,
+    ) -> LocalToolResult:
         arguments = [
             str(media),
             "--model",
@@ -203,7 +300,7 @@ class WhisperCLIAdapter:
             arguments.extend(("--language", self.settings.language))
         self._require_tool_identities()
         try:
-            result = self._runner.run(
+            return self._runner.run(
                 tuple(arguments),
                 working_directory=output,
                 timeout_seconds=self.settings.timeout_seconds,
@@ -223,45 +320,6 @@ class WhisperCLIAdapter:
             # dependency despite not being the runner's direct executable.
             # Keep its startup-approved identity bound over every exit path.
             self._require_tool_identities()
-        _require_unchanged(
-            self.settings.model_checkpoint,
-            model_stat,
-            "Whisper model checkpoint",
-        )
-        _require_unchanged(self.tool.executable, launcher_stat, "Whisper launcher")
-        if self.ffmpeg is not None and ffmpeg_stat is not None:
-            _require_unchanged(
-                self.ffmpeg.executable,
-                ffmpeg_stat,
-                "ffmpeg executable",
-            )
-        _require_unchanged(media, media_stat, "Whisper media source")
-        raw_payload, raw_identity = _read_raw_output(expected_raw)
-        document = _normalize_document(
-            raw_payload,
-            source_id=source_id,
-            stream_id=stream_id,
-            run_id=run_id,
-            raw_artifact_id=raw_artifact_id,
-            requested_language=self.settings.language,
-            duration_us=duration_us,
-        )
-        return WhisperCLIResult(
-            document=document,
-            raw_output_path=expected_raw,
-            raw_output=raw_identity,
-            model=model_before,
-            launcher=launcher_before,
-            ffmpeg=ffmpeg_before,
-            runtime_fingerprint_sha256=_runtime_fingerprint(
-                model_before,
-                launcher_before,
-                ffmpeg_before,
-                self.settings,
-            ),
-            duration_ms=result.duration_ms,
-            network_isolated=result.network_isolated,
-        )
 
     def _require_tool_identities(self) -> None:
         try:

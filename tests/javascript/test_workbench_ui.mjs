@@ -37,6 +37,25 @@ const {
 } = await import(
   pathToFileURL(path.join(assetsRoot, "workbench_ui.mjs")).href
 );
+const { createActions } = await import(
+  pathToFileURL(path.join(assetsRoot, "js/actions.mjs")).href
+);
+const { createReviewActions } = await import(
+  pathToFileURL(path.join(assetsRoot, "js/review_actions.mjs")).href
+);
+const { createCaptureActions } = await import(
+  pathToFileURL(path.join(assetsRoot, "js/capture_actions.mjs")).href
+);
+const { createAudioActions } = await import(
+  pathToFileURL(path.join(assetsRoot, "js/audio_actions.mjs")).href
+);
+const { createExportActions } = await import(
+  pathToFileURL(path.join(assetsRoot, "js/export_actions.mjs")).href
+);
+
+for (const factory of [createActions, createReviewActions, createCaptureActions, createAudioActions, createExportActions]) {
+  assert.equal(typeof factory, "function");
+}
 
 assert.equal(escapeHTML(`<script a="b">&'</script>`),
   "&lt;script a=&quot;b&quot;&gt;&amp;&#39;&lt;/script&gt;");

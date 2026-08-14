@@ -7,13 +7,27 @@ import unittest
 from notewitness.application.music_export import (
     MusicExportError,
     MusicExportFormat,
+    SymbolicNote,
     SymbolicMusicExportService,
+    _merged_midi_notes,
 )
 from notewitness.project import initialize_project
 from notewitness.project_store import ProjectStore
 
 
 class MusicExportTests(unittest.TestCase):
+    def test_midi_merging_keeps_touching_same_pitch_notes_distinct(self) -> None:
+        notes = (
+            _symbolic_note("event:first", 0, 2_000, 40),
+            _symbolic_note("event:overlap", 1_000, 2_000, 90),
+            _symbolic_note("event:touching", 3_000, 1_000, 70),
+        )
+
+        self.assertEqual(
+            ((0, 3, 60, 90), (3, 4, 60, 70)),
+            _merged_midi_notes(notes),
+        )
+
     def test_csv_is_exact_and_new_only(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary) / "project"
@@ -188,6 +202,27 @@ def _append_note(
     _ensure_fixture_records(store, snapshot.payload)
     snapshot = store.load()
     store.mutate(change, expected_sha256=snapshot.sha256)
+
+
+def _symbolic_note(
+    event_id: str, start_us: int, duration_us: int, velocity: int
+) -> SymbolicNote:
+    return SymbolicNote(
+        event_id=event_id,
+        target_id=f"target:{event_id}",
+        source_id="source:fixture",
+        stream_id="audio",
+        start_us=start_us,
+        duration_us=duration_us,
+        midi_pitch=60.0,
+        frequency_hz=None,
+        amplitude=None,
+        velocity=velocity,
+        pitch_bend_values=(),
+        pitch_bend_unit=None,
+        instrument_track_id="track:a",
+        review_status="machine_suggested",
+    )
 
 
 def _add_source(root: Path, source_id: str) -> None:

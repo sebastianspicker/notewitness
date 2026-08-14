@@ -128,6 +128,37 @@ class WhisperCLIAdapterTests(unittest.TestCase):
                     duration_us=5_000_000,
                 )
 
+    def test_model_identity_precedes_media_after_successful_run(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            root.chmod(0o700)
+            media = root / "lesson.wav"
+            media.write_bytes(b"synthetic media")
+            model = root / "model.pt"
+            model.write_bytes(b"model fixture")
+            output = root / "run"
+            output.mkdir(mode=0o700)
+            adapter = WhisperCLIAdapter(
+                _fake_whisper(
+                    root,
+                    _valid_payload(),
+                    mutate_media=True,
+                    mutate_model=True,
+                ),
+                WhisperCLISettings(model, "LicenseRef-test", "MIT-test-fixture"),
+            )
+
+            with self.assertRaisesRegex(WhisperCLIError, "model checkpoint changed"):
+                adapter.transcribe(
+                    media_path=media,
+                    output_directory=output,
+                    source_id="source:lesson",
+                    stream_id="audio",
+                    run_id="run:mutated-model-and-media",
+                    raw_artifact_id="artifact:raw-mutated-model-and-media",
+                    duration_us=5_000_000,
+                )
+
     def test_rejects_output_when_whisper_launcher_is_replaced(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -292,6 +323,7 @@ def _fake_whisper(
     *,
     suffix: str = "valid",
     mutate_media: bool = False,
+    mutate_model: bool = False,
     mutate_launcher: bool = False,
     mutate_ffmpeg: bool = False,
 ) -> LocalTool:
@@ -300,10 +332,13 @@ def _fake_whisper(
         "#!/usr/bin/python3\n"
         "import json, os, pathlib, sys\n"
         "audio = pathlib.Path(sys.argv[1])\n"
+        "model = pathlib.Path(sys.argv[sys.argv.index('--model') + 1])\n"
         "output = pathlib.Path(sys.argv[sys.argv.index('--output_dir') + 1])\n"
     )
     if mutate_media:
         source += "audio.write_bytes(b'mutated media')\n"
+    if mutate_model:
+        source += "model.write_bytes(b'mutated model')\n"
     if mutate_launcher:
         source += "pathlib.Path(__file__).write_text('#!/bin/sh\\nexit 0\\n')\n"
     if mutate_ffmpeg:

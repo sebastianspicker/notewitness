@@ -40,6 +40,25 @@ The screenshots below show the repository's 1440 by 900 workbench fixtures. The
 capture path uses the application UI with synthetic project state. They are
 design references, not evidence of a packaged release.
 
+[Open the static interface demo](https://sebastianspicker.github.io/notewitness/).
+It is generated from the same workbench renderer and synthetic fixture used by
+the screenshot path. Navigation runs in the browser; every command-capable
+control is marked as simulated and cannot access media, run tools, upload,
+persist, or export data.
+
+Build and serve that same artifact locally without installing the package:
+
+```sh
+demo_root="$(mktemp -d)"
+bash scripts/build_pages_demo.sh "$demo_root/site"
+python3 -m http.server 8000 --bind 127.0.0.1 --directory "$demo_root/site"
+```
+
+Open `http://127.0.0.1:8000/`. The Pages workflow runs the same builder under
+Python 3.11 and publishes its output at `/notewitness/`; relative asset paths
+keep the artifact subpath-safe. The hosted demo uses only the synthetic fixture
+and its client contains no network requests.
+
 ![Workbench overview](docs/screenshots/workbench-overview.png)
 
 ![Lesson notes](docs/screenshots/lesson-notes.png)

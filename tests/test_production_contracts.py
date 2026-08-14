@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 import socket
 import unittest
+from unittest.mock import patch
 
 from notewitness.application.adapter_registry import (
     AdapterRegistrationError,
@@ -161,6 +162,14 @@ class InvariantBreakingSpeechAdapter(ConformingSpeechAdapter):
                 words,
             )
         return batch
+
+
+class ProbeFailingSpeechAdapter(ConformingSpeechAdapter):
+    def __init__(self) -> None:
+        self.probe_error = RuntimeError("test probe failure")
+
+    def analyze(self, request: AnalysisRequest) -> AnalysisBatch:
+        raise self.probe_error
 
 
 class ConformingDiarizationAdapter:
@@ -373,9 +382,9 @@ class ProductionContractTests(unittest.TestCase):
         registry.register(manifest, StubSpeechAdapter())  # type: ignore[arg-type]
         runtime = RuntimeCapabilityRegistry(registry)
 
-        self.assertIn("local_asr", runtime.available_capability_ids)
-        self.assertNotIn(
-            "noscribe_asr_conformance", runtime.available_capability_ids
+        self.assertEqual(
+            ("local_asr",),
+            runtime.available_capability_ids,
         )
         self.assertNotIn(
             "local_asr", profile_readiness("tonic-local", runtime)["missing"]
@@ -408,6 +417,22 @@ class ProductionContractTests(unittest.TestCase):
             conforming_manifest,
             ConformingSpeechAdapter(),  # type: ignore[arg-type]
         )
+        failing_adapter = ProbeFailingSpeechAdapter()
+        failing_registry = StrictLocalAdapterRegistry(artifacts, verifications)
+        with self.assertRaises(AdapterRegistrationError) as probe_failure:
+            failing_registry.register(
+                conforming_manifest, failing_adapter  # type: ignore[arg-type]
+            )
+        self.assertEqual(
+            "Adapter conformance probe failed for 'speech_recognition'.",
+            str(probe_failure.exception),
+        )
+        self.assertIs(failing_adapter.probe_error, probe_failure.exception.__cause__)
+        self.assertEqual((), failing_registry.available_stages)
+        self.assertEqual((), failing_registry.available_capability_ids)
+        self.assertEqual({}, failing_registry._manifests)
+        self.assertEqual({}, failing_registry._conformance)
+
         diarization_manifest = AdapterManifest(
             adapter_id="adapter:diarization",
             code_artifact_id=code.artifact_id,
@@ -427,19 +452,30 @@ class ProductionContractTests(unittest.TestCase):
             diarization_manifest,
             ConformingDiarizationAdapter(),  # type: ignore[arg-type]
         )
-        self.assertIn(
-            "noscribe_asr_conformance",
+        self.assertEqual(
+            (
+                AnalysisStage.ANONYMOUS_DIARIZATION,
+                AnalysisStage.SPEECH_RECOGNITION,
+            ),
+            conforming_registry.available_stages,
+        )
+        self.assertEqual(
+            (
+                "anonymous_diarization",
+                "local_asr",
+                "noscribe_asr_conformance",
+                "noscribe_diarization_conformance",
+            ),
             conforming_registry.available_capability_ids,
         )
-        self.assertIn(
-            "noscribe_diarization_conformance",
-            conforming_registry.available_capability_ids,
-        )
+        stub_failure_registry = StrictLocalAdapterRegistry(artifacts, verifications)
         with self.assertRaisesRegex(AdapterRegistrationError, "probe failed"):
-            StrictLocalAdapterRegistry(artifacts, verifications).register(
+            stub_failure_registry.register(
                 conforming_manifest,
                 StubSpeechAdapter(),  # type: ignore[arg-type]
             )
+        self.assertEqual({}, stub_failure_registry._manifests)
+        self.assertEqual({}, stub_failure_registry._conformance)
         socket_constructor = socket.socket
         for violation in (
             "bounded_output",
@@ -449,32 +485,106 @@ class ProductionContractTests(unittest.TestCase):
             "typed_output",
         ):
             with self.subTest(violation=violation):
+                violation_registry = StrictLocalAdapterRegistry(
+                    artifacts, verifications
+                )
                 with self.assertRaisesRegex(
                     AdapterRegistrationError, "probe failed"
                 ):
-                    StrictLocalAdapterRegistry(
-                        artifacts, verifications
-                    ).register(
+                    violation_registry.register(
                         conforming_manifest,
                         InvariantBreakingSpeechAdapter(violation),
                     )
+                self.assertEqual({}, violation_registry._manifests)
+                self.assertEqual({}, violation_registry._conformance)
         self.assertIs(socket_constructor, socket.socket)
 
+        signature_registry = StrictLocalAdapterRegistry(artifacts, verifications)
         with self.assertRaisesRegex(TypeError, "conformance_probe"):
-            StrictLocalAdapterRegistry(artifacts, verifications).register(
+            signature_registry.register(
                 conforming_manifest,
                 StubSpeechAdapter(),  # type: ignore[arg-type]
                 conformance_probe=lambda _adapter: object(),  # type: ignore[call-arg]
             )
+        self.assertEqual({}, signature_registry._manifests)
+        self.assertEqual({}, signature_registry._conformance)
 
-        tampered = dict(verifications)
-        tampered[weights.artifact_id] = ArtifactVerification(
-            weights.artifact_id, "c" * 64, weights.size_bytes
+        preflight_manifest = replace(
+            conforming_manifest, supported_stages=()
         )
-        with self.assertRaisesRegex(AdapterRegistrationError, "checksum"):
-            StrictLocalAdapterRegistry(artifacts, tampered).register(
-                manifest, StubSpeechAdapter()  # type: ignore[arg-type]
+        preflight_adapter = StubSpeechAdapter()
+        preflight_adapter.generator_id = "adapter:other"
+        incomplete_verifications = {
+            weights.artifact_id: ArtifactVerification(
+                weights.artifact_id, "c" * 64, 0
             )
+        }
+        preflight_registry = StrictLocalAdapterRegistry(
+            artifacts, incomplete_verifications
+        )
+        missing_artifact_registry = StrictLocalAdapterRegistry(
+            artifacts, verifications
+        )
+        with patch(
+            "notewitness.application.adapter_registry.run_noscribe_conformance",
+            side_effect=AssertionError("preflight must not run a conformance probe"),
+        ) as probe:
+            with self.assertRaises(AdapterRegistrationError) as artifact_failure:
+                missing_artifact_registry.register(
+                    replace(
+                        conforming_manifest,
+                        code_artifact_id="artifact:missing",
+                    ),
+                    StubSpeechAdapter(),  # type: ignore[arg-type]
+                )
+            with self.assertRaises(AdapterRegistrationError) as preflight_failure:
+                preflight_registry.register(
+                    preflight_manifest,
+                    preflight_adapter,  # type: ignore[arg-type]
+                )
+            duplicate_adapter = StubSpeechAdapter()
+            duplicate_adapter.generator_id = "adapter:other"
+            with self.assertRaises(AdapterRegistrationError) as duplicate_failure:
+                registry.register(
+                    preflight_manifest,
+                    duplicate_adapter,  # type: ignore[arg-type]
+                )
+        self.assertEqual(0, probe.call_count)
+        self.assertEqual(
+            "missing artifact 'artifact:missing'", str(artifact_failure.exception)
+        )
+        self.assertEqual(
+            "adapter declares no supported analysis stages; "
+            "artifact 'artifact:code' has no verification record; "
+            "artifact 'artifact:weights' checksum is not verified; "
+            "artifact 'artifact:weights' size is not verified; "
+            "manifest does not declare stage 'speech_recognition'; "
+            "adapter generator_id does not match its manifest ID",
+            str(preflight_failure.exception),
+        )
+        self.assertEqual((), missing_artifact_registry.available_stages)
+        self.assertEqual((), missing_artifact_registry.available_capability_ids)
+        self.assertEqual({}, missing_artifact_registry._manifests)
+        self.assertEqual({}, missing_artifact_registry._conformance)
+        self.assertEqual((), preflight_registry.available_stages)
+        self.assertEqual((), preflight_registry.available_capability_ids)
+        self.assertEqual({}, preflight_registry._manifests)
+        self.assertEqual({}, preflight_registry._conformance)
+        self.assertEqual(
+            "adapter declares no supported analysis stages; "
+            "manifest does not declare stage 'speech_recognition'; "
+            "adapter generator_id does not match its manifest ID; "
+            "stage 'speech_recognition' already has an adapter",
+            str(duplicate_failure.exception),
+        )
+        self.assertEqual(
+            (AnalysisStage.SPEECH_RECOGNITION,), registry.available_stages
+        )
+        self.assertEqual(("local_asr",), registry.available_capability_ids)
+        self.assertEqual(
+            {AnalysisStage.SPEECH_RECOGNITION: manifest}, registry._manifests
+        )
+        self.assertEqual({}, registry._conformance)
 
     def test_runtime_components_require_allowlisted_successful_unique_probes(self) -> None:
         registry = RuntimeCapabilityRegistry()
@@ -482,8 +592,8 @@ class ProductionContractTests(unittest.TestCase):
             "transcription_run_manifest", "manifest-store:test", lambda: True
         )
 
-        self.assertIn(
-            "transcription_run_manifest", registry.available_capability_ids
+        self.assertEqual(
+            ("transcription_run_manifest",), registry.available_capability_ids
         )
         with self.assertRaisesRegex(BackendRegistrationError, "already"):
             registry.register_component(

@@ -60,6 +60,17 @@ class ProjectInitializationTests(unittest.TestCase):
             with self.assertRaises(ProjectInitializationError):
                 initialize_project(target)
 
+    def test_initialize_restricts_an_empty_existing_directory(self) -> None:
+        with TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve() / "existing"
+            target.mkdir(mode=0o755)
+            target.chmod(0o755)
+            self.assertEqual(0o755, stat.S_IMODE(target.stat().st_mode))
+
+            initialize_project(target)
+
+            self.assertEqual(0o700, stat.S_IMODE(target.stat().st_mode))
+
     def test_initialize_refuses_symlink_target(self) -> None:
         with TemporaryDirectory() as temporary:
             temporary_path = Path(temporary).resolve()

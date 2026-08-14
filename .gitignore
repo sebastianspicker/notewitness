@@ -28,6 +28,7 @@ lcov.info
 /tests/failure-artifacts/
 /dist/
 /build/
+/_site/
 /*.egg-info/
 /src/*.egg-info/
 /.venv/
@@ -40,10 +41,24 @@ node_modules/
 .env
 .env.*
 !.env.example
+!.env.*.example
+!.env.sample
+!.env.template
+secrets.local.*
+credentials.local.*
+.netrc
+.npmrc.local
 *.pem
 *.key
 *.p12
 *.pfx
+*.jks
+*.keystore
+*.kdbx
+*.ppk
+*.mobileprovision
+*.local.pem
+*.local.key
 
 # Private project data, media, models, and generated workspaces
 /data/
@@ -62,6 +77,7 @@ node_modules/
 Thumbs.db
 .idea/
 .vscode/
+.cursor/
 .fleet/
 *.swp
 *.swo
@@ -73,13 +89,45 @@ Thumbs.db
 *.temp
 *.tmp
 .cache/
+.agents/
 /.agents/
+.codex/
 /.codex/
+.serena/
 /.serena/
+.codacy/
 /.codacy/
+.codegraph/
 /.codegraph/
 /.impeccable/
+.claude/
+/.claude/
+/.mcp.json
+.repowise/
+.kilo/
 
 # Private workspace guidance and local historical packets
 /AGENTS.md
+/CLAUDE.md
+/GEMINI.md
+/AUDIT_LEDGER.md
+/remediation-ledger.md
+/plan.md
+/progress.md
 /archive/
+
+# Local build, analysis, and database sidecars
+target/
+.build/
+DerivedData/
+xcuserdata/
+*.sarif
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
+*.local.db
+*.local.sqlite
+*.local.sqlite3

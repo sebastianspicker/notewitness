@@ -33,6 +33,57 @@ def _trusted_absolute_path(target: Path) -> Path:
     return absolute_target
 
 
+def _open_or_create_private_directory(
+    parent_descriptor: int, component: str
+) -> int:
+    """Open a directory component, creating it with private permissions if absent."""
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        return os.open(component, flags, dir_fd=parent_descriptor)
+    except FileNotFoundError:
+        _create_private_directory_if_absent(parent_descriptor, component)
+    return os.open(component, flags, dir_fd=parent_descriptor)
+
+
+def _create_private_directory_if_absent(
+    parent_descriptor: int, component: str
+) -> None:
+    """Create and restrict a previously absent directory component."""
+    try:
+        os.mkdir(component, _DIRECTORY_MODE, dir_fd=parent_descriptor)
+    except FileExistsError:
+        return
+    os.chmod(
+        component,
+        _DIRECTORY_MODE,
+        dir_fd=parent_descriptor,
+        follow_symlinks=False,
+    )
+
+
+def _open_private_directory_component(
+    parent_descriptor: int, component: str, target: Path
+) -> int:
+    """Open one trusted directory component without following symlinks."""
+    try:
+        return _open_or_create_private_directory(parent_descriptor, component)
+    except OSError as exc:
+        if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+            raise ProjectInitializationError(
+                f"Project target contains a symlink or non-directory component: {target}"
+            ) from exc
+        raise
+
+
+def _require_empty_private_directory(descriptor: int, target: Path) -> None:
+    """Require an empty target directory before restoring its private mode."""
+    if os.listdir(descriptor):
+        raise ProjectInitializationError(
+            f"Refusing to initialize non-empty directory: {target}"
+        )
+    os.fchmod(descriptor, _DIRECTORY_MODE)
+
+
 def _open_empty_private_directory(target: Path) -> int:
     """Open an empty project directory from the trusted root descriptor."""
     absolute_target = _trusted_absolute_path(target)
@@ -41,47 +92,21 @@ def _open_empty_private_directory(target: Path) -> int:
     if absolute_target.is_symlink():
         raise ProjectInitializationError(f"Project target is a symlink: {target}")
 
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    descriptor = os.open(os.path.sep, flags)
+    descriptor = os.open(os.path.sep, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    keep_descriptor = False
     try:
-        components = absolute_target.parts[1:]
-        for index, component in enumerate(components):
-            is_target = index == len(components) - 1
-            try:
-                try:
-                    child_descriptor = os.open(component, flags, dir_fd=descriptor)
-                except FileNotFoundError:
-                    try:
-                        os.mkdir(component, _DIRECTORY_MODE, dir_fd=descriptor)
-                    except FileExistsError:
-                        pass
-                    else:
-                        os.chmod(
-                            component,
-                            _DIRECTORY_MODE,
-                            dir_fd=descriptor,
-                            follow_symlinks=False,
-                        )
-                    child_descriptor = os.open(component, flags, dir_fd=descriptor)
-            except OSError as exc:
-                if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
-                    raise ProjectInitializationError(
-                        f"Project target contains a symlink or non-directory component: {target}"
-                    ) from exc
-                raise
-
+        for component in absolute_target.parts[1:]:
+            child_descriptor = _open_private_directory_component(
+                descriptor, component, target
+            )
             os.close(descriptor)
             descriptor = child_descriptor
-            if is_target:
-                if os.listdir(descriptor):
-                    raise ProjectInitializationError(
-                        f"Refusing to initialize non-empty directory: {target}"
-                    )
-                os.fchmod(descriptor, _DIRECTORY_MODE)
+        _require_empty_private_directory(descriptor, target)
+        keep_descriptor = True
         return descriptor
-    except BaseException:
-        os.close(descriptor)
-        raise
+    finally:
+        if not keep_descriptor:
+            os.close(descriptor)
 
 
 def _write_private_file(directory_descriptor: int, name: str, contents: str) -> None:
@@ -122,6 +147,54 @@ def _write_private_file(directory_descriptor: int, name: str, contents: str) -> 
             pass
 
 
+def _create_private_project_directory(
+    project_descriptor: int, directory_name: str
+) -> None:
+    """Create a project-owned directory without replacing an existing path."""
+    try:
+        os.mkdir(directory_name, _DIRECTORY_MODE, dir_fd=project_descriptor)
+    except FileExistsError as exc:
+        raise ProjectInitializationError(
+            f"Refusing to replace existing project path: {directory_name}"
+        ) from exc
+    os.chmod(
+        directory_name,
+        _DIRECTORY_MODE,
+        dir_fd=project_descriptor,
+        follow_symlinks=False,
+    )
+
+
+def _write_private_media_readme(project_descriptor: int) -> None:
+    """Write the media directory's private-use notice through its descriptor."""
+    media_descriptor = os.open(
+        "media",
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        dir_fd=project_descriptor,
+    )
+    try:
+        os.fchmod(media_descriptor, _DIRECTORY_MODE)
+        _write_private_file(
+            media_descriptor,
+            "README.txt",
+            "Private source media belongs here. Do not commit this directory.\n",
+        )
+    finally:
+        os.close(media_descriptor)
+
+
+def _initialize_project_contents(project_descriptor: int, payload: dict[str, object]) -> None:
+    """Publish the initial private project document and required directories."""
+    _write_private_file(
+        project_descriptor,
+        "project.json",
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+    )
+    for directory_name in ("media", "runs", "exports"):
+        _create_private_project_directory(project_descriptor, directory_name)
+    _write_private_media_readme(project_descriptor)
+
+
 def initialize_project(directory: str | Path, *, name: str | None = None) -> Path:
     target = Path(directory)
     project_name = (name or target.name).strip()
@@ -149,38 +222,7 @@ def initialize_project(directory: str | Path, *, name: str | None = None) -> Pat
 
     project_descriptor = _open_empty_private_directory(target)
     try:
-        _write_private_file(
-            project_descriptor,
-            "project.json",
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        )
-        for directory_name in ("media", "runs", "exports"):
-            try:
-                os.mkdir(directory_name, _DIRECTORY_MODE, dir_fd=project_descriptor)
-            except FileExistsError as exc:
-                raise ProjectInitializationError(
-                    f"Refusing to replace existing project path: {directory_name}"
-                ) from exc
-            os.chmod(
-                directory_name,
-                _DIRECTORY_MODE,
-                dir_fd=project_descriptor,
-                follow_symlinks=False,
-            )
-        media_descriptor = os.open(
-            "media",
-            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-            dir_fd=project_descriptor,
-        )
-        try:
-            os.fchmod(media_descriptor, _DIRECTORY_MODE)
-            _write_private_file(
-                media_descriptor,
-                "README.txt",
-                "Private source media belongs here. Do not commit this directory.\n",
-            )
-        finally:
-            os.close(media_descriptor)
+        _initialize_project_contents(project_descriptor, payload)
     finally:
         os.close(project_descriptor)
     return target / "project.json"

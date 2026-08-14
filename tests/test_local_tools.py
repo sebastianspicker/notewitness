@@ -20,6 +20,7 @@ from notewitness.local_tools import (
     LocalToolProcessLeak,
     LocalToolUnavailable,
     MAX_TOOL_OUTPUT_BYTES,
+    _resource_limited_launcher_command,
     _trusted_python_launcher,
     discover_local_tool,
 )
@@ -114,12 +115,23 @@ class LocalToolTests(unittest.TestCase):
             mutable_interpreter.write_bytes(b"mutable interpreter placeholder")
             mutable_interpreter.chmod(0o722)
             with mock.patch(
-                "notewitness.local_tools.sys.executable",
+                "notewitness._local_tool_policy.sys.executable",
                 str(mutable_interpreter),
             ):
                 selected = _trusted_python_launcher()
 
         self.assertEqual(Path("/usr/bin/python3").resolve(), selected)
+
+    def test_launcher_command_uses_the_public_facade_patch_seam(self) -> None:
+        selected = Path("/private/test/python")
+        with mock.patch(
+            "notewitness.local_tools._trusted_python_launcher",
+            return_value=selected,
+        ) as launcher:
+            command = _resource_limited_launcher_command(("/bin/echo",), 1)
+
+        self.assertEqual(str(selected), command[0])
+        launcher.assert_called_once_with()
 
     def test_runner_concurrent_cancellations_complete_without_hanging(self) -> None:
         with TemporaryDirectory() as temporary:

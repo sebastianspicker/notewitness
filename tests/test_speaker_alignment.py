@@ -6,6 +6,7 @@ import unittest
 
 from notewitness.application.lesson_notes import LessonNotesProjector
 from notewitness.application.speaker_alignment import (
+    _event_spans,
     align_speech_to_anonymous_speakers,
 )
 from notewitness.evidence import EvidenceGraph
@@ -14,6 +15,30 @@ from notewitness.project_store import ProjectStore
 
 
 class SpeakerAlignmentTests(unittest.TestCase):
+    def test_event_spans_accepts_only_valid_anchors_in_event_order(self) -> None:
+        targets = {
+            "target:later": {"source_id": "source:lesson", "selector": {"stream_id": "audio", "start_us": 5, "duration_us": 1}},
+            "target:not-mapping": "not a target",
+            "target:no-selector": {"source_id": "source:lesson", "selector": None},
+            "target:non-string-source": {"source_id": 1, "selector": {"stream_id": "audio", "start_us": 0, "duration_us": 1}},
+            "target:non-string-stream": {"source_id": "source:lesson", "selector": {"stream_id": 1, "start_us": 0, "duration_us": 1}},
+            "target:bool-start": {"source_id": "source:lesson", "selector": {"stream_id": "audio", "start_us": True, "duration_us": 1}},
+            "target:bool-duration": {"source_id": "source:lesson", "selector": {"stream_id": "audio", "start_us": 0, "duration_us": True}},
+            "target:negative-start": {"source_id": "source:lesson", "selector": {"stream_id": "audio", "start_us": -1, "duration_us": 1}},
+            "target:zero-duration": {"source_id": "source:lesson", "selector": {"stream_id": "audio", "start_us": 0, "duration_us": 0}},
+            "target:first": {"source_id": "source:lesson", "selector": {"stream_id": "audio", "start_us": 0, "duration_us": 1}},
+        }
+
+        spans = _event_spans(
+            {"target_ids": tuple(targets)},
+            targets,  # type: ignore[arg-type]
+        )
+
+        self.assertEqual(
+            (("source:lesson", "audio", 5, 6), ("source:lesson", "audio", 0, 1)),
+            spans,
+        )
+
     def test_max_overlap_preserves_ties_and_projects_anonymous_roles(self) -> None:
         with TemporaryDirectory() as temporary:
             project = Path(temporary) / "study"

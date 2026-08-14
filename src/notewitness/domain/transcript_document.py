@@ -34,14 +34,13 @@ def _require_text(value: object, field_name: str) -> None:
 
 
 def _require_microsecond_range(start_us: object, end_us: object) -> None:
-    if (
-        not isinstance(start_us, int)
-        or isinstance(start_us, bool)
-        or not isinstance(end_us, int)
-        or isinstance(end_us, bool)
-        or start_us < 0
-        or end_us <= start_us
-    ):
+    if not _is_non_boolean_int(start_us):
+        raise ValueError("Transcript times must be positive, ordered microseconds.")
+    if not _is_non_boolean_int(end_us):
+        raise ValueError("Transcript times must be positive, ordered microseconds.")
+    if start_us < 0:
+        raise ValueError("Transcript times must be positive, ordered microseconds.")
+    if end_us <= start_us:
         raise ValueError("Transcript times must be positive, ordered microseconds.")
 
 
@@ -51,14 +50,20 @@ def _require_language(value: object, field_name: str) -> None:
 
 
 def _require_confidence(value: object, field_name: str) -> None:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-        or value < 0
-        or value > 1
-    ):
+    if isinstance(value, bool):
         raise ValueError(f"{field_name} must be a finite value from 0 to 1.")
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"{field_name} must be a finite value from 0 to 1.")
+    if not math.isfinite(value):
+        raise ValueError(f"{field_name} must be a finite value from 0 to 1.")
+    if value < 0:
+        raise ValueError(f"{field_name} must be a finite value from 0 to 1.")
+    if value > 1:
+        raise ValueError(f"{field_name} must be a finite value from 0 to 1.")
+
+
+def _is_non_boolean_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _require_cluster(value: object) -> None:

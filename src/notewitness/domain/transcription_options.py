@@ -258,19 +258,37 @@ def _validate_adapter_settings(settings: object) -> None:
 
 
 def _validate_beam_size(beam_size: object) -> None:
-    if beam_size is not None and (
-        not isinstance(beam_size, int)
-        or isinstance(beam_size, bool)
-        or not 1 <= beam_size <= 100
-    ):
+    if beam_size is None:
+        return
+    if not _is_non_boolean_int(beam_size):
         raise ValueError("beam_size must be an integer in [1, 100].")
+    if beam_size < 1:
+        raise ValueError("beam_size must be an integer in [1, 100].")
+    if beam_size > 100:
+        raise ValueError("beam_size must be an integer in [1, 100].")
+
+
 def _validate_vad_threshold(vad_threshold: object) -> None:
-    if vad_threshold is not None and (
-        isinstance(vad_threshold, bool)
-        or not isinstance(vad_threshold, (int, float))
-        or not 0.0 <= vad_threshold <= 1.0
-    ):
+    if vad_threshold is None:
+        return
+    if not _is_non_boolean_number(vad_threshold):
         raise ValueError("vad_threshold must be in [0, 1].")
+    if not _is_unit_interval(vad_threshold):
+        raise ValueError("vad_threshold must be in [0, 1].")
+
+
+def _is_non_boolean_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_non_boolean_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_unit_interval(value: int | float) -> bool:
+    return 0.0 <= value <= 1.0
+
+
 def _validate_adapter_setting_strings(settings: Mapping[str, Any]) -> None:
     for key in ("compute_type", "device", "backend"):
         value = settings.get(key)

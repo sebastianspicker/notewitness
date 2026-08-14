@@ -225,25 +225,46 @@ def _event_spans(
     result: list[tuple[str, str, int, int]] = []
     for target_id in event.get("target_ids", ()):
         target = targets.get(str(target_id))
-        selector = target.get("selector") if isinstance(target, Mapping) else None
-        if not isinstance(selector, Mapping):
-            continue
-        source_id = target.get("source_id")
-        stream_id = selector.get("stream_id")
-        start = selector.get("start_us")
-        duration = selector.get("duration_us")
-        if (
-            isinstance(source_id, str)
-            and isinstance(stream_id, str)
-            and isinstance(start, int)
-            and not isinstance(start, bool)
-            and isinstance(duration, int)
-            and not isinstance(duration, bool)
-            and start >= 0
-            and duration > 0
-        ):
-            result.append((source_id, stream_id, start, start + duration))
+        span = _valid_event_span(target)
+        if span is not None:
+            result.append(span)
     return tuple(result)
+
+
+def _valid_event_span(target: object) -> tuple[str, str, int, int] | None:
+    if not isinstance(target, Mapping):
+        return None
+    selector = target.get("selector")
+    if not isinstance(selector, Mapping):
+        return None
+    source_id = target.get("source_id")
+    stream_id = selector.get("stream_id")
+    start = selector.get("start_us")
+    duration = selector.get("duration_us")
+    if not _has_valid_span_values(source_id, stream_id, start, duration):
+        return None
+    return source_id, stream_id, start, start + duration
+
+
+def _has_valid_span_values(
+    source_id: object,
+    stream_id: object,
+    start: object,
+    duration: object,
+) -> bool:
+    if not isinstance(source_id, str):
+        return False
+    if not isinstance(stream_id, str):
+        return False
+    if not _is_non_boolean_int(start):
+        return False
+    if not _is_non_boolean_int(duration):
+        return False
+    return start >= 0 and duration > 0
+
+
+def _is_non_boolean_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _total_overlap(

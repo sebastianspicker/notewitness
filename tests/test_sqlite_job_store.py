@@ -14,6 +14,7 @@ from notewitness.infrastructure.sqlite_job_store import (
     JobConflictError,
     JobStoreError,
     SQLiteJobStore,
+    _secure_private_sidecar,
 )
 
 
@@ -159,6 +160,141 @@ class SQLiteJobStoreTests(unittest.TestCase):
                 ).state,
             )  # type: ignore[union-attr]
 
+    def test_checkpoint_rejects_invalid_values_without_mutating_running_job(self) -> None:
+        with TemporaryDirectory() as temporary:
+            store = SQLiteJobStore(Path(temporary) / "jobs.sqlite")
+            store.enqueue(spec())
+            store.claim(
+                "job:test", owner_id="worker:a", lease_seconds=30, source_sha256=SHA,
+                adapter_fingerprint_sha256="b" * 64, runtime_fingerprint_sha256="c" * 64,
+                settings_fingerprint_sha256="d" * 64, score_sha256="e" * 64,
+            )
+            before = store.get("job:test")
+
+            with self.assertRaisesRegex(ValueError, "^stage must be an AnalysisStage\\.$"):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage="invalid",  # type: ignore[arg-type]
+                    completed_span_count=1, continuation_token="resume:next",
+                    last_artifact_id="artifact:checkpoint",
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                JobConflictError, "^checkpoint is outside the immutable job specification$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.MEDIA_PROBE,
+                    completed_span_count=1, continuation_token="resume:next",
+                    last_artifact_id="artifact:checkpoint",
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                JobConflictError, "^checkpoint is outside the immutable job specification$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                    completed_span_count=2, continuation_token="resume:next",
+                    last_artifact_id="artifact:checkpoint",
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                ValueError, "^completed_span_count must be non-negative\\.$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                    completed_span_count=True, continuation_token="resume:next",  # type: ignore[arg-type]
+                    last_artifact_id="artifact:checkpoint",
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                ValueError, "^completed_span_count must be non-negative\\.$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                    completed_span_count=-1, continuation_token="resume:next",
+                    last_artifact_id="artifact:checkpoint",
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                ValueError, "^continuation_token exceeds its bounded contract\\.$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                    completed_span_count=1, continuation_token="x" * 4_097,
+                    last_artifact_id="artifact:checkpoint",
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                ValueError, "^continuation_token exceeds its bounded contract\\.$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                    completed_span_count=1, continuation_token=1,  # type: ignore[arg-type]
+                    last_artifact_id="artifact:checkpoint",
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                ValueError, "^continuation_token exceeds its bounded contract\\.$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                    completed_span_count=1, continuation_token="",
+                    last_artifact_id="artifact:checkpoint",
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                ValueError, "^last_artifact_id must be a bounded non-empty string\\.$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                    completed_span_count=1, continuation_token="resume:next",
+                    last_artifact_id="x" * 513,
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                ValueError, "^last_artifact_id must be a bounded non-empty string\\.$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                    completed_span_count=1, continuation_token="resume:next",
+                    last_artifact_id=1,  # type: ignore[arg-type]
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            with self.assertRaisesRegex(
+                ValueError, "^last_artifact_id must be a bounded non-empty string\\.$"
+            ):
+                store.checkpoint(
+                    "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                    completed_span_count=1, continuation_token="resume:next",
+                    last_artifact_id="",
+                )
+            self.assertEqual(before, store.get("job:test"))
+
+            boundary_checkpoint = store.checkpoint(
+                "job:test", owner_id="worker:a", stage=AnalysisStage.SPEECH_RECOGNITION,
+                completed_span_count=1, continuation_token="x" * 4_096,
+                last_artifact_id="x" * 512, pause=False,
+            )
+            self.assertEqual(
+                (JobState.RUNNING, "worker:a", "x" * 4_096, "x" * 512),
+                (
+                    boundary_checkpoint.state,
+                    boundary_checkpoint.owner_id,
+                    boundary_checkpoint.continuation_token,
+                    boundary_checkpoint.last_artifact_id,
+                ),
+            )
+            self.assertEqual(boundary_checkpoint, store.get("job:test"))
+
     def test_permissions_and_symlink_rejected(self) -> None:
         with TemporaryDirectory() as temporary:
             parent = Path(temporary)
@@ -221,3 +357,155 @@ class SQLiteJobStoreTests(unittest.TestCase):
                     "^database sidecar could not be secured$",
                 ):
                     store._private_sidecars()
+
+    def test_sidecar_chmod_uses_open_descriptor_after_pathname_swap(self) -> None:
+        with TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            sidecar = parent / "jobs.sqlite-wal"
+            secured = parent / "opened-sidecar"
+            replacement = parent / "replacement"
+            sidecar.write_bytes(b"opened first")
+            replacement.write_bytes(b"swapped in later")
+            sidecar.chmod(0o644)
+            replacement.chmod(0o644)
+            real_fchmod = os.fchmod
+
+            def swap_then_chmod(descriptor: int, mode: int) -> None:
+                sidecar.replace(secured)
+                replacement.replace(sidecar)
+                real_fchmod(descriptor, mode)
+
+            with patch(
+                "notewitness.infrastructure.sqlite_job_store.os.fchmod",
+                side_effect=swap_then_chmod,
+            ):
+                _secure_private_sidecar(sidecar)
+
+            self.assertEqual(0o600, secured.stat().st_mode & 0o777)
+            self.assertEqual(0o644, sidecar.stat().st_mode & 0o777)
+
+    def test_sidecar_close_failure_never_replaces_earlier_failure(self) -> None:
+        with TemporaryDirectory() as temporary:
+            sidecar = Path(temporary) / "jobs.sqlite-wal"
+            sidecar.write_bytes(b"sidecar")
+            real_close = os.close
+
+            def close_then_fail(descriptor: int) -> None:
+                real_close(descriptor)
+                raise OSError("close failure")
+
+            with (
+                patch(
+                    "notewitness.infrastructure.sqlite_job_store.os.fchmod",
+                    side_effect=OSError("chmod failure"),
+                ),
+                patch(
+                    "notewitness.infrastructure.sqlite_job_store.os.close",
+                    side_effect=close_then_fail,
+                ),
+                self.assertRaisesRegex(
+                    JobStoreError,
+                    "^database sidecar could not be secured$",
+                ) as caught,
+            ):
+                _secure_private_sidecar(sidecar)
+
+            self.assertEqual("chmod failure", str(caught.exception.__cause__))
+
+    def test_sidecar_close_failure_replaces_success(self) -> None:
+        with TemporaryDirectory() as temporary:
+            sidecar = Path(temporary) / "jobs.sqlite-wal"
+            sidecar.write_bytes(b"sidecar")
+            real_close = os.close
+
+            def close_then_fail(descriptor: int) -> None:
+                real_close(descriptor)
+                raise OSError("close failure")
+
+            with (
+                patch(
+                    "notewitness.infrastructure.sqlite_job_store.os.close",
+                    side_effect=close_then_fail,
+                ),
+                self.assertRaisesRegex(
+                    JobStoreError,
+                    "^database sidecar could not be secured$",
+                ) as caught,
+            ):
+                _secure_private_sidecar(sidecar)
+
+            self.assertEqual("close failure", str(caught.exception.__cause__))
+
+    def test_sidecar_fstat_base_exception_closes_and_propagates_same_object(self) -> None:
+        class SentinelFailure(BaseException):
+            pass
+
+        with TemporaryDirectory() as temporary:
+            sidecar = Path(temporary) / "jobs.sqlite-wal"
+            sidecar.write_bytes(b"sidecar")
+            sentinel = SentinelFailure()
+            descriptors: list[int] = []
+            real_close = os.close
+
+            def fail_fstat(descriptor: int) -> None:
+                descriptors.append(descriptor)
+                raise sentinel
+
+            def close_then_fail(descriptor: int) -> None:
+                real_close(descriptor)
+                raise OSError("close failure")
+
+            with (
+                patch(
+                    "notewitness.infrastructure.sqlite_job_store.os.fstat",
+                    side_effect=fail_fstat,
+                ),
+                patch(
+                    "notewitness.infrastructure.sqlite_job_store.os.close",
+                    side_effect=close_then_fail,
+                ) as close,
+                self.assertRaises(SentinelFailure) as caught,
+            ):
+                _secure_private_sidecar(sidecar)
+
+            self.assertIs(sentinel, caught.exception)
+            close.assert_called_once_with(descriptors[0])
+            with self.assertRaises(OSError):
+                os.fstat(descriptors[0])
+
+    def test_sidecar_fchmod_base_exception_closes_and_propagates_same_object(self) -> None:
+        class SentinelFailure(BaseException):
+            pass
+
+        with TemporaryDirectory() as temporary:
+            sidecar = Path(temporary) / "jobs.sqlite-wal"
+            sidecar.write_bytes(b"sidecar")
+            sentinel = SentinelFailure()
+            descriptors: list[int] = []
+            real_close = os.close
+
+            def fail_fchmod(descriptor: int, mode: int) -> None:
+                descriptors.append(descriptor)
+                raise sentinel
+
+            def close_then_fail(descriptor: int) -> None:
+                real_close(descriptor)
+                raise OSError("close failure")
+
+            with (
+                patch(
+                    "notewitness.infrastructure.sqlite_job_store.os.fchmod",
+                    side_effect=fail_fchmod,
+                ),
+                patch(
+                    "notewitness.infrastructure.sqlite_job_store.os.close",
+                    side_effect=close_then_fail,
+                ) as close,
+                self.assertRaises(SentinelFailure) as caught,
+            ):
+                _secure_private_sidecar(sidecar)
+
+            self.assertIs(sentinel, caught.exception)
+            close.assert_called_once_with(descriptors[0])
+            with self.assertRaises(OSError):
+                os.fstat(descriptors[0])

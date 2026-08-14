@@ -346,29 +346,44 @@ class LocalAnalysisRuntime:
                 },
             )
         except Exception as exc:
-            status_name = (
-                "status.integration-failed.json"
-                if manifest_written
-                else "status.failed.json"
+            _write_failure_status(
+                run_directory,
+                exc=exc,
+                manifest_written=manifest_written,
+                run_id=run_id,
+                request=request,
             )
-            try:
-                write_new_private_json(
-                    run_directory / status_name,
-                    {
-                        "failure_code": type(exc).__name__,
-                        "run_id": run_id,
-                        "source_id": request.source_id,
-                        "state": (
-                            "integration_failed" if manifest_written else "failed"
-                        ),
-                        "timestamp": _now(),
-                    },
-                )
-            except (LocalArtifactError, OSError):
-                pass
             if isinstance(exc, LocalAnalysisRuntimeError):
                 raise
             raise LocalAnalysisRuntimeError("Local analysis run failed.") from exc
+
+
+def _write_failure_status(
+    run_directory: Path,
+    *,
+    exc: Exception,
+    manifest_written: bool,
+    run_id: str,
+    request: LocalAnalysisRunRequest,
+) -> None:
+    status_name = (
+        "status.integration-failed.json"
+        if manifest_written
+        else "status.failed.json"
+    )
+    try:
+        write_new_private_json(
+            run_directory / status_name,
+            {
+                "failure_code": type(exc).__name__,
+                "run_id": run_id,
+                "source_id": request.source_id,
+                "state": "integration_failed" if manifest_written else "failed",
+                "timestamp": _now(),
+            },
+        )
+    except (LocalArtifactError, OSError):
+        pass
 
 
 def _validate_steps(

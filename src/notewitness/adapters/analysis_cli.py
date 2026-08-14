@@ -1,4 +1,4 @@
-"""Strict adapter for explicit, offline JSON-speaking analysis executables."""
+"""Compatibility façade for strict, offline JSON-speaking analysis executables."""
 
 from __future__ import annotations
 
@@ -8,25 +8,14 @@ import json
 import math
 import os
 from pathlib import Path
-import stat
 from tempfile import TemporaryDirectory
 from typing import Any, Callable, Mapping
 
 from notewitness.domain.analysis import (
-    ActivityHypothesis,
     AnalysisBatch,
     AnalysisRequest,
-    AnalysisResult,
     AnalysisStage,
-    AnalysisState,
-    AlignmentOutcome,
-    InstrumentHypothesis,
-    NoteHypothesis,
-    PitchPointHypothesis,
-    ScoreAlignmentHypothesis,
-    SpeakerSegmentHypothesis,
 )
-from notewitness.domain.lesson import ActivityKind
 from notewitness.domain.timeline import MediaSpan
 from notewitness.local_tools import (
     BoundedLocalToolRunner,
@@ -36,13 +25,16 @@ from notewitness.local_tools import (
     LocalToolFailure,
 )
 
+from . import analysis_cli_identity as _identity
+from . import analysis_cli_protocol as _protocol
 
-MAX_JSON_BYTES = 2 * 1024 * 1024
-MAX_JSON_DEPTH = 32
-MAX_JSON_ITEMS = 50_000
-MAX_STRING_CHARS = 4_096
-MAX_ARTIFACT_TREE_ENTRIES = 200_000
-MAX_ARTIFACT_TREE_BYTES = 128 * 1024 * 1024 * 1024
+
+MAX_JSON_BYTES = _protocol.MAX_JSON_BYTES
+MAX_JSON_DEPTH = _protocol.MAX_JSON_DEPTH
+MAX_JSON_ITEMS = _protocol.MAX_JSON_ITEMS
+MAX_STRING_CHARS = _protocol.MAX_STRING_CHARS
+MAX_ARTIFACT_TREE_ENTRIES = _identity.MAX_ARTIFACT_TREE_ENTRIES
+MAX_ARTIFACT_TREE_BYTES = _identity.MAX_ARTIFACT_TREE_BYTES
 _SUPPORTED_STAGES = frozenset(
     {
         AnalysisStage.ACTIVITY_SEGMENTATION,
@@ -55,9 +47,8 @@ _SUPPORTED_STAGES = frozenset(
     }
 )
 
-
-class AnalysisCLIError(RuntimeError):
-    """The local executable violated the bounded analysis JSON protocol."""
+AnalysisCLIError = _protocol.AnalysisCLIError
+AnalysisCLIError.__module__ = __name__
 
 
 class AnalysisCLIExecutionError(AnalysisCLIError):
@@ -92,8 +83,7 @@ class LocalAnalysisSource:
     def __post_init__(self) -> None:
         if not isinstance(self.source_id, str) or not self.source_id:
             raise ValueError("Analysis inputs require a source ID.")
-        path = _private_analysis_input(Path(self.path))
-        object.__setattr__(self, "path", path)
+        object.__setattr__(self, "path", _private_analysis_input(Path(self.path)))
         if (
             not isinstance(self.sha256, str)
             or len(self.sha256) != 64
@@ -120,15 +110,16 @@ class LocalAnalysisCLISettings:
     score_license: str | None = None
 
     def __post_init__(self) -> None:
-        directory = _private_directory(Path(self.working_directory))
-        object.__setattr__(self, "working_directory", directory)
+        object.__setattr__(
+            self,
+            "working_directory",
+            _private_directory(Path(self.working_directory)),
+        )
         if not isinstance(self.media, LocalAnalysisSource):
             raise ValueError("Analysis CLI settings require a media input.")
         if not isinstance(self.model, LocalAnalysisSource):
             raise ValueError("Analysis CLI settings require a model artifact.")
-        if self.score is not None and not isinstance(
-            self.score, LocalAnalysisSource
-        ):
+        if self.score is not None and not isinstance(self.score, LocalAnalysisSource):
             raise ValueError("score must be a LocalAnalysisSource or None.")
         if (self.score is None) != (self.score_license is None):
             raise ValueError("score and score_license must be configured together.")
@@ -181,15 +172,23 @@ class LocalAnalysisCLIAdapter:
         if not isinstance(tool, LocalTool):
             raise ValueError("LocalAnalysisCLIAdapter requires one explicit LocalTool.")
         if stage not in _SUPPORTED_STAGES:
-            raise ValueError("This adapter does not support the requested analysis stage.")
-        if not isinstance(version, str) or not version or len(version) > MAX_STRING_CHARS:
+            raise ValueError(
+                "This adapter does not support the requested analysis stage."
+            )
+        if (
+            not isinstance(version, str)
+            or not version
+            or len(version) > MAX_STRING_CHARS
+        ):
             raise ValueError("Analysis CLI version must be a bounded non-empty string.")
         if (
             not isinstance(generator_id, str)
             or not generator_id
             or len(generator_id) > MAX_STRING_CHARS
         ):
-            raise ValueError("Analysis CLI generator_id must be a bounded non-empty string.")
+            raise ValueError(
+                "Analysis CLI generator_id must be a bounded non-empty string."
+            )
         self.tool = tool
         self.stage = stage
         self.version = version
@@ -227,20 +226,12 @@ class LocalAnalysisCLIAdapter:
     ) -> LocalAnalysisCLIExecution:
         """Run once and retain exact UTF-8 JSON bytes for provenance storage."""
 
-        if not isinstance(request, AnalysisRequest):
-            raise TypeError("Analysis CLI requests must be AnalysisRequest instances.")
-        if request.source_id != self.settings.media.source_id:
-            raise AnalysisCLIError(
-                "Analysis request source does not match the configured media input."
-            )
-        _require_source_identity(self.settings.media)
-        _require_source_identity(self.settings.model)
-        if self.settings.score is not None:
-            _require_source_identity(self.settings.score)
-        payload = _request_payload(request, self)
-        request_bytes = _json_bytes(payload, "request")
+        _validate_request(request, self)
+        request_bytes = _json_bytes(_request_payload(request, self), "request")
+        request_sha256 = hashlib.sha256(request_bytes).hexdigest()
         with TemporaryDirectory(
-            prefix="analysis-cli-", dir=self.settings.working_directory
+            prefix="analysis-cli-",
+            dir=self.settings.working_directory,
         ) as raw:
             workdir = Path(raw)
             workdir.chmod(0o700)
@@ -266,28 +257,24 @@ class LocalAnalysisCLIAdapter:
             finally:
                 self.require_executable_identity()
             if failure is not None:
-                raw_output = failure.stdout.encode("utf-8")
                 raise AnalysisCLIExecutionError(
                     "Analysis CLI process failed.",
-                    request_sha256=hashlib.sha256(request_bytes).hexdigest(),
-                    raw_output=raw_output,
+                    request_sha256=request_sha256,
+                    raw_output=failure.stdout.encode("utf-8"),
                 ) from failure
-        _require_source_identity(self.settings.media)
-        _require_source_identity(self.settings.model)
-        if self.settings.score is not None:
-            _require_source_identity(self.settings.score)
+        _require_configured_source_identities(self)
         raw_output = result.stdout.encode("utf-8")
         try:
             batch = _parse_batch(result.stdout, request, self)
         except AnalysisCLIError as exc:
             raise AnalysisCLIExecutionError(
                 "Analysis CLI output could not be normalized.",
-                request_sha256=hashlib.sha256(request_bytes).hexdigest(),
+                request_sha256=request_sha256,
                 raw_output=raw_output,
             ) from exc
         return LocalAnalysisCLIExecution(
             batch=batch,
-            request_sha256=hashlib.sha256(request_bytes).hexdigest(),
+            request_sha256=request_sha256,
             raw_output=raw_output,
             raw_output_sha256=hashlib.sha256(raw_output).hexdigest(),
             duration_ms=result.duration_ms,
@@ -296,23 +283,47 @@ class LocalAnalysisCLIAdapter:
 
     def replay(self, request: AnalysisRequest, raw_output: bytes) -> AnalysisBatch:
         """Validate retained exact output without invoking the local executable."""
-        if not isinstance(request, AnalysisRequest):
-            raise TypeError("Analysis CLI requests must be AnalysisRequest instances.")
-        if request.source_id != self.settings.media.source_id:
-            raise AnalysisCLIError(
-                "Analysis request source does not match the configured media input."
-            )
+
+        _validate_request_identity(request, self)
         if not isinstance(raw_output, bytes) or len(raw_output) > MAX_JSON_BYTES:
-            raise AnalysisCLIError("Retained analysis output exceeds the bounded contract.")
-        _require_source_identity(self.settings.media)
-        _require_source_identity(self.settings.model)
-        if self.settings.score is not None:
-            _require_source_identity(self.settings.score)
+            raise AnalysisCLIError(
+                "Retained analysis output exceeds the bounded contract."
+            )
+        _require_configured_source_identities(self)
         try:
             raw = raw_output.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise AnalysisCLIError("Retained analysis output must be UTF-8 JSON.") from exc
+            raise AnalysisCLIError(
+                "Retained analysis output must be UTF-8 JSON."
+            ) from exc
         return _parse_batch(raw, request, self)
+
+
+def _validate_request(
+    request: AnalysisRequest,
+    adapter: LocalAnalysisCLIAdapter,
+) -> None:
+    _validate_request_identity(request, adapter)
+    _require_configured_source_identities(adapter)
+
+
+def _validate_request_identity(
+    request: AnalysisRequest,
+    adapter: LocalAnalysisCLIAdapter,
+) -> None:
+    if not isinstance(request, AnalysisRequest):
+        raise TypeError("Analysis CLI requests must be AnalysisRequest instances.")
+    if request.source_id != adapter.settings.media.source_id:
+        raise AnalysisCLIError(
+            "Analysis request source does not match the configured media input."
+        )
+
+
+def _require_configured_source_identities(adapter: LocalAnalysisCLIAdapter) -> None:
+    _require_source_identity(adapter.settings.media)
+    _require_source_identity(adapter.settings.model)
+    if adapter.settings.score is not None:
+        _require_source_identity(adapter.settings.score)
 
 
 def _request_payload(
@@ -346,43 +357,19 @@ def _parse_batch(
     request: AnalysisRequest,
     adapter: LocalAnalysisCLIAdapter,
 ) -> AnalysisBatch:
-    if len(raw.encode("utf-8")) > MAX_JSON_BYTES:
-        raise AnalysisCLIError("Analysis CLI JSON output exceeds the bounded contract.")
-    try:
-        payload = json.loads(raw, object_pairs_hook=_unique_object)
-        payload = _json_value(payload, "output")
-    except (json.JSONDecodeError, AnalysisCLIError) as exc:
-        raise AnalysisCLIError("Analysis CLI did not emit valid JSON.") from exc
-    _expect_keys(
-        payload,
-        {"state", "hypotheses", "diagnostics", "continuation_token"},
-        "output",
+    return _protocol.parse_batch(
+        raw,
+        request,
+        adapter,
+        json_value=_json_value,
+        unique_object=_unique_object,
+        expect_keys=_expect_keys,
+        enum=_enum,
+        list_value=_list,
+        string_tuple=_string_tuple,
+        nullable_string=_nullable_string,
+        hypothesis=_hypothesis,
     )
-    state = _enum(AnalysisState, payload["state"], "output.state")
-    hypotheses_raw = _list(payload["hypotheses"], "output.hypotheses")
-    if len(hypotheses_raw) > MAX_JSON_ITEMS:
-        raise AnalysisCLIError("Analysis CLI returned too many hypotheses.")
-    diagnostics = _string_tuple(payload["diagnostics"], "output.diagnostics")
-    continuation = _nullable_string(
-        payload["continuation_token"], "output.continuation_token"
-    )
-    hypotheses = tuple(
-        _hypothesis(item, request, adapter, index)
-        for index, item in enumerate(hypotheses_raw)
-    )
-    try:
-        return AnalysisBatch(
-            AnalysisResult(
-                stage=adapter.stage,
-                state=state,
-                hypothesis_ids=tuple(item.hypothesis_id for item in hypotheses),
-                diagnostics=diagnostics,
-                continuation_token=continuation,
-            ),
-            hypotheses,
-        )
-    except ValueError as exc:
-        raise AnalysisCLIError("Analysis CLI output violates the analysis contract.") from exc
 
 
 def _hypothesis(
@@ -391,151 +378,23 @@ def _hypothesis(
     adapter: LocalAnalysisCLIAdapter,
     index: int,
 ) -> Any:
-    label = f"output.hypotheses[{index}]"
-    common = {"hypothesis_id", "span", "state", "confidence"}
-    stage_fields: dict[AnalysisStage, set[str]] = {
-        AnalysisStage.ACTIVITY_SEGMENTATION: {"kind"},
-        AnalysisStage.ANONYMOUS_DIARIZATION: {"anonymous_cluster_id"},
-        AnalysisStage.NOTE_TRANSCRIPTION: {"midi_pitch", "frequency_hz"},
-        AnalysisStage.CONTINUOUS_PITCH: {"frequency_hz"},
-        AnalysisStage.INSTRUMENT_DETECTION: {"instrument_label"},
-        AnalysisStage.INSTRUMENT_DIARIZATION: {
-            "instrument_label",
-            "anonymous_instrument_track_id",
-        },
-        AnalysisStage.SCORE_ALIGNMENT: {
-            "outcome",
-            "score_id",
-            "score_position",
-            "source_hypothesis_ids",
-        },
-    }
-    optional_fields: dict[AnalysisStage, set[str]] = {
-        AnalysisStage.NOTE_TRANSCRIPTION: {
-            "amplitude",
-            "pitch_bend_unit",
-            "pitch_bend_values",
-            "source_track_id",
-            "velocity",
-        },
-        AnalysisStage.INSTRUMENT_DETECTION: {
-            "anonymous_instrument_track_id",
-        },
-    }
-    _expect_keys_with_optional(
+    return _protocol.hypothesis(
         raw,
-        common | stage_fields[adapter.stage],
-        optional_fields.get(adapter.stage, set()),
-        label,
+        request,
+        adapter,
+        index,
+        expect_keys_with_optional=_expect_keys_with_optional,
+        string=_string,
+        enum=_enum,
+        span=_span,
+        nullable_number=_nullable_number,
+        nullable_string=_nullable_string,
+        nullable_integer_in_range=_nullable_integer_in_range,
+        number_tuple=_number_tuple,
+        json_value=_json_value,
+        mapping=_mapping,
+        string_tuple=_string_tuple,
     )
-    hypothesis_id = _string(raw["hypothesis_id"], f"{label}.hypothesis_id")
-    state = _enum(AnalysisState, raw["state"], f"{label}.state")
-    span = _span(raw["span"], request, f"{label}.span")
-    confidence = _nullable_number(raw["confidence"], f"{label}.confidence")
-    try:
-        if adapter.stage is AnalysisStage.ACTIVITY_SEGMENTATION:
-            kind_raw = raw["kind"]
-            kind = None if kind_raw is None else _enum(ActivityKind, kind_raw, f"{label}.kind")
-            return ActivityHypothesis(
-                hypothesis_id,
-                span,
-                state,
-                kind,
-                confidence,
-                adapter.generator_id,
-            )
-        if adapter.stage is AnalysisStage.ANONYMOUS_DIARIZATION:
-            return SpeakerSegmentHypothesis(
-                hypothesis_id,
-                span,
-                state,
-                _nullable_string(
-                    raw["anonymous_cluster_id"],
-                    f"{label}.anonymous_cluster_id",
-                ),
-                None,
-                confidence,
-                adapter.generator_id,
-            )
-        if adapter.stage is AnalysisStage.NOTE_TRANSCRIPTION:
-            return NoteHypothesis(
-                hypothesis_id,
-                span,
-                state,
-                _nullable_number(raw["midi_pitch"], f"{label}.midi_pitch"),
-                _nullable_number(
-                    raw["frequency_hz"], f"{label}.frequency_hz"
-                ),
-                confidence,
-                adapter.generator_id,
-                _nullable_string(
-                    raw.get("source_track_id"), f"{label}.source_track_id"
-                ),
-                _nullable_number(raw.get("amplitude"), f"{label}.amplitude"),
-                _nullable_integer_in_range(
-                    raw.get("velocity"), 0, 127, f"{label}.velocity"
-                ),
-                _number_tuple(
-                    raw.get("pitch_bend_values", []),
-                    f"{label}.pitch_bend_values",
-                ),
-                _nullable_string(
-                    raw.get("pitch_bend_unit"), f"{label}.pitch_bend_unit"
-                ),
-            )
-        if adapter.stage is AnalysisStage.CONTINUOUS_PITCH:
-            return PitchPointHypothesis(
-                hypothesis_id,
-                span,
-                state,
-                _nullable_number(
-                    raw["frequency_hz"], f"{label}.frequency_hz"
-                ),
-                confidence,
-                adapter.generator_id,
-            )
-        if adapter.stage in {
-            AnalysisStage.INSTRUMENT_DETECTION,
-            AnalysisStage.INSTRUMENT_DIARIZATION,
-        }:
-            return InstrumentHypothesis(
-                hypothesis_id,
-                span,
-                state,
-                _nullable_string(
-                    raw["instrument_label"], f"{label}.instrument_label"
-                ),
-                None,
-                confidence,
-                adapter.generator_id,
-                _nullable_string(
-                    raw.get("anonymous_instrument_track_id"),
-                    f"{label}.anonymous_instrument_track_id",
-                ),
-            )
-        outcome = _enum(AlignmentOutcome, raw["outcome"], f"{label}.outcome")
-        score_position = raw["score_position"]
-        if score_position is not None:
-            score_position = _mapping(
-                _json_value(score_position, f"{label}.score_position"),
-                f"{label}.score_position",
-            )
-        return ScoreAlignmentHypothesis(
-            hypothesis_id,
-            span,
-            state,
-            outcome,
-            _nullable_string(raw["score_id"], f"{label}.score_id"),
-            score_position,
-            _string_tuple(
-                raw["source_hypothesis_ids"],
-                f"{label}.source_hypothesis_ids",
-            ),
-            confidence,
-            adapter.generator_id,
-        )
-    except ValueError as exc:
-        raise AnalysisCLIError(f"{label} violates the typed hypothesis contract.") from exc
 
 
 def _span(raw: Any, request: AnalysisRequest, label: str) -> MediaSpan:
@@ -544,33 +403,25 @@ def _span(raw: Any, request: AnalysisRequest, label: str) -> MediaSpan:
     start = _integer(raw["start_us"], f"{label}.start_us")
     duration = _integer(raw["duration_us"], f"{label}.duration_us")
     try:
-        span = MediaSpan(request.source_id, stream, start, duration)
+        parsed_span = MediaSpan(request.source_id, stream, start, duration)
     except ValueError as exc:
         raise AnalysisCLIError(f"{label} is invalid.") from exc
     if not any(
-        span.stream_id == allowed.stream_id
-        and allowed.start_us <= span.start_us
-        and span.end_us <= allowed.end_us
+        parsed_span.stream_id == allowed.stream_id
+        and allowed.start_us <= parsed_span.start_us
+        and parsed_span.end_us <= allowed.end_us
         for allowed in request.spans
     ):
         raise AnalysisCLIError(f"{label} lies outside the requested source span.")
-    return span
+    return parsed_span
 
 
 def _span_payload(span: MediaSpan, *, include_source: bool) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "stream_id": span.stream_id,
-        "start_us": span.start_us,
-        "duration_us": span.duration_us,
-    }
-    if include_source:
-        payload["source_id"] = span.source_id
-    return payload
+    return _protocol.span_payload(span, include_source=include_source)
 
 
 def _expect_keys(value: Any, expected: set[str], label: str) -> None:
-    mapping = _mapping(value, label)
-    if set(mapping) != expected:
+    if set(_mapping(value, label)) != expected:
         raise AnalysisCLIError(f"{label} has unknown or missing keys.")
 
 
@@ -580,28 +431,21 @@ def _expect_keys_with_optional(
     optional: set[str],
     label: str,
 ) -> None:
-    mapping = _mapping(value, label)
-    keys = set(mapping)
+    keys = set(_mapping(value, label))
     if required - keys or keys - required - optional:
         raise AnalysisCLIError(f"{label} has unknown or missing keys.")
 
 
 def _mapping(value: Any, label: str) -> Mapping[str, Any]:
-    if not isinstance(value, dict) or any(not isinstance(key, str) for key in value):
-        raise AnalysisCLIError(f"{label} must be an object.")
-    return value
+    return _protocol.mapping(value, label)
 
 
 def _list(value: Any, label: str) -> list[Any]:
-    if not isinstance(value, list):
-        raise AnalysisCLIError(f"{label} must be an array.")
-    return value
+    return _protocol.list_value(value, label)
 
 
 def _string(value: Any, label: str) -> str:
-    if not isinstance(value, str) or not value or len(value) > MAX_STRING_CHARS:
-        raise AnalysisCLIError(f"{label} must be a bounded non-empty string.")
-    return value
+    return _protocol.string(value, label)
 
 
 def _nullable_string(value: Any, label: str) -> str | None:
@@ -616,21 +460,11 @@ def _string_tuple(value: Any, label: str) -> tuple[str, ...]:
 
 
 def _integer(value: Any, label: str) -> int:
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise AnalysisCLIError(f"{label} must be a non-negative integer.")
-    return value
+    return _protocol.integer(value, label)
 
 
 def _nullable_number(value: Any, label: str) -> float | None:
-    if value is None:
-        return None
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-    ):
-        raise AnalysisCLIError(f"{label} must be a finite number or null.")
-    return float(value)
+    return _protocol.nullable_number(value, label)
 
 
 def _nullable_integer_in_range(
@@ -639,17 +473,7 @@ def _nullable_integer_in_range(
     maximum: int,
     label: str,
 ) -> int | None:
-    if value is None:
-        return None
-    if (
-        not isinstance(value, int)
-        or isinstance(value, bool)
-        or not minimum <= value <= maximum
-    ):
-        raise AnalysisCLIError(
-            f"{label} must be an integer in [{minimum}, {maximum}] or null."
-        )
-    return value
+    return _protocol.nullable_integer_in_range(value, minimum, maximum, label)
 
 
 def _number_tuple(value: Any, label: str) -> tuple[float, ...]:
@@ -675,7 +499,9 @@ def _enum(enum_type: Any, value: Any, label: str) -> Any:
 def _json_bytes(value: Any, label: str) -> bytes:
     try:
         encoded = json.dumps(
-            value, separators=(",", ":"), allow_nan=False
+            value,
+            separators=(",", ":"),
+            allow_nan=False,
         ).encode("utf-8")
     except (TypeError, ValueError) as exc:
         raise AnalysisCLIError(f"{label} is not JSON-safe.") from exc
@@ -712,142 +538,27 @@ def _json_value(value: Any, label: str, depth: int = 0) -> Any:
 
 
 def _reject_path_like_values(value: Any, label: str) -> None:
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            if "path" in key.lower() or "media" in key.lower():
-                raise AnalysisCLIError(f"{label} must not contain media paths.")
-            _reject_path_like_values(item, label)
-    elif isinstance(value, list):
-        for item in value:
-            _reject_path_like_values(item, label)
-    elif isinstance(value, str) and (value.startswith("/") or value.startswith("~")):
-        raise AnalysisCLIError(f"{label} must not contain filesystem paths.")
+    _protocol.reject_path_like_values(value, label)
 
 
 def _private_directory(path: Path) -> Path:
-    try:
-        resolved = path.resolve(strict=True)
-        mode = stat.S_IMODE(resolved.stat().st_mode)
-    except OSError as exc:
-        raise ValueError("working_directory must exist.") from exc
-    if not resolved.is_dir() or mode & 0o077:
-        raise ValueError("working_directory must deny group and other access.")
-    return resolved
+    return _identity.private_directory(path)
 
 
 def _private_analysis_input(path: Path) -> Path:
-    if not path.is_absolute() or path.is_symlink():
-        raise ValueError("Analysis input paths must be absolute non-symlinks.")
-    try:
-        resolved = path.resolve(strict=True)
-        metadata = resolved.stat()
-    except OSError as exc:
-        raise ValueError("Analysis input path is unavailable.") from exc
-    if (
-        not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode))
-        or metadata.st_uid != os.getuid()
-        or stat.S_IMODE(metadata.st_mode) & 0o077
-    ):
-        raise ValueError(
-            "Analysis inputs must be owner-private regular files or directories."
-        )
-    return resolved
+    return _identity.private_analysis_input(path)
 
 
 def analysis_artifact_identity(path: str | Path) -> tuple[str, int]:
-    """Hash one owner-private file or an explicit symlink-free model tree."""
-
-    resolved = _private_analysis_input(Path(path))
-    if resolved.is_file():
-        return _regular_file_identity(resolved)
-    digest = hashlib.sha256(b"notewitness-model-tree-v1\0")
-    total_size = 0
-    entry_count = 0
-    pending = [resolved]
-    while pending:
-        directory = pending.pop()
-        try:
-            entries = sorted(directory.iterdir(), key=lambda item: item.name)
-        except OSError as exc:
-            raise ValueError("Analysis artifact directory could not be read.") from exc
-        directories: list[Path] = []
-        for entry in entries:
-            entry_count += 1
-            if entry_count > MAX_ARTIFACT_TREE_ENTRIES:
-                raise ValueError("Analysis artifact directory has too many entries.")
-            try:
-                metadata = entry.lstat()
-            except OSError as exc:
-                raise ValueError("Analysis artifact entry became unavailable.") from exc
-            if (
-                stat.S_ISLNK(metadata.st_mode)
-                or metadata.st_uid != os.getuid()
-                or stat.S_IMODE(metadata.st_mode) & 0o077
-            ):
-                raise ValueError(
-                    "Analysis artifact trees must be owner-private and symlink-free."
-                )
-            relative = entry.relative_to(resolved).as_posix().encode(
-                "utf-8", errors="surrogateescape"
-            )
-            if stat.S_ISDIR(metadata.st_mode):
-                digest.update(b"D\0" + relative + b"\0")
-                directories.append(entry)
-                continue
-            if not stat.S_ISREG(metadata.st_mode):
-                raise ValueError(
-                    "Analysis artifact trees may contain only files and directories."
-                )
-            file_digest, file_size = _regular_file_identity(entry)
-            total_size += file_size
-            if total_size > MAX_ARTIFACT_TREE_BYTES:
-                raise ValueError("Analysis artifact directory exceeds the byte bound.")
-            digest.update(
-                b"F\0"
-                + relative
-                + b"\0"
-                + str(file_size).encode("ascii")
-                + b"\0"
-                + file_digest.encode("ascii")
-                + b"\0"
-            )
-        pending.extend(reversed(directories))
-    if entry_count == 0 or total_size <= 0:
-        raise ValueError("Analysis artifact directory must contain model bytes.")
-    return digest.hexdigest(), total_size
+    return _identity.analysis_artifact_identity(
+        path,
+        private_input=_private_analysis_input,
+        regular_file_identity=_regular_file_identity,
+    )
 
 
 def _regular_file_identity(path: Path) -> tuple[str, int]:
-    flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        raise ValueError("Analysis artifact file could not be opened safely.") from exc
-    try:
-        before = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(before.st_mode)
-            or before.st_uid != os.getuid()
-            or stat.S_IMODE(before.st_mode) & 0o077
-        ):
-            raise ValueError("Analysis artifact files must be owner-private.")
-        digest = hashlib.sha256()
-        while chunk := os.read(descriptor, 1024 * 1024):
-            digest.update(chunk)
-        after = os.fstat(descriptor)
-    finally:
-        os.close(descriptor)
-    identity = lambda item: (
-        item.st_dev,
-        item.st_ino,
-        item.st_mode,
-        item.st_size,
-        item.st_mtime_ns,
-        item.st_ctime_ns,
-    )
-    if identity(before) != identity(after):
-        raise ValueError("Analysis artifact file changed while it was read.")
-    return digest.hexdigest(), before.st_size
+    return _identity._regular_file_identity(path)
 
 
 def _source_payload(source: LocalAnalysisSource) -> dict[str, Any]:
@@ -871,9 +582,4 @@ def _require_source_identity(source: LocalAnalysisSource) -> None:
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise AnalysisCLIError(f"Analysis CLI output duplicates key {key!r}.")
-        result[key] = value
-    return result
+    return _protocol.unique_object(pairs)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 import json
 from pathlib import Path
 import unittest
@@ -205,6 +206,107 @@ class AnalysisEvidenceTests(unittest.TestCase):
             )
         self.assertEqual(original, payload)
 
+    def test_context_validation_retains_ordered_boundaries(self) -> None:
+        with self.assertRaisesRegex(ValueError, "valid graph ID"):
+            replace(context(), generator_id="invalid id", run_token="invalid token")
+
+        invalid_values = (
+            ("raw_artifact_id", "invalid id", "valid graph ID"),
+            ("run_token", "invalid token", "ID-safe characters"),
+            ("generator_name", " ", "non-empty string"),
+            ("raw_artifact_sha256", "A" * 64, "lowercase SHA-256"),
+            ("raw_artifact_size_bytes", True, "non-negative"),
+            ("analysis_run_id", "x" * 513, "bounded non-empty"),
+            ("parameters", {"value": float("nan")}, "finite JSON data"),
+        )
+        for field, value, message in invalid_values:
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, message):
+                replace(context(), **{field: value})
+
+    def test_append_preflight_precedes_source_lookup_and_materializes_once(self) -> None:
+        with self.assertRaisesRegex(AnalysisEvidenceError, "requires 1-32 batches"):
+            append_analysis_batches(
+                {}, source_id=SOURCE_ID, batches=(), context=context()
+            )
+
+        span = MediaSpan(SOURCE_ID, "audio", 0, 100_000)
+        mismatched = ActivityHypothesis(
+            "activity:mismatched",
+            MediaSpan("source:other", "audio", 0, 100_000),
+            AnalysisState.READY,
+            ActivityKind.SPEECH,
+            0.7,
+            "generator:other",
+        )
+        original = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        payload = deepcopy(original)
+        with self.assertRaisesRegex(AnalysisEvidenceError, "target the selected source"):
+            append_analysis_batches(
+                payload,
+                source_id=SOURCE_ID,
+                batches=(batch(AnalysisStage.ACTIVITY_SEGMENTATION, mismatched),),
+                context=context(),
+            )
+        self.assertEqual(original, payload)
+
+        hypotheses = (
+            ActivityHypothesis(
+                "activity:first",
+                span,
+                AnalysisState.READY,
+                ActivityKind.SPEECH,
+                0.7,
+                GENERATOR_ID,
+            ),
+            ActivityHypothesis(
+                "activity:second",
+                span,
+                AnalysisState.READY,
+                ActivityKind.MUSIC,
+                0.8,
+                GENERATOR_ID,
+            ),
+        )
+        payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        records = append_analysis_batches(
+            payload,
+            source_id=SOURCE_ID,
+            batches=(batch(AnalysisStage.ACTIVITY_SEGMENTATION, item) for item in hypotheses),
+            context=context(),
+        )
+        self.assertEqual(
+            tuple(item.hypothesis_id for item in hypotheses), records.hypothesis_ids
+        )
+        self.assertEqual(
+            records.hypothesis_ids,
+            tuple(
+                item["body"]["hypothesis_id"]
+                for item in payload["events"]
+                if item["id"] in records.event_ids
+            ),
+        )
+
+        confirmed_speaker = SpeakerSegmentHypothesis(
+            "speaker:attributed",
+            span,
+            AnalysisState.READY,
+            "SPEAKER_00",
+            "actor:student",
+            0.9,
+            GENERATOR_ID,
+        )
+        payload = deepcopy(original)
+        with self.assertRaisesRegex(AnalysisEvidenceError, "confirm a human actor"):
+            append_analysis_batches(
+                payload,
+                source_id=SOURCE_ID,
+                batches=(
+                    batch(AnalysisStage.ANONYMOUS_DIARIZATION, confirmed_speaker),
+                ),
+                context=context(),
+            )
+        self.assertEqual(original, payload)
+
         alignment = ScoreAlignmentHypothesis(
             "alignment:unknown",
             span,
@@ -222,6 +324,62 @@ class AnalysisEvidenceTests(unittest.TestCase):
                 payload,
                 source_id=SOURCE_ID,
                 batches=(batch(AnalysisStage.SCORE_ALIGNMENT, alignment),),
+                context=context(),
+            )
+        self.assertEqual(original, payload)
+
+    def test_activity_other_sound_is_local_and_score_selector_checks_follow_ids(self) -> None:
+        original = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        span = MediaSpan(SOURCE_ID, "audio", 0, 100_000)
+        other_sound = ActivityHypothesis(
+            "activity:other-sound",
+            span,
+            AnalysisState.READY,
+            ActivityKind.OTHER_SOUND,
+            0.7,
+            GENERATOR_ID,
+        )
+        payload = deepcopy(original)
+        records = append_analysis_batches(
+            payload,
+            source_id=SOURCE_ID,
+            batches=(batch(AnalysisStage.ACTIVITY_SEGMENTATION, other_sound),),
+            context=context(),
+        )
+        event = next(
+            item for item in payload["events"] if item["id"] in records.event_ids
+        )
+        self.assertEqual("local:other_sound", event["type"])
+
+        note = NoteHypothesis(
+            "note:known",
+            span,
+            AnalysisState.READY,
+            60.0,
+            None,
+            0.8,
+            GENERATOR_ID,
+        )
+        malformed_alignment = ScoreAlignmentHypothesis(
+            "alignment:reserved-selector",
+            span,
+            AnalysisState.READY,
+            AlignmentOutcome.ALIGNED,
+            "score:test",
+            {"kind": "reserved"},
+            (note.hypothesis_id,),
+            0.8,
+            GENERATOR_ID,
+        )
+        payload = deepcopy(original)
+        with self.assertRaisesRegex(AnalysisEvidenceError, "reserved selector"):
+            append_analysis_batches(
+                payload,
+                source_id=SOURCE_ID,
+                batches=(
+                    batch(AnalysisStage.NOTE_TRANSCRIPTION, note),
+                    batch(AnalysisStage.SCORE_ALIGNMENT, malformed_alignment),
+                ),
                 context=context(),
             )
         self.assertEqual(original, payload)

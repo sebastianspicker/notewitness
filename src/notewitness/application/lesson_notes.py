@@ -196,53 +196,115 @@ def _speaker_roles_by_event(
     events: Mapping[str, Mapping[str, Any]],
     relations: Iterable[Mapping[str, Any]],
 ) -> dict[str, str]:
+    candidates = _speaker_role_candidates(events, relations)
+    clusters = _selected_speaker_clusters(candidates)
+    _inherit_speaker_clusters(events, clusters)
+    return _formatted_speaker_roles(clusters)
+
+
+def _speaker_role_candidates(
+    events: Mapping[str, Mapping[str, Any]],
+    relations: Iterable[Mapping[str, Any]],
+) -> dict[str, list[tuple[str, str, int, str]]]:
     event_positions = {event_id: index for index, event_id in enumerate(events)}
     candidates: dict[str, list[tuple[str, str, int, str]]] = {}
     for relation in relations:
-        if (
-            relation.get("type") != "local:speaker_alignment"
-            or relation.get("review_status")
-            not in {"machine_suggested", "human_accepted", "human_created"}
-        ):
+        candidate = _speaker_role_candidate(events, event_positions, relation)
+        if candidate is None:
             continue
-        speech_id: str | None = None
-        speaker_id: str | None = None
-        arguments = relation.get("arguments")
-        if not isinstance(arguments, list):
+        speech_id, value = candidate
+        candidates.setdefault(speech_id, []).append(value)
+    return candidates
+
+
+def _speaker_role_candidate(
+    events: Mapping[str, Mapping[str, Any]],
+    event_positions: Mapping[str, int],
+    relation: Mapping[str, Any],
+) -> tuple[str, tuple[str, str, int, str]] | None:
+    if not _is_usable_speaker_alignment(relation):
+        return None
+    speech_id, speaker_id = _speaker_alignment_event_ids(relation.get("arguments"))
+    speaker = events.get(speaker_id or "")
+    if not isinstance(speaker, Mapping):
+        return None
+    cluster = _anonymous_speaker_cluster(speaker)
+    if speech_id not in events or cluster is None:
+        return None
+    return (
+        speech_id,
+        (
+            str(relation["review_status"]),
+            diarization_run_id(speaker),
+            event_positions.get(speaker_id or "", -1),
+            cluster,
+        ),
+    )
+
+
+def _is_usable_speaker_alignment(relation: Mapping[str, Any]) -> bool:
+    return relation.get("type") == "local:speaker_alignment" and relation.get(
+        "review_status"
+    ) in {"machine_suggested", "human_accepted", "human_created"}
+
+
+def _speaker_alignment_event_ids(arguments: object) -> tuple[str | None, str | None]:
+    speech_id: str | None = None
+    speaker_id: str | None = None
+    if not isinstance(arguments, list):
+        return speech_id, speaker_id
+    for argument in arguments:
+        reference = _speaker_alignment_reference(argument)
+        if reference is None:
             continue
-        for argument in arguments:
-            if not isinstance(argument, Mapping) or argument.get("ref_kind") != "event":
-                continue
-            ref_id = argument.get("ref_id")
-            if not isinstance(ref_id, str):
-                continue
-            if argument.get("role") == "speech":
-                speech_id = ref_id
-            elif argument.get("role") == "speaker_segment":
-                speaker_id = ref_id
-        speaker = events.get(speaker_id or "")
-        body = speaker.get("body") if isinstance(speaker, Mapping) else None
-        value = body.get("value") if isinstance(body, Mapping) else None
-        cluster = value.get("anonymous_cluster_id") if isinstance(value, Mapping) else None
-        if speech_id in events and isinstance(cluster, str) and cluster:
-            candidates.setdefault(speech_id, []).append(
-                (
-                    str(relation["review_status"]),
-                    diarization_run_id(speaker),
-                    event_positions.get(speaker_id or "", -1),
-                    cluster,
-                )
-            )
+        role, event_id = reference
+        if role == "speech":
+            speech_id = event_id
+        else:
+            speaker_id = event_id
+    return speech_id, speaker_id
+
+
+def _speaker_alignment_reference(argument: object) -> tuple[str, str] | None:
+    if not isinstance(argument, Mapping) or argument.get("ref_kind") != "event":
+        return None
+    role = argument.get("role")
+    event_id = argument.get("ref_id")
+    if role not in {"speech", "speaker_segment"} or not isinstance(event_id, str):
+        return None
+    return str(role), event_id
+
+
+def _anonymous_speaker_cluster(event: Mapping[str, Any]) -> str | None:
+    body = event.get("body")
+    value = body.get("value") if isinstance(body, Mapping) else None
+    cluster = value.get("anonymous_cluster_id") if isinstance(value, Mapping) else None
+    return cluster if isinstance(cluster, str) and cluster else None
+
+
+def _selected_speaker_clusters(
+    candidates: Mapping[str, list[tuple[str, str, int, str]]],
+) -> dict[str, set[str]]:
     clusters: dict[str, set[str]] = {}
     for speech_id, values in candidates.items():
         human = tuple(
             item for item in values if item[0] in {"human_accepted", "human_created"}
         )
-        selected = human
-        if not selected:
-            latest_run = max(values, key=lambda item: item[2])[1]
-            selected = tuple(item for item in values if item[1] == latest_run)
+        selected = human or _latest_speaker_run(values)
         clusters[speech_id] = {item[3] for item in selected}
+    return clusters
+
+
+def _latest_speaker_run(
+    values: list[tuple[str, str, int, str]],
+) -> tuple[tuple[str, str, int, str], ...]:
+    latest_run = max(values, key=lambda item: item[2])[1]
+    return tuple(item for item in values if item[1] == latest_run)
+
+
+def _inherit_speaker_clusters(
+    events: Mapping[str, Mapping[str, Any]], clusters: dict[str, set[str]]
+) -> None:
     for event_id, event in events.items():
         body = event.get("body")
         source_id = (
@@ -252,6 +314,9 @@ def _speaker_roles_by_event(
         )
         if isinstance(source_id, str) and source_id in clusters:
             clusters.setdefault(event_id, set()).update(clusters[source_id])
+
+
+def _formatted_speaker_roles(clusters: Mapping[str, set[str]]) -> dict[str, str]:
     return {
         event_id: (
             f"anonymous speaker {next(iter(values))}"

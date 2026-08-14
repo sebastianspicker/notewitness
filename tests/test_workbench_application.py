@@ -6,9 +6,11 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from notewitness.application.transcript_review_service import add_project_actor
+from notewitness.application.pedagogical_digest import suggest_practice_relations
 from notewitness.application.workbench import (
     WorkbenchError,
     accept_evidence_suggestion,
+    accept_relation_suggestion,
     create_exact_time_bookmark,
     project_workbench,
     revise_evidence_annotation,
@@ -43,7 +45,9 @@ class WorkbenchApplicationTests(unittest.TestCase):
 
             self.assertEqual(before.sha256, ProjectStore(project).load().sha256)
 
-    def test_actor_snapshot_and_review_share_human_evidence_eligibility_policy(self) -> None:
+    def test_actor_snapshot_and_review_share_human_evidence_eligibility_policy(
+        self,
+    ) -> None:
         with TemporaryDirectory() as temporary:
             project, source_id = _project_fixture(Path(temporary))
             for role in ("unknown", "machine", "system", "analysis"):
@@ -56,7 +60,8 @@ class WorkbenchApplicationTests(unittest.TestCase):
             _append_note_suggestion(project, source_id)
 
             actors = {
-                actor["id"]: actor for actor in project_workbench(str(project))["actors"]
+                actor["id"]: actor
+                for actor in project_workbench(str(project))["actors"]
             }
             for role in ("unknown", "machine", "system", "analysis"):
                 self.assertFalse(actors[f"actor:{role}"]["human_evidence_eligible"])
@@ -103,7 +108,10 @@ class WorkbenchApplicationTests(unittest.TestCase):
             snapshot = project_workbench(str(project))
             self.assertNotEqual(before.sha256, result.project_sha256)
             self.assertEqual(1, len(snapshot["lesson"]["bookmarks"]))
-            self.assertEqual("Check the release", snapshot["lesson"]["bookmarks"][0]["label"])
+            self.assertEqual(
+                "Check the release",
+                snapshot["lesson"]["bookmarks"][0]["label"],
+            )
             self.assertEqual((), snapshot["lesson"]["full_transcript"])
             self.assertEqual(1, snapshot["lesson"]["statistics"]["bookmark_count"])
 
@@ -135,7 +143,9 @@ class WorkbenchApplicationTests(unittest.TestCase):
 
             graph = ProjectStore(project).load().payload
             suggestion = next(
-                item for item in graph["events"] if item["id"] == "event:note-suggestion"
+                item
+                for item in graph["events"]
+                if item["id"] == "event:note-suggestion"
             )
             accepted = next(
                 item for item in graph["events"] if item["id"] == result.record_ids[0]
@@ -188,9 +198,14 @@ class WorkbenchApplicationTests(unittest.TestCase):
             graph = ProjectStore(project).load().payload
             self.assertEqual(3, len(graph["events"]))
             revision = next(
-                item for item in graph["revisions"] if item["id"] == revised.revision_ids[0]
+                item
+                for item in graph["revisions"]
+                if item["id"] == revised.revision_ids[0]
             )
-            self.assertEqual(list(accepted.revision_ids), revision["parent_revision_ids"])
+            self.assertEqual(
+                list(accepted.revision_ids),
+                revision["parent_revision_ids"],
+            )
             lesson = project_workbench(str(project))["lesson"]
             self.assertEqual(1, len(lesson["full_transcript"]))
             self.assertEqual(
@@ -198,6 +213,59 @@ class WorkbenchApplicationTests(unittest.TestCase):
                 lesson["full_transcript"][0]["display_text"],
             )
             self.assertEqual(0, len(lesson["transcript_suggestions"]))
+
+    def test_relation_acceptance_keeps_both_adjudication_revisions_append_only(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temporary:
+            project, source_id = _project_fixture(Path(temporary))
+            _append_speech_suggestion(
+                project,
+                source_id,
+                text="Practice the phrase with a lighter release.",
+            )
+            relation_id = suggest_practice_relations(str(project)).relation_ids[0]
+            before = ProjectStore(project).load()
+            accepted_event = accept_evidence_suggestion(
+                str(project),
+                event_id="event:speech-suggestion",
+                author_id="actor:researcher",
+                actor_id="actor:researcher",
+                reason="Auditioned locally",
+                expected_sha256=before.sha256,
+            )
+
+            accepted_relation = accept_relation_suggestion(
+                str(project),
+                relation_id=relation_id,
+                author_id="actor:researcher",
+                reason="Confirmed for local practice",
+                expected_sha256=accepted_event.project_sha256,
+            )
+
+            graph = ProjectStore(project).load().payload
+            revisions = {
+                item["id"]: item for item in graph["revisions"]
+            }
+            self.assertEqual(
+                ("supersede", "adjudicate"),
+                tuple(
+                    revisions[revision_id]["operation"]
+                    for revision_id in accepted_relation.revision_ids
+                ),
+            )
+            self.assertEqual(
+                accepted_relation.record_ids[0],
+                revisions[accepted_relation.revision_ids[1]]["record_id"],
+            )
+            with self.assertRaisesRegex(WorkbenchError, "already reviewed"):
+                accept_relation_suggestion(
+                    str(project),
+                    relation_id=relation_id,
+                    author_id="actor:researcher",
+                    reason="Duplicate relation review",
+                    expected_sha256=accepted_relation.project_sha256,
+                )
 
     def test_practice_completion_round_trips_as_append_only_local_state(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -260,7 +328,11 @@ def _project_fixture(parent: Path) -> tuple[Path, str]:
 
 def _append_note_suggestion(project: Path, source_id: str) -> None:
     snapshot = ProjectStore(project).load()
-    source = next(item for item in snapshot.payload["sources"] if item["id"] == source_id)
+    source = next(
+        item
+        for item in snapshot.payload["sources"]
+        if item["id"] == source_id
+    )
 
     def append(payload: dict[str, object]) -> None:
         payload["generators"].append(  # type: ignore[union-attr]
@@ -308,7 +380,12 @@ def _append_note_suggestion(project: Path, source_id: str) -> None:
     ProjectStore(project).mutate(append, expected_sha256=snapshot.sha256)
 
 
-def _append_speech_suggestion(project: Path, source_id: str) -> None:
+def _append_speech_suggestion(
+    project: Path,
+    source_id: str,
+    *,
+    text: str = "Play the phrase lightly.",
+) -> None:
     snapshot = ProjectStore(project).load()
     source = next(
         item for item in snapshot.payload["sources"] if item["id"] == source_id
@@ -341,7 +418,7 @@ def _append_speech_suggestion(project: Path, source_id: str) -> None:
             {
                 "actor_id": "actor:researcher",
                 "alternatives": [],
-                "body": {"format": "text", "value": "Play the phrase lightly."},
+                "body": {"format": "text", "value": text},
                 "confidence": {"kind": "probability", "value": 0.9},
                 "generator_id": "generator:speech-model",
                 "id": "event:speech-suggestion",
