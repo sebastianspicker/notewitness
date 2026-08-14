@@ -1,93 +1,108 @@
 # Public alpha status
 
-Status reviewed: 2026-07-24
+Status reviewed: 2026-08-09
 
 Candidate version: `0.1.0a0`
 
-Status: local working-tree candidate, not ready to publish
+Status: local dirty-working-tree candidate, not ready to publish
 
-The repository has no commits, tags, configured remote, or tracked files. The
-current filesystem has no immutable release identity.
+## Current verification addendum
+
+Rechecked on 2026-08-14. This addendum supersedes only the dated live-checkout
+row below; the remaining 2026-08-09 candidate evidence stays historical.
+
+- `bash scripts/verify.sh` now passes in the live checkout: public hygiene,
+  JSON and CLI checks, 342 Python tests, JavaScript contracts, and the
+  deterministic Pages build all pass.
+- Current `.gitignore` rules exclude `.repowise/`, `.claude/`, and `.mcp.json`;
+  `git check-ignore -v` confirms those local-tool paths no longer block public
+  hygiene.
+- `git diff --check` passes.
+- Wheel/install proof remains unavailable because this host has Python 3.14.6,
+  lacks Python 3.11 and Hatchling, and no dependency installation was
+  authorized. Rendered browser and assistive-technology proof also remains
+  unavailable because the in-app browser exposes no backend.
+- Asset-license confirmation, a verified private vulnerability-reporting
+  channel, screenshot-manifest evidence, and remote Actions/Pages results are
+  still publication blockers.
+
+## Candidate identity
+
+- Branch: `agent/remediate-codacy-findings`
+- HEAD: `65aa70273a6ca06ffa5fd5ed770ba1cd574c9476`
+- Tracked files: 206
+- Tracked modifications: 28
+- Staged files: 0
+- Configured origin: present locally; remote state was not queried or changed
+- Upstream tracking branch: gone
+
+HEAD does not identify the working-tree candidate. The exact candidate-content digest, status
+fingerprint, exclusions, and remediation evidence are recorded in `AUDIT_LEDGER.md`.
 
 ## Implemented scope
 
-The current package provides a dependency-free Python evidence workbench for
-private music-teaching research projects. Implemented paths cover project
-creation, evidence validation, media ingest, operator-supplied transcription
-and analysis adapters, durable local jobs, append-only human review,
-rights-gated exports, an optional explicitly authorized OpenAI text path, and a
-session-authenticated loopback browser workbench.
+The current package provides a dependency-free Python evidence workbench for private
+music-teaching research projects. Implemented paths cover project creation, evidence validation,
+media ingest, operator-supplied transcription and analysis adapters, durable local jobs,
+append-only human review, rights-gated exports, an optional explicitly authorized OpenAI text
+path, and a session-authenticated loopback browser workbench.
 
-The repository does not establish model accuracy, fairness, pedagogical
-effectiveness, corpus suitability, or compatibility with a particular external
-runtime.
+The repository does not establish model accuracy, fairness, pedagogical effectiveness, corpus
+suitability, or compatibility with a particular external runtime.
 
-## Local validation
+## Current local verification
 
-The following results were measured on 2026-07-24 with Python 3.14.6 and Node.js
-22.23.1:
+These results apply only to the 2026-08-09 dirty-working-tree candidate described above.
 
 | Command or check | Result |
 |---|---|
-| `bash scripts/verify.sh` | Passed. 295 Python tests passed in 26.775 seconds. Public hygiene, JSON validation, CLI smoke tests, JavaScript syntax checks, tuner checks, and workbench UI contracts also passed. |
-| Documented project creation, validation, and inspection example | Passed against a new private project under `/private/tmp`. |
-| Prospective 196-file checkout copy | Passed from an isolated `/private/tmp` copy with fresh Git metadata. The 295 Python tests passed in 28.145 seconds; the remaining verification steps and documented checkout commands also passed. |
-| Active Markdown local-target scan | Passed. Every referenced local file exists. |
-| External documentation link check | Seventy-two URLs returned successful responses. The OpenAI API endpoint returned the expected authentication-required response. Two TELMI pages timed out during direct requests but remained available through current search indexes. |
-| Screenshot file check | Passed. All three current PNG files are 1440 by 900 pixels. |
-| `pyright src tests` | Failed with 204 errors, including unresolved optional provider packages and source/test typing findings. Pyright is installed locally but is not configured as a repository gate. |
-| `python3 -m pip wheel . --no-deps --no-build-isolation` | Failed after metadata preparation because `hatchling.build` is unavailable in the local environment. |
-| Formatter and linter | Not run. Ruff, Black, mypy, and Hatch are not installed, and `pyproject.toml` defines no formatter or linter. |
-| Python 3.11 installed-package check | Not run. Python 3.11 and Hatchling are not installed locally. |
-| GitHub Actions | Not run. The repository has no remote or immutable candidate. |
-
-The broad gate is the maintained repository check. The Pyright result remains
-useful diagnostic evidence, but it is not part of that gate.
+| `bash scripts/verify.sh` in the live checkout | Blocked before tests because the fail-closed public-hygiene scan correctly sees untracked local `.repowise/` databases and `.mcp.json`. Those local-tool paths are outside the audit candidate and were preserved. |
+| `bash scripts/verify.sh` in an isolated candidate copy excluding only `.repowise/`, `.claude/`, and `.mcp.json` | Passed. Public hygiene, JSON validation, 303 Python tests in 118.010 seconds, CLI smoke checks, JavaScript syntax and contract checks, and the deterministic Pages artifact build all passed. |
+| Focused facade and transcription tests | Passed. 38 tests completed in 50.006 seconds after the analyzer-driven cleanup. |
+| Configured local Codacy scan | Completed across all 153 Python files with Ruff 0.12.7, Bandit 1.8.3, and Pylint 3.3.9. All tools succeeded with no crashes. The scan reported 1,527 findings, dominated by documentation and policy-threshold noise; no Bandit High finding affects `src/`. Exact dispositions are in `AUDIT_LEDGER.md`. |
+| Focused Codacy rescan of the three remediated Python files | Ruff reported 0 issues. Pylint reported 15 remaining documentation and complexity findings. The targeted F401/W0611 findings were absent. |
+| RepoWise current-tree inventory | All 188 enumerated source, test, script, and workflow targets resolved. No target was unindexed. Coverage data remains unavailable. |
+| Pages artifact generation and privacy scan | Passed locally from the real renderer and synthetic fixture. The generated artifact was served on loopback, but rendered interaction proof was blocked because the in-app Browser runtime had no available browser backend. |
+| GitHub workflow reference check | Passed. Every external `uses:` reference in both workflows is pinned to a 40-character commit SHA, and both workflow files parse as YAML. |
+| `git diff --check` | Passed after the remediation batches. |
+| Wheel build and installed-package smoke test | Blocked. The available Python is 3.14.6, Python 3.11 is unavailable, and Hatchling is not installed. The documented isolated build would resolve/install the backend, which this audit did not authorize. |
+| Coverage ingestion | Blocked. `coverage.py` is not installed, and the repository does not produce a coverage artifact in its maintained gate. |
+| GitHub Actions and Pages deployment | Not run. No commit, push, deployment, or remote mutation was authorized. |
 
 ## Screenshot evidence
 
-The README references these files:
-
-| File | SHA-256 |
-|---|---|
-| `docs/screenshots/lesson-notes.png` | `4babbd25a5044315c9e444fdf4e93fb53667a4ffea865687b5804c664606f7ca` |
-| `docs/screenshots/review-boundary.png` | `4efcb111dd10159f8cd8f47b7a9a4755f3b16ac3d40b00097a6b0265a3e4d914` |
-| `docs/screenshots/workbench-overview.png` | `77c37132be786d9ceccfa91b05a0471bfd15935050b1e8b7d0eac81adf708936` |
-
-The files match the required dimensions. Their exact browser version, capture
-time, and candidate commit cannot be verified from the repository because
-`docs/screenshots/manifest.json` does not exist. Treat them as working-tree
-design references, not release evidence.
+The README references three 1440 by 900 design-reference screenshots. They remain working-tree
+design references, not release evidence, because `docs/screenshots/manifest.json` does not exist
+and the current candidate was not rendered in an available browser backend during this audit.
 
 ## Publication blockers
 
-1. Confirm and document license terms for schemas, documentation, screenshots,
-   and the synthetic fixture.
-2. Configure and verify a private vulnerability-reporting channel, then update
+1. Confirm and document license terms for schemas, documentation, screenshots, and the synthetic
+   fixture.
+2. Configure and independently verify a private vulnerability-reporting channel, then update
    `SECURITY.md` and the code-of-conduct contact guidance.
-3. Resolve or explicitly scope the current Pyright findings.
-4. Build a wheel in a reviewed environment, install it into a clean Python 3.11
-   environment, and run the installed-package checks in
-   [docs/RELEASING.md](docs/RELEASING.md).
-5. Create an immutable candidate only after approval, rerun the complete gate on
-   that exact commit, and obtain passing GitHub Actions results.
-6. Recapture or verify screenshots against that candidate and add the required
-   manifest.
+3. Review or explicitly scope the remaining configured-analyzer policy debt. Do not suppress it
+   merely to obtain a clean count.
+4. Build and install a wheel in an approved Python 3.11 environment with the reviewed Hatchling
+   backend, then run the installed-package checks in `docs/RELEASING.md`.
+5. Obtain rendered browser and assistive-technology evidence for the workbench and static Pages
+   artifact, then create the required screenshot manifest.
+6. Create one immutable candidate only after approval, rerun the complete gate on that exact
+   commit, and obtain passing GitHub Actions and Pages results.
 
 ## Accepted alpha limitations
 
-- No models, model weights, external executables, media, scores, or empirical
-  corpus are bundled.
-- External-tool execution is supported only on macOS and does not provide
-  filesystem confinement for approved tools.
-- Browser, codec, microphone, capture-device, and external-runtime
-  compatibility is not established.
-- Session authentication cannot defend against a malicious process with the
-  same user's filesystem authority.
+- No models, model weights, external executables, media, scores, or empirical corpus are bundled.
+- External-tool execution is supported only on macOS and does not provide filesystem confinement
+  for approved tools.
+- Browser, codec, microphone, capture-device, and external-runtime compatibility is not
+  established.
+- Session authentication cannot defend against a malicious process with the same user's
+  filesystem authority.
 - Model quality and research conclusions remain unevaluated.
-- Public APIs, schemas, and project data formats may change during the alpha
-  series.
+- Public APIs, schemas, and project data formats may change during the alpha series.
 
 ## Release control
 
-Publication and Git history changes require explicit maintainer approval.
+Publication and Git history changes require explicit maintainer approval. Nothing in this local
+audit authorizes staging, committing, pushing, tagging, publishing, or deployment.

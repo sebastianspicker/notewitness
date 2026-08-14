@@ -10,9 +10,65 @@ from notewitness.application.workbench_local_executor import (
     LocalWorkbenchExecutor,
     WorkbenchRuntimeConfigurationError,
 )
+from notewitness.application._workbench_executor_identity import _workbench_run_token
 from notewitness.application.workbench_processing import WorkbenchJobKind
 from notewitness.project import initialize_project
 from notewitness.project_store import ProjectStore
+
+
+class WorkbenchRunTokenTests(unittest.TestCase):
+    def test_returns_deterministic_tokens_for_valid_identities(self) -> None:
+        vectors = (
+            (
+                "9ddeb0548731f144e884287e338ddca8",
+                "job:workbench-example",
+                "transcription",
+                1,
+            ),
+            (
+                "0ffcc00bafd6b61b20ddb99bf3c10f63",
+                "job:workbench-another",
+                "transcription",
+                1,
+            ),
+            (
+                "0cecca458b91a1240d903073aebc561f",
+                "job:workbench-example",
+                "analysis",
+                1,
+            ),
+            (
+                "e835634ea0ced76bf75387a69ecccb98",
+                "job:workbench-example",
+                "transcription",
+                2,
+            ),
+        )
+        for expected, job_id, step, attempt in vectors:
+            with self.subTest(job_id=job_id, step=step, attempt=attempt):
+                self.assertEqual(expected, _workbench_run_token(job_id, step, attempt))
+
+    def test_rejects_invalid_job_id(self) -> None:
+        self._assert_invalid("job:other", "transcription", 1)
+
+    def test_rejects_invalid_step(self) -> None:
+        self._assert_invalid("job:workbench-example", "other", 1)
+
+    def test_rejects_boolean_attempt(self) -> None:
+        self._assert_invalid("job:workbench-example", "transcription", True)
+
+    def test_rejects_attempt_below_range(self) -> None:
+        self._assert_invalid("job:workbench-example", "transcription", 0)
+
+    def test_rejects_attempt_above_range(self) -> None:
+        self._assert_invalid("job:workbench-example", "transcription", 101)
+
+    def _assert_invalid(self, job_id: str, step: str, attempt: int) -> None:
+        with self.assertRaisesRegex(
+            WorkbenchRuntimeConfigurationError,
+            "^workbench_run_identity_invalid$",
+        ):
+            _workbench_run_token(job_id, step, attempt)
 
 
 class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
@@ -32,7 +88,9 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def test_private_config_approves_both_local_runtimes_without_paths_in_status(self) -> None:
+    def test_private_config_approves_both_local_runtimes_without_paths_in_status(
+        self,
+    ) -> None:
         path = self.parent / "runtime.json"
         path.write_text(
             json.dumps(
@@ -95,7 +153,10 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
 
     def test_config_rejects_open_permissions_and_unknown_keys(self) -> None:
         path = self.parent / "runtime.json"
-        path.write_text(json.dumps({"version": 1, "unexpected": True}), encoding="utf-8")
+        path.write_text(
+            json.dumps({"version": 1, "unexpected": True}),
+            encoding="utf-8",
+        )
         path.chmod(0o644)
         with self.assertRaisesRegex(
             WorkbenchRuntimeConfigurationError,
@@ -201,7 +262,10 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
 
         self.assertFalse(status["modalities"]["anonymous_diarization"])
         self.assertFalse(status["complete_ready"])
-        self.assertEqual(["anonymous_diarization"], status["missing_complete_modalities"])
+        self.assertEqual(
+            ["anonymous_diarization"],
+            status["missing_complete_modalities"],
+        )
 
     def _provider(self, stage: str) -> dict[str, str]:
         return {
@@ -242,7 +306,9 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
         ):
             LocalWorkbenchExecutor.from_private_config(self.project, path)
 
-    def test_startup_bound_checkpoint_rejects_replacement_before_execution(self) -> None:
+    def test_startup_bound_checkpoint_rejects_replacement_before_execution(
+        self,
+    ) -> None:
         executor = self._transcription_executor()
         self.checkpoint.write_bytes(b"replacement checkpoint bytes")
         self.checkpoint.chmod(0o600)
@@ -296,7 +362,8 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
                 )
 
             with patch(
-                "notewitness.application.workbench_local_executor.integrate_completed_run"
+                "notewitness.application.workbench_local_executor."
+                "integrate_completed_run"
             ) as integrate:
                 executor.execute(
                     WorkbenchJobKind.TRANSCRIPTION,

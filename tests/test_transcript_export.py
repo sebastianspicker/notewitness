@@ -4,7 +4,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from notewitness.application.transcript_export import TranscriptEvidenceExportService, TranscriptExportError
+from notewitness.application.transcript_export import (
+    TranscriptEvidenceExportService,
+    TranscriptExportError,
+    _source_targets,
+)
 from notewitness.application.transcript_review_service import add_project_actor
 from notewitness.application.workbench import (
     accept_evidence_suggestion,
@@ -16,6 +20,27 @@ from notewitness.project_store import ProjectStore
 
 
 class TranscriptWorkbenchExportTests(unittest.TestCase):
+    def test_source_targets_accepts_only_valid_source_time_anchors_in_event_order(self) -> None:
+        targets = {
+            "target:later": {"source_id": "source:lesson", "selector": {"start_us": 5, "duration_us": 1}},
+            "target:wrong-source": {"source_id": "source:other", "selector": {"start_us": 0, "duration_us": 1}},
+            "target:no-selector": {"source_id": "source:lesson", "selector": None},
+            "target:bool-start": {"source_id": "source:lesson", "selector": {"start_us": True, "duration_us": 1}},
+            "target:bool-duration": {"source_id": "source:lesson", "selector": {"start_us": 0, "duration_us": True}},
+            "target:negative-start": {"source_id": "source:lesson", "selector": {"start_us": -1, "duration_us": 1}},
+            "target:zero-duration": {"source_id": "source:lesson", "selector": {"start_us": 0, "duration_us": 0}},
+            "target:not-mapping": "not a target",
+            "target:first": {"source_id": "source:lesson", "selector": {"start_us": 0, "duration_us": 1}},
+        }
+
+        matches = _source_targets(
+            {"target_ids": tuple(targets)},
+            targets,  # type: ignore[arg-type]
+            "source:lesson",
+        )
+
+        self.assertEqual((targets["target:later"], targets["target:first"]), matches)
+
     def test_exports_accepted_only_or_explicit_machine_layer_with_format_controls(self) -> None:
         with TemporaryDirectory() as temporary:
             project, source_id = _project(Path(temporary))

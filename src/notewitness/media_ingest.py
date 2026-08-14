@@ -232,15 +232,11 @@ def _stream_copy(source_path: Path, media_descriptor: int) -> tuple[str, int, st
     source_descriptor = _open_explicit_regular_file(source_path)
     destination_descriptor: int | None = None
     destination_name: str | None = None
+    staging_name: str | None = None
     linked_destination = False
     try:
         source_info = os.fstat(source_descriptor)
-        if source_info.st_size > MAX_INGEST_BYTES:
-            raise MediaIngestError(f"source media exceeds {MAX_INGEST_BYTES} bytes")
-        filesystem = os.fstatvfs(media_descriptor)
-        available_bytes = filesystem.f_bavail * filesystem.f_frsize
-        if source_info.st_size + _INGEST_FREE_SPACE_MARGIN > available_bytes:
-            raise MediaIngestError("project storage has insufficient space for media ingest")
+        _require_ingest_capacity(source_info, media_descriptor)
         suffix = _safe_suffix(source_path.name)
         # Reserve a stable digest-derived filename only after hash streaming into
         # a private staging file.  The final link operation remains O_EXCL-safe.
@@ -254,17 +250,7 @@ def _stream_copy(source_path: Path, media_descriptor: int) -> tuple[str, int, st
             dir_fd=media_descriptor,
         )
         os.fchmod(destination_descriptor, _FILE_MODE)
-        digest = hashlib.sha256()
-        byte_count = 0
-        while True:
-            chunk = os.read(source_descriptor, _CHUNK_SIZE)
-            if not chunk:
-                break
-            digest.update(chunk)
-            byte_count += len(chunk)
-            offset = 0
-            while offset < len(chunk):
-                offset += os.write(destination_descriptor, chunk[offset:])
+        digest, byte_count = _copy_and_hash(source_descriptor, destination_descriptor)
         final_source_info = os.fstat(source_descriptor)
         if not _same_source_snapshot(source_info, final_source_info):
             raise MediaIngestError("source file changed while it was being copied")
@@ -273,38 +259,70 @@ def _stream_copy(source_path: Path, media_descriptor: int) -> tuple[str, int, st
         os.fsync(destination_descriptor)
         os.close(destination_descriptor)
         destination_descriptor = None
-        destination_name = f"{digest.hexdigest()}{suffix}"
-        try:
-            os.link(
-                staging_name,
-                destination_name,
-                src_dir_fd=media_descriptor,
-                dst_dir_fd=media_descriptor,
-                follow_symlinks=False,
-            )
-            linked_destination = True
-        except FileExistsError as exc:
-            raise MediaIngestError(
-                "a media file with this stable destination already exists"
-            ) from exc
+        destination_name = f"{digest}{suffix}"
+        _link_staged_media(media_descriptor, staging_name, destination_name)
+        linked_destination = True
         os.unlink(staging_name, dir_fd=media_descriptor)
+        staging_name = None
         os.fsync(media_descriptor)
-        return digest.hexdigest(), byte_count, destination_name
+        return digest, byte_count, destination_name
     except BaseException:
         if linked_destination and destination_name is not None:
-            try:
-                os.unlink(destination_name, dir_fd=media_descriptor)
-            except FileNotFoundError:
-                pass
+            _unlink_if_present(media_descriptor, destination_name)
         raise
     finally:
         if destination_descriptor is not None:
             os.close(destination_descriptor)
-        try:
-            os.unlink(staging_name, dir_fd=media_descriptor)
-        except (FileNotFoundError, UnboundLocalError):
-            pass
+        if staging_name is not None:
+            _unlink_if_present(media_descriptor, staging_name)
         os.close(source_descriptor)
+
+
+def _require_ingest_capacity(source_info: os.stat_result, media_descriptor: int) -> None:
+    if source_info.st_size > MAX_INGEST_BYTES:
+        raise MediaIngestError(f"source media exceeds {MAX_INGEST_BYTES} bytes")
+    filesystem = os.fstatvfs(media_descriptor)
+    available_bytes = filesystem.f_bavail * filesystem.f_frsize
+    if source_info.st_size + _INGEST_FREE_SPACE_MARGIN > available_bytes:
+        raise MediaIngestError("project storage has insufficient space for media ingest")
+
+
+def _copy_and_hash(source_descriptor: int, destination_descriptor: int) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    byte_count = 0
+    while chunk := os.read(source_descriptor, _CHUNK_SIZE):
+        digest.update(chunk)
+        byte_count += len(chunk)
+        _write_all(destination_descriptor, chunk)
+    return digest.hexdigest(), byte_count
+
+
+def _write_all(descriptor: int, data: bytes) -> None:
+    offset = 0
+    while offset < len(data):
+        offset += os.write(descriptor, data[offset:])
+
+
+def _link_staged_media(media_descriptor: int, staging_name: str, destination_name: str) -> None:
+    try:
+        os.link(
+            staging_name,
+            destination_name,
+            src_dir_fd=media_descriptor,
+            dst_dir_fd=media_descriptor,
+            follow_symlinks=False,
+        )
+    except FileExistsError as exc:
+        raise MediaIngestError(
+            "a media file with this stable destination already exists"
+        ) from exc
+
+
+def _unlink_if_present(directory_descriptor: int, name: str) -> None:
+    try:
+        os.unlink(name, dir_fd=directory_descriptor)
+    except FileNotFoundError:
+        pass
 
 
 def _open_explicit_regular_file(source: Path) -> int:

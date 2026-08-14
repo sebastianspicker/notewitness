@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import time
@@ -15,18 +17,131 @@ from notewitness.infrastructure.sqlite_job_store import JobConflictError, SQLite
 SHA = "a" * 64
 
 
-def spec() -> AnalysisJobSpec:
-    return AnalysisJobSpec(
-        job_id="job:test",
-        source_id="source:test",
-        source_sha256=SHA,
-        stages=(AnalysisStage.MEDIA_PROBE, AnalysisStage.SPEECH_RECOGNITION),
-        spans=(MediaSpan("source:test", "audio:0", 0, 10),),
-        adapter_fingerprint_sha256="b" * 64,
-        runtime_fingerprint_sha256="c" * 64,
-        settings_fingerprint_sha256="d" * 64,
-        score_sha256="e" * 64,
-    )
+def spec_values(**overrides: object) -> dict[str, object]:
+    values: dict[str, object] = {
+        "job_id": "job:test",
+        "source_id": "source:test",
+        "source_sha256": SHA,
+        "stages": (AnalysisStage.MEDIA_PROBE, AnalysisStage.SPEECH_RECOGNITION),
+        "spans": (MediaSpan("source:test", "audio:0", 0, 10),),
+        "adapter_fingerprint_sha256": "b" * 64,
+        "runtime_fingerprint_sha256": "c" * 64,
+        "settings_fingerprint_sha256": "d" * 64,
+        "score_sha256": "e" * 64,
+    }
+    values.update(overrides)
+    return values
+
+
+def spec(**overrides: object) -> AnalysisJobSpec:
+    return AnalysisJobSpec(**spec_values(**overrides))  # type: ignore[arg-type]
+
+
+class AnalysisJobSpecValidationTests(unittest.TestCase):
+    def test_rejects_mutated_invalid_values_with_exact_messages(self) -> None:
+        span = MediaSpan("source:test", "audio:0", 0, 10)
+        cases = (
+            ("job_id", "", "job_id must be a non-empty string of at most 256 characters."),
+            ("source_id", "", "source_id must be a non-empty string of at most 256 characters."),
+            ("source_sha256", "A" * 64, "source_sha256 must be a lowercase SHA-256 digest."),
+            (
+                "adapter_fingerprint_sha256",
+                "A" * 64,
+                "adapter_fingerprint_sha256 must be a lowercase SHA-256 digest.",
+            ),
+            (
+                "runtime_fingerprint_sha256",
+                "A" * 64,
+                "runtime_fingerprint_sha256 must be a lowercase SHA-256 digest.",
+            ),
+            (
+                "settings_fingerprint_sha256",
+                "A" * 64,
+                "settings_fingerprint_sha256 must be a lowercase SHA-256 digest.",
+            ),
+            ("score_sha256", "A" * 64, "score_sha256 must be a lowercase SHA-256 digest."),
+            ("stages", [AnalysisStage.MEDIA_PROBE], "stages must contain 1-32 ordered items."),
+            ("stages", (), "stages must contain 1-32 ordered items."),
+            ("stages", (AnalysisStage.MEDIA_PROBE,) * 33, "stages must contain 1-32 ordered items."),
+            ("stages", ("media_probe",), "stages must contain AnalysisStage values."),
+            (
+                "stages",
+                (AnalysisStage.MEDIA_PROBE, AnalysisStage.MEDIA_PROBE),
+                "stages must not contain duplicates.",
+            ),
+            ("spans", [span], "spans must contain 1-1024 items."),
+            ("spans", (), "spans must contain 1-1024 items."),
+            ("spans", (span,) * 1_025, "spans must contain 1-1024 items."),
+            ("spans", ("span",), "every span must be a MediaSpan for source_id."),
+            (
+                "spans",
+                (MediaSpan("source:other", "audio:0", 0, 10),),
+                "every span must be a MediaSpan for source_id.",
+            ),
+            (
+                "created_at",
+                "x" * 65,
+                "created_at must be a non-empty string of at most 64 characters.",
+            ),
+            ("created_at", "not-a-timestamp", "created_at must be an ISO-8601 timestamp."),
+        )
+        for field, value, message in cases:
+            with self.subTest(field=field, value=value):
+                values = spec_values()
+                values[field] = value
+                with self.assertRaises(ValueError) as raised:
+                    AnalysisJobSpec(**values)  # type: ignore[arg-type]
+                self.assertEqual(message, str(raised.exception))
+
+    def test_validation_order_preserves_earliest_failure(self) -> None:
+        cases = (
+            (
+                {"job_id": "", "source_id": ""},
+                "job_id must be a non-empty string of at most 256 characters.",
+            ),
+            (
+                {"source_sha256": "A" * 64, "adapter_fingerprint_sha256": "A" * 64},
+                "source_sha256 must be a lowercase SHA-256 digest.",
+            ),
+            (
+                {"source_sha256": "A" * 64, "stages": ()},
+                "source_sha256 must be a lowercase SHA-256 digest.",
+            ),
+            (
+                {"settings_fingerprint_sha256": "A" * 64, "score_sha256": "A" * 64},
+                "settings_fingerprint_sha256 must be a lowercase SHA-256 digest.",
+            ),
+            (
+                {"stages": (), "spans": ()},
+                "stages must contain 1-32 ordered items.",
+            ),
+            (
+                {"stages": ("media_probe",), "created_at": "not-a-timestamp"},
+                "stages must contain AnalysisStage values.",
+            ),
+            (
+                {"spans": (), "created_at": "not-a-timestamp"},
+                "spans must contain 1-1024 items.",
+            ),
+        )
+        for overrides, message in cases:
+            with self.subTest(overrides=overrides):
+                values = spec_values()
+                values.update(overrides)
+                with self.assertRaises(ValueError) as raised:
+                    AnalysisJobSpec(**values)  # type: ignore[arg-type]
+                self.assertEqual(message, str(raised.exception))
+
+    def test_defaults_timestamp_at_construction_and_remains_frozen(self) -> None:
+        before = datetime.now(timezone.utc)
+        job_spec = spec()
+        after = datetime.now(timezone.utc)
+
+        created_at = datetime.fromisoformat(job_spec.created_at)
+        self.assertLessEqual(before, created_at)
+        self.assertLessEqual(created_at, after)
+        with self.assertRaises(FrozenInstanceError):
+            job_spec.created_at = "2026-08-11T00:00:00+00:00"
 
 
 class RecordingExecutor:

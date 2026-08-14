@@ -43,6 +43,12 @@ class AnalysisJobSpec:
     created_at: str = ""
 
     def __post_init__(self) -> None:
+        self._validate_identity_digests()
+        self._validate_stages()
+        self._validate_spans()
+        self._default_or_validate_created_at()
+
+    def _validate_identity_digests(self) -> None:
         _bounded(self.job_id, "job_id")
         _bounded(self.source_id, "source_id")
         _sha256(self.source_sha256, "source_sha256")
@@ -51,6 +57,8 @@ class AnalysisJobSpec:
         _sha256(self.settings_fingerprint_sha256, "settings_fingerprint_sha256")
         if self.score_sha256 is not None:
             _sha256(self.score_sha256, "score_sha256")
+
+    def _validate_stages(self) -> None:
         if (
             not isinstance(self.stages, tuple)
             or not self.stages
@@ -61,6 +69,8 @@ class AnalysisJobSpec:
             raise ValueError("stages must contain AnalysisStage values.")
         if len(self.stages) != len(set(self.stages)):
             raise ValueError("stages must not contain duplicates.")
+
+    def _validate_spans(self) -> None:
         if not isinstance(self.spans, tuple) or not self.spans or len(self.spans) > MAX_JOB_SPANS:
             raise ValueError(f"spans must contain 1-{MAX_JOB_SPANS} items.")
         if any(
@@ -68,6 +78,8 @@ class AnalysisJobSpec:
             for span in self.spans
         ):
             raise ValueError("every span must be a MediaSpan for source_id.")
+
+    def _default_or_validate_created_at(self) -> None:
         if not self.created_at:
             object.__setattr__(self, "created_at", datetime.now(timezone.utc).isoformat())
         else:

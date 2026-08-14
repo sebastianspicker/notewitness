@@ -4,7 +4,10 @@ import copy
 from pathlib import Path
 import unittest
 
-from notewitness.application.lesson_notes import LessonNotesProjector
+from notewitness.application.lesson_notes import (
+    LessonNotesProjector,
+    _speaker_roles_by_event,
+)
 from notewitness.application.lesson_projection_events import full_transcript_kind
 from notewitness.evidence import EvidenceGraph
 from notewitness.presentation.timeline import TimelineLaneKind, TimelineViewModel
@@ -95,6 +98,48 @@ class LessonNotesProjectionTests(unittest.TestCase):
 
         self.assertEqual((), no_score_notes.summary.topics)
         self.assertEqual(7, len(no_score_notes.activity))
+
+    def test_speaker_roles_prefer_human_clusters_and_inherit_suggestions(self) -> None:
+        events = {
+            "event:speech": {"body": {}},
+            "event:machine-speaker": {
+                "body": {"value": {"anonymous_cluster_id": "machine"}}
+            },
+            "event:human-speaker-one": {
+                "body": {"value": {"anonymous_cluster_id": "beta"}}
+            },
+            "event:human-speaker-two": {
+                "body": {"value": {"anonymous_cluster_id": "alpha"}}
+            },
+            "event:suggestion": {
+                "body": {"source_suggestion_id": "event:speech"}
+            },
+        }
+        relations = (
+            _speaker_alignment_relation(
+                "machine_suggested", "event:speech", "event:machine-speaker"
+            ),
+            _speaker_alignment_relation(
+                "human_accepted", "event:speech", "event:human-speaker-one"
+            ),
+            _speaker_alignment_relation(
+                "human_created", "event:speech", "event:human-speaker-two"
+            ),
+            _speaker_alignment_relation(
+                "human_accepted", "event:speech", "event:human-speaker-one"
+            ),
+            _speaker_alignment_relation(
+                "unknown", "event:speech", "event:machine-speaker"
+            ),
+        )
+
+        self.assertEqual(
+            {
+                "event:speech": "anonymous speakers alpha / beta",
+                "event:suggestion": "anonymous speakers alpha / beta",
+            },
+            _speaker_roles_by_event(events, relations),
+        )
 
     def test_structured_note_entry_is_preserved_in_full_transcript(self) -> None:
         payload = copy.deepcopy(self.graph.payload)
@@ -351,6 +396,23 @@ class LessonNotesProjectionTests(unittest.TestCase):
         self.assertEqual(2, len(source_lane.items))
         self.assertEqual("unannotated", unannotated.review_status)
         self.assertIsNone(unannotated.playback)
+
+
+def _speaker_alignment_relation(
+    review_status: str, speech_id: str, speaker_id: str
+) -> dict[str, object]:
+    return {
+        "type": "local:speaker_alignment",
+        "review_status": review_status,
+        "arguments": [
+            {"role": "speech", "ref_kind": "event", "ref_id": speech_id},
+            {
+                "role": "speaker_segment",
+                "ref_kind": "event",
+                "ref_id": speaker_id,
+            },
+        ],
+    }
 
 
 if __name__ == "__main__":

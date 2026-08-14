@@ -36,6 +36,41 @@ class TunerReading:
     direction: TuningDirection
 
 
+def _is_finite_number(value: object) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(value)
+    )
+
+
+def _validate_positive_number(value: object, field_name: str) -> None:
+    if not _is_finite_number(value) or value <= 0:
+        raise ValueError(f"{field_name} must be a finite positive number.")
+
+
+def _validate_tuner_inputs(
+    frequency_hz: object, a4_hz: object, in_tune_cents: object
+) -> None:
+    _validate_positive_number(frequency_hz, "frequency_hz")
+    _validate_positive_number(a4_hz, "a4_hz")
+    if not 300.0 <= a4_hz <= 500.0:
+        raise ValueError("a4_hz must be in the supported range [300, 500].")
+    if (
+        not _is_finite_number(in_tune_cents)
+        or not 0.0 < in_tune_cents <= 50.0
+    ):
+        raise ValueError("in_tune_cents must be in the range (0, 50].")
+
+
+def _tuning_direction(cents_offset: float, threshold: float) -> TuningDirection:
+    if cents_offset < -threshold:
+        return TuningDirection.FLAT
+    if cents_offset > threshold:
+        return TuningDirection.SHARP
+    return TuningDirection.IN_TUNE
+
+
 def tuner_reading(
     frequency_hz: float,
     *,
@@ -44,20 +79,7 @@ def tuner_reading(
 ) -> TunerReading:
     """Map a local pitch estimate to the nearest equal-tempered note."""
 
-    for value, field_name in ((frequency_hz, "frequency_hz"), (a4_hz, "a4_hz")):
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError(f"{field_name} must be a finite positive number.")
-        if not math.isfinite(value) or value <= 0:
-            raise ValueError(f"{field_name} must be a finite positive number.")
-    if not 300.0 <= a4_hz <= 500.0:
-        raise ValueError("a4_hz must be in the supported range [300, 500].")
-    if (
-        isinstance(in_tune_cents, bool)
-        or not isinstance(in_tune_cents, (int, float))
-        or not math.isfinite(in_tune_cents)
-        or not 0.0 < in_tune_cents <= 50.0
-    ):
-        raise ValueError("in_tune_cents must be in the range (0, 50].")
+    _validate_tuner_inputs(frequency_hz, a4_hz, in_tune_cents)
 
     continuous_midi = 69.0 + 12.0 * (
         math.log2(frequency_hz) - math.log2(a4_hz)
@@ -67,12 +89,6 @@ def tuner_reading(
     midi_note = math.floor(continuous_midi + 0.5)
     reference_hz = a4_hz * (2.0 ** ((midi_note - 69) / 12.0))
     cents_offset = (continuous_midi - midi_note) * 100.0
-    if cents_offset < -in_tune_cents:
-        direction = TuningDirection.FLAT
-    elif cents_offset > in_tune_cents:
-        direction = TuningDirection.SHARP
-    else:
-        direction = TuningDirection.IN_TUNE
     return TunerReading(
         frequency_hz=float(frequency_hz),
         reference_hz=reference_hz,
@@ -80,7 +96,7 @@ def tuner_reading(
         note_name=_NOTE_NAMES[midi_note % 12],
         octave=(midi_note // 12) - 1,
         cents_offset=cents_offset,
-        direction=direction,
+        direction=_tuning_direction(cents_offset, in_tune_cents),
     )
 
 
@@ -94,6 +110,66 @@ class MetronomeTick:
     accent: MetronomeAccent
 
 
+def _validate_metronome_bpm(bpm: object) -> None:
+    if not _is_finite_number(bpm) or not 20.0 <= bpm <= 400.0:
+        raise ValueError("bpm must be a finite value from 20 through 400.")
+
+
+def _validate_bounded_integer(value: object, field_name: str, maximum: int) -> None:
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or not 1 <= value <= maximum
+    ):
+        raise ValueError(f"{field_name} must be an integer from 1 through {maximum}.")
+
+
+def _validate_schedule_inputs(bars: object, start_us: object) -> None:
+    if not isinstance(bars, int) or isinstance(bars, bool) or bars < 1:
+        raise ValueError("bars must be a positive integer.")
+    if (
+        not isinstance(start_us, int)
+        or isinstance(start_us, bool)
+        or not 0 <= start_us <= MAX_TIMELINE_US
+    ):
+        raise ValueError("start_us must fit the canonical non-negative timeline.")
+
+
+def _metronome_accent(position: int, subdivision: int) -> MetronomeAccent:
+    if position == 0:
+        return MetronomeAccent.BAR
+    if subdivision == 0:
+        return MetronomeAccent.BEAT
+    return MetronomeAccent.SUBDIVISION
+
+
+def _schedule_ticks(
+    tick_count: int,
+    start_us: int,
+    interval_us: Decimal,
+    beats_per_bar: int,
+    subdivisions_per_beat: int,
+) -> tuple[MetronomeTick, ...]:
+    ticks_per_bar = beats_per_bar * subdivisions_per_beat
+    ticks: list[MetronomeTick] = []
+    for index in range(tick_count):
+        position = index % ticks_per_bar
+        beat = position // subdivisions_per_beat
+        subdivision = position % subdivisions_per_beat
+        offset = int((interval_us * index).to_integral_value(rounding=ROUND_HALF_UP))
+        ticks.append(
+            MetronomeTick(
+                index=index,
+                at_us=start_us + offset,
+                bar=(index // ticks_per_bar) + 1,
+                beat=beat + 1,
+                subdivision=subdivision + 1,
+                accent=_metronome_accent(position, subdivision),
+            )
+        )
+    return tuple(ticks)
+
+
 @dataclass(frozen=True, slots=True)
 class MetronomePlan:
     bpm: float
@@ -101,33 +177,14 @@ class MetronomePlan:
     subdivisions_per_beat: int = 1
 
     def __post_init__(self) -> None:
-        if (
-            isinstance(self.bpm, bool)
-            or not isinstance(self.bpm, (int, float))
-            or not math.isfinite(self.bpm)
-            or not 20.0 <= self.bpm <= 400.0
-        ):
-            raise ValueError("bpm must be a finite value from 20 through 400.")
-        for value, field_name, maximum in (
-            (self.beats_per_bar, "beats_per_bar", 32),
-            (self.subdivisions_per_beat, "subdivisions_per_beat", 16),
-        ):
-            if (
-                not isinstance(value, int)
-                or isinstance(value, bool)
-                or not 1 <= value <= maximum
-            ):
-                raise ValueError(f"{field_name} must be an integer from 1 through {maximum}.")
+        _validate_metronome_bpm(self.bpm)
+        _validate_bounded_integer(self.beats_per_bar, "beats_per_bar", 32)
+        _validate_bounded_integer(
+            self.subdivisions_per_beat, "subdivisions_per_beat", 16
+        )
 
     def schedule(self, bars: int, *, start_us: int = 0) -> tuple[MetronomeTick, ...]:
-        if not isinstance(bars, int) or isinstance(bars, bool) or bars < 1:
-            raise ValueError("bars must be a positive integer.")
-        if (
-            not isinstance(start_us, int)
-            or isinstance(start_us, bool)
-            or not 0 <= start_us <= MAX_TIMELINE_US
-        ):
-            raise ValueError("start_us must fit the canonical non-negative timeline.")
+        _validate_schedule_inputs(bars, start_us)
         tick_count = bars * self.beats_per_bar * self.subdivisions_per_beat
         if tick_count > MAX_METRONOME_TICKS:
             raise ValueError(
@@ -145,29 +202,10 @@ class MetronomePlan:
         )
         if start_us + final_offset > MAX_TIMELINE_US:
             raise ValueError("Metronome schedule exceeds the canonical timeline.")
-        ticks: list[MetronomeTick] = []
-        ticks_per_bar = self.beats_per_bar * self.subdivisions_per_beat
-        for index in range(tick_count):
-            position = index % ticks_per_bar
-            beat = position // self.subdivisions_per_beat
-            subdivision = position % self.subdivisions_per_beat
-            if position == 0:
-                accent = MetronomeAccent.BAR
-            elif subdivision == 0:
-                accent = MetronomeAccent.BEAT
-            else:
-                accent = MetronomeAccent.SUBDIVISION
-            offset = int(
-                (interval_us * index).to_integral_value(rounding=ROUND_HALF_UP)
-            )
-            ticks.append(
-                MetronomeTick(
-                    index=index,
-                    at_us=start_us + offset,
-                    bar=(index // ticks_per_bar) + 1,
-                    beat=beat + 1,
-                    subdivision=subdivision + 1,
-                    accent=accent,
-                )
-            )
-        return tuple(ticks)
+        return _schedule_ticks(
+            tick_count,
+            start_us,
+            interval_us,
+            self.beats_per_bar,
+            self.subdivisions_per_beat,
+        )

@@ -446,6 +446,24 @@ class ResearchTranscriptionContractTests(unittest.TestCase):
                     ),
                 ),
             )
+        overlapping = MediaSpan("source:lesson", "audio", 500_000, 1_000_000)
+        with self.assertRaisesRegex(ValueError, "must not overlap"):
+            SpeakerCorrection(
+                correction_id="correction:overlap",
+                kind=SpeakerCorrectionKind.SPLIT,
+                cluster_ids=("speaker:source",),
+                result_cluster_ids=("speaker:teacher", "speaker:student"),
+                actor_id=None,
+                spans=(first, overlapping),
+                result_span_assignments=(
+                    SpeakerResultSpanAssignment("speaker:teacher", (first,)),
+                    SpeakerResultSpanAssignment("speaker:student", (overlapping,)),
+                ),
+                author_id="actor:researcher",
+                reason="Overlapping split fixture",
+                parent_revision_ids=("revision:before-split",),
+                created_at="2026-07-18T10:02:00+00:00",
+            )
 
     def test_export_preflight_uses_evidence_not_only_detector_settings(self) -> None:
         job = job_spec(

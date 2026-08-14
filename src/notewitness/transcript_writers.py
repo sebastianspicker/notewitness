@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 import errno
 from html import escape
 import os
@@ -9,7 +10,7 @@ from pathlib import Path
 import stat
 from uuid import uuid4
 
-from notewitness.domain.transcript_document import TranscriptDocument
+from notewitness.domain.transcript_document import TranscriptDocument, TranscriptSegment
 
 
 MAX_RENDERED_CHARACTERS = 10_000_000
@@ -32,21 +33,20 @@ def render_txt(
     _require_document(document)
     _render_options(visible_timestamps, timestamp_interval_ms, pause_threshold_ms)
     lines: list[str] = []
-    next_timestamp_us = 0
-    previous_end_us: int | None = None
-    for segment in document.segments:
-        pause = _pause_line(previous_end_us, segment.start_us, pause_threshold_ms)
+    for segment, show_timestamp, pause_duration_us in _rendered_segments(
+        document,
+        visible_timestamps=visible_timestamps,
+        timestamp_interval_ms=timestamp_interval_ms,
+        pause_threshold_ms=pause_threshold_ms,
+    ):
+        pause = _pause_line(pause_duration_us)
         if pause is not None:
             lines.append(pause)
-        show_timestamp = visible_timestamps and segment.start_us >= next_timestamp_us
         prefix = f"[{_format_timestamp(segment.start_us)}]" if show_timestamp else ""
-        if show_timestamp:
-            next_timestamp_us = segment.start_us + timestamp_interval_ms * 1_000
         lines.append(
             f"{prefix}{_speaker_prefix(segment.anonymous_speaker_cluster)} "
             f"{_single_line(segment.text)}".strip()
         )
-        previous_end_us = segment.end_us
     return _bounded_output("\n".join(lines) + "\n")
 
 
@@ -94,13 +94,15 @@ def render_html(
     _require_document(document)
     _render_options(visible_timestamps, timestamp_interval_ms, pause_threshold_ms)
     rendered_entries: list[str] = []
-    next_timestamp_us = 0
-    previous_end_us: int | None = None
-    for segment in document.segments:
-        pause = _pause_html(previous_end_us, segment.start_us, pause_threshold_ms)
+    for segment, show_timestamp, pause_duration_us in _rendered_segments(
+        document,
+        visible_timestamps=visible_timestamps,
+        timestamp_interval_ms=timestamp_interval_ms,
+        pause_threshold_ms=pause_threshold_ms,
+    ):
+        pause = _pause_html(pause_duration_us)
         if pause is not None:
             rendered_entries.append(pause)
-        show_timestamp = visible_timestamps and segment.start_us >= next_timestamp_us
         timestamp = (
             "<time datetime=\"{datetime}\">{label}</time>".format(
                 datetime=_duration_datetime(segment.start_us),
@@ -109,8 +111,6 @@ def render_html(
             if show_timestamp
             else ""
         )
-        if show_timestamp:
-            next_timestamp_us = segment.start_us + timestamp_interval_ms * 1_000
         speaker = (
             f"<span class=\"speaker\">"
             f"{escape(segment.anonymous_speaker_cluster)}</span>"
@@ -122,7 +122,6 @@ def render_html(
             f"data-end-us=\"{segment.end_us}\">{timestamp}{speaker}"
             f"<span class=\"text\">{escape(_single_line(segment.text))}</span></li>"
         )
-        previous_end_us = segment.end_us
     entries = "\n".join(rendered_entries)
     language = escape(document.language, quote=True)
     return _bounded_output(
@@ -195,30 +194,55 @@ def _render_options(
         raise ValueError("pause_threshold_ms must be off, 1000, 2000, or 3000.")
 
 
-def _pause_line(
+def _rendered_segments(
+    document: TranscriptDocument,
+    *,
+    visible_timestamps: bool,
+    timestamp_interval_ms: int,
+    pause_threshold_ms: int | None,
+) -> Iterator[tuple[TranscriptSegment, bool, int | None]]:
+    """Yield TXT/HTML segments with their shared timestamp and pause decisions."""
+
+    next_timestamp_us = 0
+    previous_end_us: int | None = None
+    for segment in document.segments:
+        pause_duration_us = _pause_duration_us(
+            previous_end_us,
+            segment.start_us,
+            pause_threshold_ms,
+        )
+        show_timestamp = visible_timestamps and segment.start_us >= next_timestamp_us
+        if show_timestamp:
+            next_timestamp_us = segment.start_us + timestamp_interval_ms * 1_000
+        yield segment, show_timestamp, pause_duration_us
+        previous_end_us = segment.end_us
+
+
+def _pause_duration_us(
     previous_end_us: int | None,
     start_us: int,
     threshold_ms: int | None,
-) -> str | None:
+) -> int | None:
     if previous_end_us is None or threshold_ms is None:
         return None
     gap_us = max(0, start_us - previous_end_us)
     if gap_us < threshold_ms * 1_000:
         return None
-    return f"[PAUSE {gap_us / 1_000_000:.3f} s]"
+    return gap_us
 
 
-def _pause_html(
-    previous_end_us: int | None,
-    start_us: int,
-    threshold_ms: int | None,
-) -> str | None:
-    line = _pause_line(previous_end_us, start_us, threshold_ms)
+def _pause_line(pause_duration_us: int | None) -> str | None:
+    if pause_duration_us is None:
+        return None
+    return f"[PAUSE {pause_duration_us / 1_000_000:.3f} s]"
+
+
+def _pause_html(pause_duration_us: int | None) -> str | None:
+    line = _pause_line(pause_duration_us)
     if line is None:
         return None
-    gap_us = max(0, start_us - int(previous_end_us))
     return (
-        f"<li class=\"pause\" data-duration-us=\"{gap_us}\">"
+        f"<li class=\"pause\" data-duration-us=\"{pause_duration_us}\">"
         f"{escape(line)}</li>"
     )
 

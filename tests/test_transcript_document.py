@@ -7,6 +7,8 @@ from notewitness.domain.transcript_document import (
     TranscriptDocument,
     TranscriptSegment,
     TranscriptWord,
+    _require_confidence,
+    _require_microsecond_range,
 )
 
 
@@ -56,6 +58,20 @@ def _document(
 
 
 class TranscriptDocumentTests(unittest.TestCase):
+    def test_time_and_confidence_boundaries_reject_invalid_values(self) -> None:
+        _require_microsecond_range(0, 1)
+        _require_confidence(0, "confidence")
+        _require_confidence(1, "confidence")
+
+        for start_us, end_us in ((True, 2), (0, True), (-1, 1), (1, 1)):
+            with self.subTest(start_us=start_us, end_us=end_us):
+                with self.assertRaisesRegex(ValueError, "positive, ordered"):
+                    _require_microsecond_range(start_us, end_us)
+        for value in (True, float("nan"), float("inf"), -0.1, 1.1):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "finite value from 0 to 1"):
+                    _require_confidence(value, "confidence")
+
     def test_normalized_document_is_immutable_and_keeps_provenance(self) -> None:
         document = _document()
 

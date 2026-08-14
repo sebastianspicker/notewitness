@@ -245,47 +245,11 @@ class NoteHypothesis:
 
     def __post_init__(self) -> None:
         _validate_hypothesis_identity(self.hypothesis_id, self.generator_id)
-        if self.state is AnalysisState.READY and (
-            self.midi_pitch is None and self.frequency_hz is None
-        ):
-            raise ValueError("Ready note hypotheses require pitch evidence.")
-        if self.midi_pitch is not None and not _finite_number_in_range(
-            self.midi_pitch, 0.0, 127.0
-        ):
-            raise ValueError("midi_pitch must be finite and in the range [0, 127].")
-        if self.frequency_hz is not None and not _positive_finite_number(
-            self.frequency_hz
-        ):
-            raise ValueError("frequency_hz must be a positive finite number.")
+        _validate_note_pitch(self.state, self.midi_pitch, self.frequency_hz)
         _validate_confidence(self.confidence)
         _validate_optional_local_track_id(self.source_track_id, "source_track_id")
-        if self.amplitude is not None and not _finite_number_in_range(
-            self.amplitude, 0.0, 1.0
-        ):
-            raise ValueError("amplitude must be finite and in the range [0, 1].")
-        if self.velocity is not None and (
-            not isinstance(self.velocity, int)
-            or isinstance(self.velocity, bool)
-            or not 0 <= self.velocity <= 127
-        ):
-            raise ValueError("velocity must be an integer in the range [0, 127].")
-        if (
-            not isinstance(self.pitch_bend_values, tuple)
-            or len(self.pitch_bend_values) > 50_000
-            or any(
-                isinstance(value, bool)
-                or not isinstance(value, (int, float))
-                or not math.isfinite(value)
-                for value in self.pitch_bend_values
-            )
-        ):
-            raise ValueError("pitch_bend_values must be bounded finite numbers.")
-        if self.pitch_bend_unit is not None:
-            _validate_optional_local_track_id(
-                self.pitch_bend_unit, "pitch_bend_unit"
-            )
-        if self.pitch_bend_values and self.pitch_bend_unit is None:
-            raise ValueError("Pitch-bend values require an explicit unit.")
+        _validate_note_amplitude_and_velocity(self.amplitude, self.velocity)
+        _validate_note_pitch_bends(self.pitch_bend_values, self.pitch_bend_unit)
 
 
 @dataclass(frozen=True, slots=True)
@@ -549,6 +513,50 @@ def _validate_continuation_token(token: str | None) -> None:
         or len(token) > MAX_CONTINUATION_TOKEN_CHARS
     ):
         raise ValueError("continuation_token exceeds its bounded contract.")
+
+
+def _validate_note_pitch(
+    state: AnalysisState, midi_pitch: float | None, frequency_hz: float | None
+) -> None:
+    if state is AnalysisState.READY and midi_pitch is None and frequency_hz is None:
+        raise ValueError("Ready note hypotheses require pitch evidence.")
+    if midi_pitch is not None and not _finite_number_in_range(midi_pitch, 0.0, 127.0):
+        raise ValueError("midi_pitch must be finite and in the range [0, 127].")
+    if frequency_hz is not None and not _positive_finite_number(frequency_hz):
+        raise ValueError("frequency_hz must be a positive finite number.")
+
+
+def _validate_note_amplitude_and_velocity(
+    amplitude: float | None, velocity: int | None
+) -> None:
+    if amplitude is not None and not _finite_number_in_range(amplitude, 0.0, 1.0):
+        raise ValueError("amplitude must be finite and in the range [0, 1].")
+    if velocity is not None and (
+        not isinstance(velocity, int)
+        or isinstance(velocity, bool)
+        or not 0 <= velocity <= 127
+    ):
+        raise ValueError("velocity must be an integer in the range [0, 127].")
+
+
+def _validate_note_pitch_bends(
+    pitch_bend_values: tuple[float, ...], pitch_bend_unit: str | None
+) -> None:
+    if (
+        not isinstance(pitch_bend_values, tuple)
+        or len(pitch_bend_values) > 50_000
+        or any(
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            for value in pitch_bend_values
+        )
+    ):
+        raise ValueError("pitch_bend_values must be bounded finite numbers.")
+    if pitch_bend_unit is not None:
+        _validate_optional_local_track_id(pitch_bend_unit, "pitch_bend_unit")
+    if pitch_bend_values and pitch_bend_unit is None:
+        raise ValueError("Pitch-bend values require an explicit unit.")
 
 
 def _positive_finite_number(value: float | None) -> bool:

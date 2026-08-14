@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import errno
-import json
 import math
 import os
 from pathlib import Path
 import sqlite3
 import stat
+import sys
 import time
 from typing import Iterator
 
@@ -20,7 +20,10 @@ from notewitness.domain.jobs import (
     MAX_ARTIFACT_ID_CHARS,
     MAX_JOB_ID_CHARS,
 )
-from notewitness.domain.timeline import MediaSpan
+from notewitness.infrastructure.sqlite_job_store_records import (
+    row_to_job as _row_to_job,
+    spec_values as _spec_values,
+)
 
 
 _FILE_MODE = 0o600
@@ -225,33 +228,17 @@ class SQLiteJobStore:
         last_artifact_id: str | None,
         pause: bool = True,
     ) -> DurableJob:
-        _identifier(job_id, "job_id")
-        _identifier(owner_id, "owner_id")
-        if not isinstance(stage, AnalysisStage):
-            raise ValueError("stage must be an AnalysisStage.")
-        if (
-            not isinstance(completed_span_count, int)
-            or isinstance(completed_span_count, bool)
-            or completed_span_count < 0
-        ):
-            raise ValueError("completed_span_count must be non-negative.")
-        if continuation_token is not None and (
-            not isinstance(continuation_token, str)
-            or not continuation_token
-            or len(continuation_token) > 4_096
-        ):
-            raise ValueError("continuation_token exceeds its bounded contract.")
-        if last_artifact_id is not None:
-            _identifier(last_artifact_id, "last_artifact_id", MAX_ARTIFACT_ID_CHARS)
+        _validate_checkpoint_arguments(
+            job_id,
+            owner_id,
+            stage,
+            completed_span_count,
+            continuation_token,
+            last_artifact_id,
+        )
         with self._transaction() as connection:
             job = self._owned(connection, job_id, owner_id)
-            if (
-                stage not in job.spec.stages
-                or completed_span_count > len(job.spec.spans)
-            ):
-                raise JobConflictError(
-                    "checkpoint is outside the immutable job specification"
-                )
+            _validate_checkpoint_scope(job, stage, completed_span_count)
             state = JobState.PAUSED if pause else JobState.RUNNING
             connection.execute(
                 """UPDATE analysis_jobs SET state = ?, owner_id = ?, lease_expires_at = ?,
@@ -457,67 +444,59 @@ def _identifier(value: str, label: str, maximum: int = MAX_JOB_ID_CHARS) -> None
         raise ValueError(f"{label} must be a bounded non-empty string.")
 
 
-def _lease_seconds(value: float) -> float:
+def _validate_checkpoint_arguments(
+    job_id: str,
+    owner_id: str,
+    stage: AnalysisStage,
+    completed_span_count: int,
+    continuation_token: str | None,
+    last_artifact_id: str | None,
+) -> None:
+    _identifier(job_id, "job_id")
+    _identifier(owner_id, "owner_id")
+    if not isinstance(stage, AnalysisStage):
+        raise ValueError("stage must be an AnalysisStage.")
+    _validate_completed_span_count(completed_span_count)
+    _validate_continuation_token(continuation_token)
+    if last_artifact_id is not None:
+        _identifier(last_artifact_id, "last_artifact_id", MAX_ARTIFACT_ID_CHARS)
+
+
+def _validate_completed_span_count(value: int) -> None:
     if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-        or not 0 < value <= 86_400
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < 0
     ):
+        raise ValueError("completed_span_count must be non-negative.")
+
+
+def _validate_continuation_token(value: str | None) -> None:
+    if value is None:
+        return
+    if not isinstance(value, str) or not value or len(value) > 4_096:
+        raise ValueError("continuation_token exceeds its bounded contract.")
+
+
+def _validate_checkpoint_scope(
+    job: DurableJob, stage: AnalysisStage, completed_span_count: int
+) -> None:
+    if stage not in job.spec.stages or completed_span_count > len(job.spec.spans):
+        raise JobConflictError("checkpoint is outside the immutable job specification")
+
+
+def _lease_seconds(value: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError("lease_seconds must be finite and between 0 and 86400.")
+    if not isinstance(value, (int, float)):
+        raise ValueError("lease_seconds must be finite and between 0 and 86400.")
+    if not math.isfinite(value):
+        raise ValueError("lease_seconds must be finite and between 0 and 86400.")
+    if not 0 < value:
+        raise ValueError("lease_seconds must be finite and between 0 and 86400.")
+    if not value <= 86_400:
         raise ValueError("lease_seconds must be finite and between 0 and 86400.")
     return float(value)
-
-
-def _spec_values(spec: AnalysisJobSpec) -> tuple[object, ...]:
-    spans = [
-        {
-            "source_id": item.source_id,
-            "stream_id": item.stream_id,
-            "start_us": item.start_us,
-            "duration_us": item.duration_us,
-        }
-        for item in spec.spans
-    ]
-    return (
-        spec.job_id,
-        spec.source_id,
-        spec.source_sha256,
-        json.dumps([stage.value for stage in spec.stages], separators=(",", ":")),
-        json.dumps(spans, separators=(",", ":")),
-        spec.adapter_fingerprint_sha256,
-        spec.runtime_fingerprint_sha256,
-        spec.settings_fingerprint_sha256,
-        spec.score_sha256,
-        spec.created_at,
-    )
-
-
-def _row_to_job(row: sqlite3.Row) -> DurableJob:
-    spans = tuple(MediaSpan(**item) for item in json.loads(row["spans_json"]))
-    spec = AnalysisJobSpec(
-        row["job_id"],
-        row["source_id"],
-        row["source_sha256"],
-        tuple(AnalysisStage(item) for item in json.loads(row["stages_json"])),
-        spans,
-        row["adapter_fingerprint_sha256"],
-        row["runtime_fingerprint_sha256"],
-        row["settings_fingerprint_sha256"],
-        row["score_sha256"],
-        row["created_at"],
-    )
-    return DurableJob(
-        spec,
-        JobState(row["state"]),
-        row["owner_id"],
-        row["lease_expires_at"],
-        bool(row["cancel_requested"]),
-        AnalysisStage(row["checkpoint_stage"]) if row["checkpoint_stage"] else None,
-        row["completed_span_count"],
-        row["continuation_token"],
-        row["last_artifact_id"],
-        row["failure_reason"],
-    )
 
 
 def _require_private_parent(path: Path) -> None:
@@ -572,8 +551,20 @@ def _require_private_file(path: Path) -> None:
 
 def _secure_private_sidecar(path: Path) -> None:
     """Secure the opened SQLite file so a pathname swap cannot redirect chmod."""
+    descriptor = _open_sidecar_descriptor(path)
+    if descriptor is None:
+        return
     try:
-        descriptor = os.open(
+        _secure_private_sidecar_descriptor(descriptor)
+    finally:
+        active_failure = sys.exception()
+        _close_sidecar_descriptor(descriptor, preserve_failure=active_failure is not None)
+
+
+def _open_sidecar_descriptor(path: Path) -> int | None:
+    """Open a sidecar or classify its race-safe absence and unsafe path errors."""
+    try:
+        return os.open(
             path,
             os.O_RDONLY
             | os.O_NOFOLLOW
@@ -587,7 +578,10 @@ def _secure_private_sidecar(path: Path) -> None:
         if exc.errno == errno.ELOOP:
             raise JobStoreError("database path must be a regular non-symlink file") from exc
         raise JobStoreError("database sidecar could not be secured") from exc
-    failure: BaseException | None = None
+
+
+def _secure_private_sidecar_descriptor(descriptor: int) -> None:
+    """Validate and privatize the exact opened sidecar descriptor."""
     try:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
@@ -595,15 +589,14 @@ def _secure_private_sidecar(path: Path) -> None:
         if metadata.st_uid != os.getuid():
             raise JobStoreError("database file must be owner-private")
         os.fchmod(descriptor, _FILE_MODE)
-    except JobStoreError as exc:
-        failure = exc
-        raise
     except OSError as exc:
-        failure = exc
         raise JobStoreError("database sidecar could not be secured") from exc
-    finally:
-        try:
-            os.close(descriptor)
-        except OSError as exc:
-            if failure is None:
-                raise JobStoreError("database sidecar could not be secured") from exc
+
+
+def _close_sidecar_descriptor(descriptor: int, *, preserve_failure: bool) -> None:
+    """Close an opened sidecar without obscuring an earlier failure."""
+    try:
+        os.close(descriptor)
+    except OSError as exc:
+        if not preserve_failure:
+            raise JobStoreError("database sidecar could not be secured") from exc

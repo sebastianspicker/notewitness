@@ -115,14 +115,8 @@ def _suppress_provider_output() -> Iterator[None]:
         for descriptor, _saved_descriptor in saved:
             os.dup2(sink, descriptor)
     except OSError as exc:
-        for descriptor, saved_descriptor in saved:
-            try:
-                os.dup2(saved_descriptor, descriptor)
-            except OSError:
-                pass
-            os.close(saved_descriptor)
-        if sink is not None:
-            os.close(sink)
+        _restore_provider_descriptors(saved, suppress_errors=True)
+        _close_provider_descriptors(saved, sink)
         raise BridgeError("local PANNs output isolation is unavailable") from exc
     try:
         yield
@@ -132,13 +126,29 @@ def _suppress_provider_output() -> Iterator[None]:
             sys.stderr.flush()
         finally:
             try:
-                for descriptor, saved_descriptor in saved:
-                    os.dup2(saved_descriptor, descriptor)
+                _restore_provider_descriptors(saved)
             finally:
-                for _descriptor, saved_descriptor in saved:
-                    os.close(saved_descriptor)
-                if sink is not None:
-                    os.close(sink)
+                _close_provider_descriptors(saved, sink)
+
+
+def _restore_provider_descriptors(
+    saved: list[tuple[int, int]], *, suppress_errors: bool = False
+) -> None:
+    for descriptor, saved_descriptor in saved:
+        try:
+            os.dup2(saved_descriptor, descriptor)
+        except OSError:
+            if not suppress_errors:
+                raise
+
+
+def _close_provider_descriptors(
+    saved: list[tuple[int, int]], sink: int | None
+) -> None:
+    for _descriptor, saved_descriptor in saved:
+        os.close(saved_descriptor)
+    if sink is not None:
+        os.close(sink)
 
 
 def _require_panns_timing(window_us: int, hop_us: int) -> None:
@@ -159,38 +169,97 @@ def _merge_active_frames(request: dict[str, Any], framewise: Any, labels: list[s
     active: dict[str, tuple[int, int, float, int]] = {}
     merged: list[tuple[str, int, int, float, int]] = []
     for frame_index, row in enumerate(framewise):
-        raw_start = anchor + frame_index * hop_us
-        raw_end = raw_start + window_us
-        requested = request["spans"][0]
-        start = max(raw_start, requested["start_us"])
-        end = min(raw_end, requested["start_us"] + requested["duration_us"])
-        if start >= end:
+        interval = _frame_interval(request, anchor, frame_index, window_us, hop_us)
+        if interval is None:
             continue
-        row = _plain_sequence(row)
-        if row is None or len(row) != len(labels):
-            raise BridgeError("PANNs framewise output has an invalid label axis")
-        numeric_row = [_frame_score(score) for score in row]
-        for label_index in selected_indices:
-            numeric_score = numeric_row[label_index]
-            if numeric_score < threshold:
-                continue
-            label = labels[label_index]
-            prior = active.get(label)
-            if prior is not None and start <= prior[1] + gap_us:
-                active[label] = (prior[0], max(prior[1], end), max(prior[2], numeric_score), prior[3])
-            else:
-                if prior is not None:
-                    merged.append((label, *prior))
-                active[label] = (start, end, numeric_score, label_index)
+        numeric_row = _numeric_frame_row(row, len(labels))
+        _merge_frame_row(
+            active,
+            merged,
+            labels,
+            selected_indices,
+            numeric_row,
+            interval,
+            threshold,
+            gap_us,
+        )
     merged.extend((label, *value) for label, value in active.items())
-    track_ids = {label: f"instrument-{index + 1:02d}" for index, label in enumerate(sorted({item[0] for item in merged}))}
-    stage = request["stage"]
-    hypotheses = []
-    for index, (label, start, end, score, _label_index) in enumerate(sorted(merged, key=lambda item: (item[1], item[0]))):
-        item = {"hypothesis_id": f"panns:instrument:{index:06d}", "span": bounded_span(request, start, end),
-                "state": "ready", "confidence": score, "instrument_label": label}
+    return _instrument_hypotheses(request, merged)
+
+
+def _frame_interval(
+    request: dict[str, Any],
+    anchor: int,
+    frame_index: int,
+    window_us: int,
+    hop_us: int,
+) -> tuple[int, int] | None:
+    raw_start = anchor + frame_index * hop_us
+    requested = request["spans"][0]
+    start = max(raw_start, requested["start_us"])
+    end = min(
+        raw_start + window_us,
+        requested["start_us"] + requested["duration_us"],
+    )
+    return None if start >= end else (start, end)
+
+
+def _numeric_frame_row(row: Any, label_count: int) -> list[float]:
+    values = _plain_sequence(row)
+    if values is None or len(values) != label_count:
+        raise BridgeError("PANNs framewise output has an invalid label axis")
+    return [_frame_score(score) for score in values]
+
+
+def _merge_frame_row(
+    active: dict[str, tuple[int, int, float, int]],
+    merged: list[tuple[str, int, int, float, int]],
+    labels: list[str],
+    selected_indices: tuple[int, ...],
+    scores: list[float],
+    interval: tuple[int, int],
+    threshold: float,
+    gap_us: int,
+) -> None:
+    start, end = interval
+    for label_index in selected_indices:
+        numeric_score = scores[label_index]
+        if numeric_score < threshold:
+            continue
+        label = labels[label_index]
+        prior = active.get(label)
+        if prior is not None and start <= prior[1] + gap_us:
+            active[label] = (
+                prior[0],
+                max(prior[1], end),
+                max(prior[2], numeric_score),
+                prior[3],
+            )
+        else:
+            if prior is not None:
+                merged.append((label, *prior))
+            active[label] = (start, end, numeric_score, label_index)
+
+
+def _instrument_hypotheses(
+    request: dict[str, Any], merged: list[tuple[str, int, int, float, int]]
+) -> list[dict[str, Any]]:
+    track_ids = {
+        label: f"instrument-{index + 1:02d}"
+        for index, label in enumerate(sorted({item[0] for item in merged}))
+    }
+    hypotheses: list[dict[str, Any]] = []
+    ordered = sorted(merged, key=lambda item: (item[1], item[0]))
+    for index, (label, start, end, score, _label_index) in enumerate(ordered):
+        item = {
+            "hypothesis_id": f"panns:instrument:{index:06d}",
+            "span": bounded_span(request, start, end),
+            "state": "ready",
+            "confidence": score,
+            "instrument_label": label,
+        }
         # The ID is local to this run and denotes a temporal activity class, not a performer identity.
-        if stage == "instrument_diarization":
+        if request["stage"] == "instrument_diarization":
             item["anonymous_instrument_track_id"] = track_ids[label]
         hypotheses.append(item)
     return hypotheses

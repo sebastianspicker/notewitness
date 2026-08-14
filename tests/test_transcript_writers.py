@@ -118,6 +118,67 @@ class TranscriptWriterTests(unittest.TestCase):
             render_html(document, visible_timestamps=False),
         )
 
+    def test_text_and_html_share_timestamp_pause_order_and_escaping_boundaries(self) -> None:
+        original = _document("First <i>&")
+        first = replace(
+            original.segments[0],
+            end_us=2_000_100,
+            word_ids=(),
+        )
+        just_before_boundary = replace(
+            first,
+            segment_id="segment-2",
+            start_us=4_000_099,
+            end_us=4_000_100,
+            text="Second",
+        )
+        at_pause_boundary = replace(
+            first,
+            segment_id="segment-3",
+            start_us=6_000_100,
+            end_us=7_000_100,
+            text="Third",
+        )
+        document = replace(
+            original,
+            segments=(first, just_before_boundary, at_pause_boundary),
+            words=(),
+        )
+
+        self.assertEqual(
+            render_txt(
+                document,
+                timestamp_interval_ms=3_000,
+                pause_threshold_ms=2_000,
+            ),
+            "[00:00:01.000] [speaker-a] First <i>&\n"
+            "[speaker-a] Second\n"
+            "[PAUSE 2.000 s]\n"
+            "[00:00:06.000] [speaker-a] Third\n",
+        )
+        html = render_html(
+            document,
+            timestamp_interval_ms=3_000,
+            pause_threshold_ms=2_000,
+        )
+        self.assertIn(
+            '<ol class="transcript">'
+            '<li data-start-us="1000100" data-end-us="2000100">'
+            '<time datetime="PT1.000S">00:00:01.000</time>'
+            '<span class="speaker">speaker-a</span>'
+            '<span class="text">First &lt;i&gt;&amp;</span></li>\n'
+            '<li data-start-us="4000099" data-end-us="4000100">'
+            '<span class="speaker">speaker-a</span>'
+            '<span class="text">Second</span></li>\n'
+            '<li class="pause" data-duration-us="2000000">'
+            '[PAUSE 2.000 s]</li>\n'
+            '<li data-start-us="6000100" data-end-us="7000100">'
+            '<time datetime="PT6.000S">00:00:06.000</time>'
+            '<span class="speaker">speaker-a</span>'
+            '<span class="text">Third</span></li></ol>',
+            html,
+        )
+
     def test_private_publication_refuses_public_parent_overwrite_and_symlink(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
