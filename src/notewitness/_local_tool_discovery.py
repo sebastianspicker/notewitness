@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import stat
+from typing import Literal
 
 from notewitness._local_tool_contracts import (
     LocalExecutableIdentity,
@@ -64,13 +65,86 @@ def discover_local_tool(name: str, explicit_path: str | Path | None = None) -> L
 
 def _validated_executable(path: Path) -> Path:
     try:
-        resolved = path.resolve(strict=True)
+        resolved = validated_trusted_path(path, kind="file")
         metadata = resolved.stat()
-    except OSError as exc:
-        raise LocalToolUnavailable("Local tool executable is unavailable.") from exc
+    except (OSError, ValueError) as exc:
+        raise LocalToolUnavailable(str(exc)) from exc
     if not stat.S_ISREG(metadata.st_mode) or not os.access(resolved, os.X_OK):
         raise LocalToolUnavailable("Local tool path is not an executable regular file.")
     return resolved
+
+
+def validated_trusted_path(path: Path, *, kind: Literal["file", "directory"]) -> Path:
+    """Return a canonical path whose components cannot be replaced by peers.
+
+    Root-owned system paths and current-user paths are accepted for ordinary
+    local runs.  Privilege transitions accept only effective-user-owned paths:
+    a user-controlled path must not be trusted by an elevated process.
+    """
+
+    if not path.is_absolute():
+        raise ValueError("Trusted paths must be absolute.")
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError("Trusted path is unavailable.") from exc
+    components = (
+        Path(resolved.anchor),
+        *(
+            Path(resolved.anchor, *resolved.parts[1:index])
+            for index in range(2, len(resolved.parts) + 1)
+        ),
+    )
+    for index, component in enumerate(components):
+        try:
+            metadata = component.lstat()
+        except OSError as exc:
+            raise ValueError("Trusted path is unavailable.") from exc
+        is_leaf = index == len(components) - 1
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ValueError("Trusted paths must not contain symlinks.")
+        if not is_leaf and not stat.S_ISDIR(metadata.st_mode):
+            raise ValueError("Trusted path component is not a directory.")
+        if stat.S_IMODE(metadata.st_mode) & 0o022:
+            raise ValueError(
+                "Trusted path components must not be group or world writable."
+            )
+        if not _trusted_owner(metadata.st_uid):
+            raise ValueError("Trusted path components must have a trusted owner.")
+    leaf = components[-1]
+    try:
+        metadata = leaf.stat()
+    except OSError as exc:
+        raise ValueError("Trusted path is unavailable.") from exc
+    if kind == "file" and not stat.S_ISREG(metadata.st_mode):
+        raise ValueError("Trusted path is not a regular file.")
+    if kind == "directory" and not stat.S_ISDIR(metadata.st_mode):
+        raise ValueError("Trusted path is not a directory.")
+    return resolved
+
+
+def validated_private_current_user_directory(path: Path) -> Path:
+    """Require a private current-UID directory for tool working files."""
+
+    resolved = validated_trusted_path(path, kind="directory")
+    try:
+        metadata = resolved.stat()
+    except OSError as exc:
+        raise ValueError("Private directory is unavailable.") from exc
+    if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) & 0o077:
+        raise ValueError(
+            "Private directory must deny group and other access and be owned "
+            "by the current user."
+        )
+    return resolved
+
+
+def _trusted_owner(owner_uid: int) -> bool:
+    current_uid = os.getuid()
+    effective_uid = os.geteuid()
+    if effective_uid != current_uid:
+        return owner_uid == effective_uid
+    return owner_uid in {current_uid, 0}
 
 
 def _executable_identity(path: Path) -> LocalExecutableIdentity:

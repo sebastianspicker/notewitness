@@ -16,6 +16,10 @@ from notewitness._local_tool_contracts import (
     LocalToolError,
     NetworkIsolationUnavailable,
 )
+from notewitness._local_tool_discovery import (
+    validated_private_current_user_directory,
+    validated_trusted_path,
+)
 
 
 _NETWORK_DENY_PROFILE = "(version 1) (allow default) (deny network*)"
@@ -52,13 +56,11 @@ def validated_timeout(value: int) -> int:
 
 def validated_private_directory(path: Path) -> Path:
     try:
-        resolved = path.resolve(strict=True)
-        metadata = resolved.stat()
+        return validated_private_current_user_directory(path)
+    except ValueError as exc:
+        raise LocalToolError(str(exc)) from exc
     except OSError as exc:
         raise LocalToolError("Tool working directory is unavailable.") from exc
-    if not stat.S_ISDIR(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) & 0o077:
-        raise LocalToolError("Tool working directory must deny group and other access.")
-    return resolved
 
 
 def validated_search_paths(paths: Sequence[str | Path]) -> tuple[Path, ...]:
@@ -69,15 +71,12 @@ def validated_search_paths(paths: Sequence[str | Path]) -> tuple[Path, ...]:
     validated: list[Path] = []
     for raw in paths:
         path = Path(raw)
-        if not path.is_absolute() or path.is_symlink():
+        if not path.is_absolute():
             raise ValueError("Executable search paths must be absolute directories.")
         try:
-            resolved = path.resolve(strict=True)
-            metadata = resolved.stat()
-        except OSError as exc:
+            resolved = validated_trusted_path(path, kind="directory")
+        except (OSError, ValueError) as exc:
             raise ValueError("Executable search path is unavailable.") from exc
-        if not stat.S_ISDIR(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) & 0o022:
-            raise ValueError("Executable search paths must not be group/world writable.")
         validated.append(resolved)
     return tuple(validated)
 
@@ -89,13 +88,19 @@ def bounded_environment(
     tool_directory: Path,
     search_paths: tuple[Path, ...],
 ) -> dict[str, str]:
+    try:
+        trusted_tool_directory = validated_trusted_path(
+            tool_directory, kind="directory"
+        )
+    except (OSError, ValueError) as exc:
+        raise LocalToolError("Local tool directory is unavailable.") from exc
     environment = {
         key: value
         for key in _SAFE_ENVIRONMENT_KEYS
         if isinstance((value := os.environ.get(key)), str)
     }
     path_entries = unique_paths(
-        (*search_paths, tool_directory, Path("/usr/bin"), Path("/bin"))
+        (*search_paths, trusted_tool_directory, Path("/usr/bin"), Path("/bin"))
     )
     environment["PATH"] = os.pathsep.join(os.fspath(path) for path in path_entries)
     environment["TMPDIR"] = os.fspath(workdir)
@@ -116,7 +121,11 @@ def network_isolated_command(command: tuple[str, ...]) -> tuple[str, ...]:
             "Hard local-tool network isolation is implemented only for macOS."
         )
     sandbox = Path("/usr/bin/sandbox-exec")
-    if not sandbox.is_file() or not os.access(sandbox, os.X_OK):
+    try:
+        sandbox = validated_trusted_path(sandbox, kind="file")
+    except (OSError, ValueError) as exc:
+        raise NetworkIsolationUnavailable("macOS sandbox-exec is unavailable.") from exc
+    if not os.access(sandbox, os.X_OK):
         raise NetworkIsolationUnavailable("macOS sandbox-exec is unavailable.")
     return (os.fspath(sandbox), "-p", _NETWORK_DENY_PROFILE, *command)
 
@@ -130,11 +139,11 @@ def resource_limited_launcher_command(
     """Run the fixed package helper before execing the approved command."""
 
     try:
-        launcher = Path(__file__).with_name("_local_tool_launcher.py").resolve(
-            strict=True
+        launcher = validated_trusted_path(
+            Path(__file__).with_name("_local_tool_launcher.py"), kind="file"
         )
         metadata = launcher.stat()
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise LocalToolError("Local tool launcher is unavailable.") from exc
     if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) & 0o022:
         raise LocalToolError("Local tool launcher is unavailable.")
@@ -155,9 +164,9 @@ def trusted_python_launcher() -> Path:
 
     for candidate in dict.fromkeys((Path(sys.executable), Path("/usr/bin/python3"))):
         try:
-            interpreter = candidate.resolve(strict=True)
+            interpreter = validated_trusted_path(candidate, kind="file")
             metadata = interpreter.stat()
-        except OSError:
+        except (OSError, ValueError):
             continue
         if (
             stat.S_ISREG(metadata.st_mode)

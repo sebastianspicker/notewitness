@@ -95,8 +95,12 @@ Thumbs.db
 /.codex/
 .serena/
 /.serena/
-.codacy/
-/.codacy/
+/.codacy/*
+!/.codacy/codacy.config.json
+!/.codacy/codacy.yaml
+!/.codacy/codacy.yml
+/.codacy/codacy.config.json
+/.codacy/codacy.yaml
 .codegraph/
 /.codegraph/
 /.impeccable/

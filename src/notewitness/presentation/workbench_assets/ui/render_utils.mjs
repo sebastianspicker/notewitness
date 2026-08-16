@@ -17,7 +17,7 @@ export function renderConfidence(confidence) {
   const score = [confidence.value, confidence.score, confidence.probability].find(
     (value) => Number.isFinite(Number(value)),
   );
-  return score === undefined ? String(confidence.kind || "confidence reported")
+  return score === undefined ? escapeHTML(confidence.kind || "confidence reported")
     : `${Math.round(Number(score) * (Number(score) <= 1 ? 100 : 1))}% confidence`;
 }
 

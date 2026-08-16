@@ -24,7 +24,7 @@ export function createProcessing(c) {
       const current = list(c.state.processing?.jobs).filter((job) => job.job_id !== queued.job_id);
       c.state.processing = { ...(c.state.processing || {}), jobs: [queued, ...current] };
       c.refreshProcessing();
-      await pollJobs();
+      await pollJobs({ rethrowErrors: true });
     });
     if (saved) {
       c.setNotice("Local processing queued. You can keep reviewing while it runs.", "success");
@@ -37,12 +37,12 @@ export function createProcessing(c) {
       await c.request(`/api/jobs/${encodeURIComponent(jobId)}/${actionName}`, {
         method: "POST", headers: c.actionHeaders(), body: JSON.stringify({}),
       });
-      await pollJobs();
+      await pollJobs({ rethrowErrors: true });
     });
     if (saved) c.setNotice(actionName === "cancel" ? "Cancellation requested." : "Processing queued for a safe retry.", "success");
   }
 
-  async function pollJobs() {
+  async function pollJobs({ rethrowErrors = false } = {}) {
     if (!c.state.data) return;
     try {
       const previous = list(c.state.processing?.jobs);
@@ -64,6 +64,7 @@ export function createProcessing(c) {
     } catch (error) {
       stopJobPolling();
       c.setNotice(`Processing status is unavailable: ${error.message}`, "error");
+      if (rethrowErrors) throw error;
     }
   }
 

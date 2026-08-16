@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import selectors
 import signal
@@ -40,13 +41,31 @@ def execute_bounded(
     """Spawn an approved command and enforce its complete process lifecycle."""
 
     tool.require_unchanged()
+    # The child rechecks this exact descriptor identity immediately before its
+    # final execve.  This narrows the pathname race left by a normal execve;
+    # a hostile actor with this same UID can still race arbitrary path access.
+    child_environment = dict(environment)
+    child_environment["NOTEWITNESS_LOCAL_TOOL_IDENTITY"] = json.dumps(
+        {
+            "path": os.fspath(tool.executable),
+            "sha256": tool.identity.sha256,
+            "size_bytes": tool.identity.size_bytes,
+            "device": tool.identity.device,
+            "inode": tool.identity.inode,
+            "owner_uid": tool.identity.owner_uid,
+            "mode": tool.identity.mode,
+            "modified_ns": tool.identity.modified_ns,
+            "changed_ns": tool.identity.changed_ns,
+        },
+        separators=(",", ":"),
+    )
     started = time.monotonic()
     process: subprocess.Popen[bytes] | None = None
     try:
         process = popen_factory(
             launcher_command,
             cwd=workdir,
-            env=environment,
+            env=child_environment,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

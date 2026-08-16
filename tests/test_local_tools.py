@@ -20,6 +20,7 @@ from notewitness.local_tools import (
     LocalToolProcessLeak,
     LocalToolUnavailable,
     MAX_TOOL_OUTPUT_BYTES,
+    NetworkIsolationUnavailable,
     _resource_limited_launcher_command,
     _trusted_python_launcher,
     discover_local_tool,
@@ -58,6 +59,30 @@ class LocalToolTests(unittest.TestCase):
             with self.assertRaisesRegex(LocalToolUnavailable, "writable"):
                 discover_local_tool("tool", executable)
 
+    def test_discovery_rejects_an_untrusted_ancestor_directory(self) -> None:
+        with TemporaryDirectory() as temporary:
+            tool_directory = Path(temporary).resolve() / "tool-bin"
+            tool_directory.mkdir()
+            executable = tool_directory / "tool"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o700)
+            tool_directory.chmod(0o777)
+
+            with self.assertRaisesRegex(LocalToolUnavailable, "writable"):
+                discover_local_tool("tool", executable)
+
+    def test_discovery_refuses_user_owned_paths_when_effective_uid_differs(self) -> None:
+        with TemporaryDirectory() as temporary:
+            executable = Path(temporary).resolve() / "tool"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o700)
+
+            with mock.patch(
+                "notewitness._local_tool_discovery.os.geteuid", return_value=0
+            ):
+                with self.assertRaisesRegex(LocalToolUnavailable, "trusted owner"):
+                    discover_local_tool("tool", executable)
+
     def test_runner_uses_no_shell_and_bounds_environment(self) -> None:
         with TemporaryDirectory() as temporary:
             workdir = Path(temporary).resolve()
@@ -81,6 +106,70 @@ class LocalToolTests(unittest.TestCase):
         self.assertEqual(str(workdir), output[2])
         self.assertEqual("/usr/bin:/bin", output[3])
         self.assertFalse(result.network_isolated)
+
+    def test_runner_ignores_hostile_path_and_forbidden_environment_overrides(self) -> None:
+        with TemporaryDirectory() as temporary:
+            workdir = Path(temporary).resolve()
+            workdir.chmod(0o700)
+            injected = workdir / "injected-bin"
+            injected.mkdir()
+            injected.chmod(0o700)
+            tool = discover_local_tool("python3", "/usr/bin/python3")
+            with mock.patch.dict(os.environ, {"PATH": str(injected)}, clear=False):
+                result = BoundedLocalToolRunner(tool).run(
+                    ("-c", "import os; print(os.environ['PATH'])"),
+                    working_directory=workdir,
+                    timeout_seconds=10,
+                    deny_network=False,
+                )
+            self.assertEqual("/usr/bin:/bin", result.stdout.strip())
+            with self.assertRaisesRegex(ValueError, "not allowed"):
+                BoundedLocalToolRunner(tool).run(
+                    (),
+                    working_directory=workdir,
+                    timeout_seconds=10,
+                    deny_network=False,
+                    environment={"PATH": str(injected)},
+                )
+
+    def test_runner_rejects_an_untrusted_explicit_helper_search_path(self) -> None:
+        with TemporaryDirectory() as temporary:
+            workdir = Path(temporary).resolve()
+            workdir.chmod(0o700)
+            injected = workdir / "injected-bin"
+            injected.mkdir()
+            injected.chmod(0o777)
+            tool = discover_local_tool("python3", "/usr/bin/python3")
+
+            with self.assertRaisesRegex(ValueError, "unavailable"):
+                BoundedLocalToolRunner(tool).run(
+                    (),
+                    working_directory=workdir,
+                    timeout_seconds=10,
+                    deny_network=False,
+                    executable_search_paths=(injected,),
+                )
+
+    def test_runner_preserves_hostile_argument_literals_as_arguments(self) -> None:
+        with TemporaryDirectory() as temporary:
+            workdir = Path(temporary).resolve()
+            workdir.chmod(0o700)
+            tool = discover_local_tool("python3", "/usr/bin/python3")
+            literals = (
+                "-c",
+                "import sys; print(repr(sys.argv[1:]))",
+                "--",
+                "--cpu-seconds",
+            )
+
+            result = BoundedLocalToolRunner(tool).run(
+                literals,
+                working_directory=workdir,
+                timeout_seconds=10,
+                deny_network=False,
+            )
+
+        self.assertEqual("['--', '--cpu-seconds']", result.stdout.strip())
 
     def test_runner_spawns_fixed_helper_without_child_setup_callback(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -330,6 +419,54 @@ class LocalToolTests(unittest.TestCase):
                     timeout_seconds=10,
                     deny_network=False,
                 )
+
+    def test_runner_revalidates_an_executable_swapped_before_spawn(self) -> None:
+        with TemporaryDirectory() as temporary:
+            workdir = Path(temporary).resolve()
+            workdir.chmod(0o700)
+            executable = workdir / "approved-tool"
+            marker = workdir / "replaced-tool-ran"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o700)
+            replacement = workdir / "replacement"
+            replacement.write_text(
+                f"#!/bin/sh\necho unsafe > {marker}\n",
+                encoding="utf-8",
+            )
+            replacement.chmod(0o700)
+            tool = discover_local_tool("approved-tool", executable)
+            original_popen = subprocess.Popen
+
+            def swap_then_spawn(
+                *args: object, **kwargs: object
+            ) -> subprocess.Popen[bytes]:
+                os.replace(replacement, executable)
+                return original_popen(*args, **kwargs)  # type: ignore[arg-type]
+
+            with mock.patch(
+                "notewitness.local_tools.subprocess.Popen", side_effect=swap_then_spawn
+            ):
+                with self.assertRaises(LocalToolIdentityChanged):
+                    BoundedLocalToolRunner(tool).run(
+                        (),
+                        working_directory=workdir,
+                        timeout_seconds=10,
+                        deny_network=False,
+                    )
+
+            self.assertFalse(marker.exists())
+
+    def test_network_isolation_fails_closed_when_the_sandbox_is_untrusted(self) -> None:
+        with mock.patch(
+            "notewitness._local_tool_policy.platform.system", return_value="Darwin"
+        ), mock.patch(
+            "notewitness._local_tool_policy.validated_trusted_path",
+            side_effect=ValueError("untrusted"),
+        ):
+            from notewitness._local_tool_policy import network_isolated_command
+
+            with self.assertRaises(NetworkIsolationUnavailable):
+                network_isolated_command(("/usr/bin/true",))
 
     def test_runner_rejects_replaced_executable_on_cancellation(self) -> None:
         with TemporaryDirectory() as temporary:
