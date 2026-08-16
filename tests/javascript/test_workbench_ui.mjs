@@ -52,6 +52,15 @@ const { createAudioActions } = await import(
 const { createExportActions } = await import(
   pathToFileURL(path.join(assetsRoot, "js/export_actions.mjs")).href
 );
+const { createProcessing } = await import(
+  pathToFileURL(path.join(assetsRoot, "js/processing.mjs")).href
+);
+const { createRendering } = await import(
+  pathToFileURL(path.join(assetsRoot, "js/app_rendering.mjs")).href
+);
+const { renderConfidence } = await import(
+  pathToFileURL(path.join(assetsRoot, "ui/render_utils.mjs")).href
+);
 
 for (const factory of [createActions, createReviewActions, createCaptureActions, createAudioActions, createExportActions]) {
   assert.equal(typeof factory, "function");
@@ -59,6 +68,8 @@ for (const factory of [createActions, createReviewActions, createCaptureActions,
 
 assert.equal(escapeHTML(`<script a="b">&'</script>`),
   "&lt;script a=&quot;b&quot;&gt;&amp;&#39;&lt;/script&gt;");
+assert.equal(renderConfidence({ kind: `<svg onload="alert(1)">&'` }),
+  "&lt;svg onload=&quot;alert(1)&quot;&gt;&amp;&#39;");
 assert.equal(formatTime(65.25), "01:05.250");
 assert.equal(formatTime(3661, false), "1:01:01");
 assert.deepEqual(timelineTicks(60), [0, 10, 20, 30, 40, 50, 60]);
@@ -191,6 +202,116 @@ assert.ok(!rendered.includes("window.alert"));
 assert.match(rendered, /data-action="export-transcript"[^>]*>Export transcript<\/button>/);
 assert.doesNotMatch(rendered, /data-action="export-transcript"[^>]*disabled/);
 
+const hostilePayload = `"><script>alert(1)</script><style>body{}</style><svg onload="alert(1)"></svg>javascript:alert(1) data:text/html,&'`;
+const escapedHostilePayload = escapeHTML(hostilePayload);
+const hostileState = structuredClone(state);
+hostileState.activeSourceId = hostilePayload;
+hostileState.authorId = hostilePayload;
+hostileState.query = hostilePayload;
+hostileState.reviewKind = hostilePayload;
+hostileState.tempo = hostilePayload;
+hostileState.notice = { kind: hostilePayload, message: hostilePayload };
+hostileState.dialog = {
+  mode: "edit-evidence",
+  originalText: hostilePayload,
+  reason: hostilePayload,
+  sourceName: hostilePayload,
+};
+hostileState.data.actors = [{
+  id: hostilePayload,
+  role: hostilePayload,
+  instrument_role: hostilePayload,
+  human_evidence_eligible: true,
+}];
+hostileState.data.media = [{
+  source_id: hostilePayload,
+  display_name: hostilePayload,
+  duration_us: 1_000_000,
+  url: hostilePayload,
+}];
+hostileState.data.project.network_mode = hostilePayload;
+hostileState.data.lesson = {
+  title: hostilePayload,
+  schema_version: hostilePayload,
+  contains_remote_derived_evidence: false,
+  sources: [{ source_id: hostilePayload, uri: hostilePayload }],
+  transcript_suggestions: [{
+    event_id: hostilePayload,
+    content_kind: hostilePayload,
+    actor_id: hostilePayload,
+    actor_role: hostilePayload,
+    body_value: hostilePayload,
+    display_text: hostilePayload,
+    review_status: hostilePayload,
+    confidence: { kind: hostilePayload },
+    anchors: [{ span: { source_id: hostilePayload, start_us: 0, duration_us: 1_000_000 } }],
+  }],
+  full_transcript: [{
+    event_id: hostilePayload,
+    content_kind: hostilePayload,
+    actor_id: hostilePayload,
+    actor_role: hostilePayload,
+    body_value: hostilePayload,
+    display_text: hostilePayload,
+    review_status: hostilePayload,
+    anchors: [{ span: { source_id: hostilePayload, start_us: 0, duration_us: 1_000_000 } }],
+  }],
+  summary: {
+    overview: hostilePayload,
+    topics: [{ label: hostilePayload }],
+    feedback: [{
+      text: hostilePayload,
+      actor_role: hostilePayload,
+      review_status: hostilePayload,
+      playback: { source_id: hostilePayload, start_us: 0 },
+    }],
+    key_moments: [{
+      relation_type: hostilePayload,
+      label: hostilePayload,
+      anchors: [{ span: { source_id: hostilePayload, start_us: 0 } }],
+    }],
+  },
+  relation_suggestions: [{
+    relation_id: hostilePayload,
+    relation_type: "local:assigned_for_practice",
+    label: hostilePayload,
+    anchors: [{ span: { source_id: hostilePayload, start_us: 0 } }],
+  }],
+  practice_plan: { tasks: [{ task_id: hostilePayload, text: hostilePayload, review_status: hostilePayload }] },
+  bookmarks: [{ label: hostilePayload, playback: { source_id: hostilePayload, start_us: 0 } }],
+  statistics: { assessment_free: true, [hostilePayload]: hostilePayload },
+  source_graph: { [hostilePayload]: hostilePayload },
+  limitations: [hostilePayload],
+};
+hostileState.processing = {
+  runtime: {
+    analysis_ready: true,
+    complete_ready: false,
+    transcription_ready: true,
+    missing_complete_modalities: [hostilePayload],
+  },
+  jobs: [{
+    job_id: hostilePayload,
+    kind: hostilePayload,
+    label: hostilePayload,
+    state: hostilePayload,
+    status_message: hostilePayload,
+    progress_percent: 50,
+    retryable: false,
+  }],
+};
+
+for (const activePanel of ["review", "transcript", "lesson"]) {
+  hostileState.activePanel = activePanel;
+  const hostileMarkup = renderWorkbench(hostileState);
+  assert.ok(hostileMarkup.includes(escapedHostilePayload), `${activePanel} must encode hostile state text`);
+  assert.ok(hostileMarkup.includes(`value="${escapedHostilePayload}"`), `${activePanel} must encode hostile attribute values`);
+  assert.ok(!hostileMarkup.includes(hostilePayload), `${activePanel} must not emit raw hostile payload`);
+  assert.doesNotMatch(hostileMarkup, /<(?:script|style|svg)\b/i);
+  assert.doesNotMatch(hostileMarkup, /["']\s+on(?:load|error|click)\s*=/i);
+  assert.doesNotMatch(hostileMarkup, /\b(?:src|href|action)\s*=\s*["']\s*(?:javascript|data):/i);
+}
+
 state.reviewKind = "all";
 state.query = "";
 const allReviewEvidence = renderWorkbench(state);
@@ -229,5 +350,57 @@ state.processing.jobs = [{
   status_message: "Cancelled after speech transcription; completed evidence remains ready for review",
 }];
 assert.ok(renderWorkbench(state).includes(">Resume</button>"));
+
+const originalWindow = globalThis.window;
+const originalCSS = globalThis.CSS;
+globalThis.window = { clearInterval() {}, setInterval() { return 1; } };
+globalThis.CSS = { escape: (value) => String(value) };
+try {
+  async function assertJobActionFailure(request, expectedMessage) {
+    const processingState = {
+      busy: new Set(),
+      data: {},
+      jobPoll: 0,
+      notice: null,
+      processing: { jobs: [] },
+    };
+    const app = { querySelector: () => null, querySelectorAll: () => [] };
+    const controller = {
+      actionHeaders: () => ({}),
+      app,
+      load: async () => {},
+      refreshProcessing: () => {},
+      request,
+      state: processingState,
+    };
+    Object.assign(controller, createRendering(controller));
+    const processing = createProcessing(controller);
+
+    await processing.jobAction("job:failure", "cancel");
+
+    assert.deepEqual(processingState.notice, { message: expectedMessage, kind: "error" });
+    assert.equal(processingState.busy.size, 0);
+  }
+
+  await assertJobActionFailure(
+    async () => { throw new Error("action failed"); },
+    "Cancelling local processing could not be completed: action failed",
+  );
+
+  let requestCount = 0;
+  await assertJobActionFailure(
+    async () => {
+      requestCount += 1;
+      if (requestCount === 1) return {};
+      throw new Error("poll failed");
+    },
+    "Cancelling local processing could not be completed: poll failed",
+  );
+} finally {
+  if (originalWindow === undefined) delete globalThis.window;
+  else globalThis.window = originalWindow;
+  if (originalCSS === undefined) delete globalThis.CSS;
+  else globalThis.CSS = originalCSS;
+}
 
 console.log("workbench UI contract verified");

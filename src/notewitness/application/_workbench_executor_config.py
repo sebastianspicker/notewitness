@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import errno
 import json
 import math
 import os
@@ -14,6 +15,7 @@ from notewitness.adapters.analysis_cli import LocalAnalysisSource
 from notewitness.adapters.whisper_cli import WhisperCLISettings
 from notewitness.application.workbench_processing import WorkbenchProcessingError
 from notewitness.domain.analysis import AnalysisStage
+from notewitness._local_tool_discovery import validated_trusted_path
 from notewitness.local_tools import LocalTool
 
 
@@ -417,27 +419,74 @@ def _read_private_configuration(path: Path) -> Mapping[str, Any]:
     if not path.is_absolute():
         raise WorkbenchRuntimeConfigurationError("runtime_config_path_must_be_absolute")
     try:
-        metadata = path.lstat()
+        parent = validated_trusted_path(path.parent, kind="directory")
+    except ValueError as exc:
+        raise WorkbenchRuntimeConfigurationError(
+            "runtime_config_must_be_owner_private"
+        ) from exc
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(parent / path.name, flags)
     except OSError as exc:
-        raise WorkbenchRuntimeConfigurationError("runtime_config_unavailable") from exc
-    if (
-        stat.S_ISLNK(metadata.st_mode)
-        or not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_uid != os.getuid()
-        or stat.S_IMODE(metadata.st_mode) & 0o077
-        or not 0 < metadata.st_size <= MAX_RUNTIME_CONFIG_BYTES
-    ):
+        if exc.errno == errno.ENOENT:
+            raise WorkbenchRuntimeConfigurationError("runtime_config_unavailable") from exc
+        raise WorkbenchRuntimeConfigurationError(
+            "runtime_config_must_be_owner_private"
+        ) from exc
+    try:
+        before = os.fstat(descriptor)
+        if not _private_runtime_config_stat(before):
+            raise WorkbenchRuntimeConfigurationError(
+                "runtime_config_must_be_owner_private"
+            )
+        content = bytearray()
+        while len(content) <= MAX_RUNTIME_CONFIG_BYTES:
+            chunk = os.read(
+                descriptor,
+                min(8192, MAX_RUNTIME_CONFIG_BYTES + 1 - len(content)),
+            )
+            if not chunk:
+                break
+            content.extend(chunk)
+        after = os.fstat(descriptor)
+    except OSError as exc:
+        raise WorkbenchRuntimeConfigurationError("runtime_config_json_invalid") from exc
+    finally:
+        os.close(descriptor)
+    if len(content) > MAX_RUNTIME_CONFIG_BYTES or _runtime_config_stat_identity(
+        before
+    ) != _runtime_config_stat_identity(after):
         raise WorkbenchRuntimeConfigurationError("runtime_config_must_be_owner_private")
     try:
         payload = json.loads(
-            path.read_bytes().decode("utf-8"),
-            object_pairs_hook=_unique_object,
+            bytes(content).decode("utf-8"), object_pairs_hook=_unique_object
         )
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (UnicodeError, json.JSONDecodeError) as exc:
         raise WorkbenchRuntimeConfigurationError("runtime_config_json_invalid") from exc
     if not isinstance(payload, dict):
         raise WorkbenchRuntimeConfigurationError("runtime_config_must_be_object")
     return payload
+
+
+def _private_runtime_config_stat(metadata: os.stat_result) -> bool:
+    return (
+        stat.S_ISREG(metadata.st_mode)
+        and metadata.st_uid == os.getuid()
+        and not stat.S_IMODE(metadata.st_mode) & 0o077
+        and 0 < metadata.st_size <= MAX_RUNTIME_CONFIG_BYTES
+    )
+
+
+def _runtime_config_stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_uid,
+        stat.S_IMODE(metadata.st_mode),
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

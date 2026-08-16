@@ -11,6 +11,10 @@ from notewitness.application.workbench_local_executor import (
     WorkbenchRuntimeConfigurationError,
 )
 from notewitness.application._workbench_executor_identity import _workbench_run_token
+from notewitness.application._workbench_executor_config import (
+    WorkbenchRuntimeConfigurationError as PrivateConfigurationError,
+    _read_private_configuration,
+)
 from notewitness.application.workbench_processing import WorkbenchJobKind
 from notewitness.project import initialize_project
 from notewitness.project_store import ProjectStore
@@ -169,6 +173,63 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
             "keys_invalid",
         ):
             LocalWorkbenchExecutor.from_private_config(self.project, path)
+
+    def test_private_config_rejects_a_symlink(self) -> None:
+        target = self.parent / "runtime-target.json"
+        target.write_text(json.dumps({"version": 1}), encoding="utf-8")
+        target.chmod(0o600)
+        path = self.parent / "runtime-link.json"
+        path.symlink_to(target)
+
+        with self.assertRaisesRegex(WorkbenchRuntimeConfigurationError, "owner_private"):
+            LocalWorkbenchExecutor.from_private_config(self.project, path)
+
+    def test_private_config_reads_one_descriptor_despite_path_replacement(self) -> None:
+        path = self.parent / "runtime.json"
+        path.write_text(json.dumps({"version": 1}), encoding="utf-8")
+        path.chmod(0o600)
+        replacement = self.parent / "replacement.json"
+        replacement.write_text(json.dumps({"version": 2}), encoding="utf-8")
+        replacement.chmod(0o600)
+        import notewitness.application._workbench_executor_config as configuration
+
+        original_read = configuration.os.read
+        replaced = False
+
+        def replace_after_read(descriptor: int, size: int) -> bytes:
+            nonlocal replaced
+            chunk = original_read(descriptor, size)
+            if chunk and not replaced:
+                replaced = True
+                path.unlink()
+                path.symlink_to(replacement)
+            return chunk
+
+        with patch.object(configuration.os, "read", side_effect=replace_after_read):
+            with self.assertRaisesRegex(PrivateConfigurationError, "owner_private"):
+                _read_private_configuration(path)
+
+    def test_private_config_rejects_mutation_during_descriptor_read(self) -> None:
+        path = self.parent / "runtime.json"
+        path.write_text(json.dumps({"version": 1}), encoding="utf-8")
+        path.chmod(0o600)
+        import notewitness.application._workbench_executor_config as configuration
+
+        original_read = configuration.os.read
+        mutated = False
+
+        def mutate_after_read(descriptor: int, size: int) -> bytes:
+            nonlocal mutated
+            chunk = original_read(descriptor, size)
+            if chunk and not mutated:
+                mutated = True
+                path.write_text(json.dumps({"version": 2}), encoding="utf-8")
+                path.chmod(0o600)
+            return chunk
+
+        with patch.object(configuration.os, "read", side_effect=mutate_after_read):
+            with self.assertRaisesRegex(PrivateConfigurationError, "owner_private"):
+                _read_private_configuration(path)
 
     def test_v2_config_uses_distinct_provider_and_model_per_stage(self) -> None:
         diarization = _executable(self.parent / "pyannote-bridge")

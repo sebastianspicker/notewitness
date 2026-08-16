@@ -28,6 +28,8 @@ from notewitness.infrastructure.sqlite_job_store_records import (
 
 _FILE_MODE = 0o600
 _DIRECTORY_MODE = 0o700
+_MIN_BUSY_TIMEOUT_MS = 1
+_MAX_BUSY_TIMEOUT_MS = 60_000
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS analysis_jobs (
   job_id TEXT PRIMARY KEY,
@@ -63,18 +65,24 @@ class JobConflictError(JobStoreError):
     """A lease, state, or immutable identity precondition was not met."""
 
 
+def _busy_timeout_ms(value: object) -> int:
+    """Validate the only dynamic value used in SQLite's PRAGMA statement."""
+    if type(value) is not int or not _MIN_BUSY_TIMEOUT_MS <= value <= _MAX_BUSY_TIMEOUT_MS:
+        raise ValueError("busy_timeout_ms must be between 1 and 60000.")
+    return value
+
+
+def _busy_timeout_pragma(value: int) -> str:
+    """Render the validated, parameter-free SQLite PRAGMA syntax."""
+    return "PRAGMA busy_timeout = " + str(_busy_timeout_ms(value))
+
+
 class SQLiteJobStore:
     """A short-transaction job store; callers never supply SQL fragments."""
 
     def __init__(self, database_path: str | Path, *, busy_timeout_ms: int = 5_000) -> None:
         self.path = _trusted_path(Path(os.path.abspath(os.fspath(database_path))))
-        if (
-            not isinstance(busy_timeout_ms, int)
-            or isinstance(busy_timeout_ms, bool)
-            or not 1 <= busy_timeout_ms <= 60_000
-        ):
-            raise ValueError("busy_timeout_ms must be between 1 and 60000.")
-        self._busy_timeout_ms = busy_timeout_ms
+        self._busy_timeout_ms = _busy_timeout_ms(busy_timeout_ms)
         self._prepare_path()
         with self._connection() as connection:
             connection.executescript(_SCHEMA)
@@ -339,7 +347,7 @@ class SQLiteJobStore:
         connection.row_factory = sqlite3.Row
         try:
             connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms}")
+            connection.execute(_busy_timeout_pragma(self._busy_timeout_ms))
             connection.execute("PRAGMA journal_mode = WAL")
             connection.execute("PRAGMA synchronous = FULL")
             yield connection
