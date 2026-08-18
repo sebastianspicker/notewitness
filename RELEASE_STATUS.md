@@ -1,17 +1,22 @@
 # Public alpha status
 
-Status reviewed: 2026-08-09
+Historical evidence dates: 2026-08-09 and 2026-08-14
 
 Candidate version: `0.1.0a0`
 
-Status: local dirty-working-tree candidate, not ready to publish
+Status: historical local-audit evidence, not ready to publish
 
-## Current verification addendum
+This page records dated audit snapshots. It does not state the current working
+tree condition or identify a releasable revision; establish both from Git when
+preparing a release.
 
-Rechecked on 2026-08-14. This addendum supersedes only the dated live-checkout
-row below; the remaining 2026-08-09 candidate evidence stays historical.
+## 2026-08-14 verification addendum
 
-- `bash scripts/verify.sh` now passes in the live checkout: public hygiene,
+This addendum describes a checkout rechecked on 2026-08-14. It supersedes only
+the dated non-isolated-checkout row below; the remaining 2026-08-09 candidate
+evidence also remains historical.
+
+- `bash scripts/verify.sh` passed in that checkout: public hygiene,
   JSON and CLI checks, 342 Python tests, JavaScript contracts, and the
   deterministic Pages build all pass.
 - Current `.gitignore` rules exclude `.repowise/`, `.claude/`, and `.mcp.json`;
@@ -26,7 +31,7 @@ row below; the remaining 2026-08-09 candidate evidence stays historical.
   channel, screenshot-manifest evidence, and remote Actions/Pages results are
   still publication blockers.
 
-## Candidate identity
+## 2026-08-09 candidate identity
 
 - Branch: `agent/remediate-codacy-findings`
 - HEAD: `65aa70273a6ca06ffa5fd5ed770ba1cd574c9476`
@@ -36,8 +41,7 @@ row below; the remaining 2026-08-09 candidate evidence stays historical.
 - Configured origin: present locally; remote state was not queried or changed
 - Upstream tracking branch: gone
 
-HEAD does not identify the working-tree candidate. The exact candidate-content digest, status
-fingerprint, exclusions, and remediation evidence are recorded in `AUDIT_LEDGER.md`.
+HEAD did not identify the working-tree candidate represented by this snapshot.
 
 ## Implemented scope
 
@@ -50,18 +54,17 @@ path, and a session-authenticated loopback browser workbench.
 The repository does not establish model accuracy, fairness, pedagogical effectiveness, corpus
 suitability, or compatibility with a particular external runtime.
 
-## Current local verification
+## 2026-08-09 local verification
 
 These results apply only to the 2026-08-09 dirty-working-tree candidate described above.
 
 | Command or check | Result |
 |---|---|
-| `bash scripts/verify.sh` in the live checkout | Blocked before tests because the fail-closed public-hygiene scan correctly sees untracked local `.repowise/` databases and `.mcp.json`. Those local-tool paths are outside the audit candidate and were preserved. |
+| `bash scripts/verify.sh` in the non-isolated checkout | Blocked before tests because the fail-closed public-hygiene scan correctly saw untracked local `.repowise/` databases and `.mcp.json`. Those local-tool paths were outside the audit candidate and were preserved. |
 | `bash scripts/verify.sh` in an isolated candidate copy excluding only `.repowise/`, `.claude/`, and `.mcp.json` | Passed. Public hygiene, JSON validation, 303 Python tests in 118.010 seconds, CLI smoke checks, JavaScript syntax and contract checks, and the deterministic Pages artifact build all passed. |
 | Focused facade and transcription tests | Passed. 38 tests completed in 50.006 seconds after the analyzer-driven cleanup. |
-| Configured local Codacy scan | Completed across all 153 Python files with Ruff 0.12.7, Bandit 1.8.3, and Pylint 3.3.9. All tools succeeded with no crashes. The scan reported 1,527 findings, dominated by documentation and policy-threshold noise; no Bandit High finding affects `src/`. Exact dispositions are in `AUDIT_LEDGER.md`. |
+| Configured local Codacy scan | Completed across all 153 Python files with Ruff 0.12.7, Bandit 1.8.3, and Pylint 3.3.9. All tools succeeded with no crashes. The scan reported 1,527 findings, dominated by documentation and policy-threshold noise; no Bandit High finding affected `src/`. |
 | Focused Codacy rescan of the three remediated Python files | Ruff reported 0 issues. Pylint reported 15 remaining documentation and complexity findings. The targeted F401/W0611 findings were absent. |
-| RepoWise current-tree inventory | All 188 enumerated source, test, script, and workflow targets resolved. No target was unindexed. Coverage data remains unavailable. |
 | Pages artifact generation and privacy scan | Passed locally from the real renderer and synthetic fixture. The generated artifact was served on loopback, but rendered interaction proof was blocked because the in-app Browser runtime had no available browser backend. |
 | GitHub workflow reference check | Passed. Every external `uses:` reference in both workflows is pinned to a 40-character commit SHA, and both workflow files parse as YAML. |
 | `git diff --check` | Passed after the remediation batches. |
@@ -73,7 +76,7 @@ These results apply only to the 2026-08-09 dirty-working-tree candidate describe
 
 The README references three 1440 by 900 design-reference screenshots. They remain working-tree
 design references, not release evidence, because `docs/screenshots/manifest.json` does not exist
-and the current candidate was not rendered in an available browser backend during this audit.
+and that candidate was not rendered in an available browser backend during this audit.
 
 ## Publication blockers
 
