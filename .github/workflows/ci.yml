@@ -19,7 +19,12 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: bash scripts/verify.sh
+      - name: Run verification with a private temporary directory
+        run: |
+          verify_tmp_dir=$(mktemp -d "$HOME/notewitness-verify.XXXXXX")
+          chmod 700 "$verify_tmp_dir"
+          trap 'rm -rf "$verify_tmp_dir"' EXIT
+          TMPDIR="$verify_tmp_dir" bash scripts/verify.sh
 
   package:
     runs-on: macos-latest

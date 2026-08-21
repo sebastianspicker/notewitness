@@ -254,9 +254,8 @@ PYTHONPATH=src python3 -m notewitness inspect \
 │   ├── presentation/         Loopback server and browser assets
 │   └── providers/            Optional remote provider adapters
 ├── tests/
-│   ├── javascript/           Browser-module contract checks
-│   ├── support/              Shared test doubles and helpers
-│   └── test_*.py             Python unit, integration, and contract tests
+│   ├── support/              Small HTTP double used by transport tests
+│   └── test_*.py             Python persistence, boundary, and security tests
 ├── scripts/                  Repository verification and capture tooling
 ├── docs/                     Operator, protocol, product, and release references
 ├── fixtures/                 Synthetic non-sensitive project fixtures
@@ -303,8 +302,8 @@ bash scripts/verify.sh
 ```
 
 The broad script runs the Python tests, public-file hygiene checks, JSON
-validation, CLI smoke tests, JavaScript syntax checks, tuner checks, and
-workbench UI contract tests. The CI configuration runs it on Ubuntu with Python
+validation, CLI smoke tests, JavaScript syntax checks, and a static Pages demo
+build. The CI configuration runs it on Ubuntu with Python
 3.11 and 3.14. A separate macOS job builds and installs the package, checks the
 installed entry points and package assets, and performs fixture smoke tests.
 
