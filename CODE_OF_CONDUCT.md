@@ -13,9 +13,10 @@ safe for people whose work may involve sensitive teaching and research contexts.
 
 ## Enforcement
 
-Do not publish sensitive conduct reports in an issue. Before public participation is invited, the
-maintainer must document a specific private reporting channel and a conflict-of-interest fallback.
-That channel is not yet verifiable in this local repository and remains a publication blocker.
+Do not publish sensitive conduct reports in an issue. Establish a private
+contact channel with a maintainer before sharing details. If the report
+concerns that maintainer, ask another project owner or repository host for a
+private conflict-of-interest route.
 
 Maintainers may remove content, restrict participation, or ban contributors when necessary to
 protect participants. Reports should be handled privately, with conflicts of interest disclosed or

@@ -52,7 +52,7 @@ are deferred until they have a separate authentication and host-trust design.
 The adapter posts directly to the fixed
 `https://api.openai.com/v1/responses` URL. The request has the following shape.
 The runtime sends the complete strict
-[`SUGGESTION_SCHEMA`](../src/notewitness/providers/openai_responses.py) shown
+[`SUGGESTION_SCHEMA`](../src/notewitness/lessons/openai_responses.py) shown
 below.
 
 ```json

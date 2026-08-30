@@ -42,7 +42,7 @@ jobs:
           notewitness --help >/dev/null
           notewitness --version
           notewitness capabilities >/dev/null
-          notewitness validate "$checkout_dir/fixtures/synthetic_lesson/project.json"
+          notewitness validate "$checkout_dir/examples/synthetic-lesson/project.json"
           provider_status=0
           notewitness-provider-bridge --help 2>provider-error.txt || provider_status=$?
           test "$provider_status" -eq 2
@@ -53,8 +53,8 @@ jobs:
           grep -q "expected exactly" mt3-error.txt
           python - <<'PY'
           from pathlib import Path
-          from notewitness.presentation import workbench_server
-          root = Path(workbench_server.__file__).with_name("workbench_assets")
+          from notewitness.workbench import server
+          root = Path(server.__file__).with_name("assets")
           for name in ("index.html", "app.css", "app.js", "workbench_ui.mjs", "pitch_estimator.mjs", "notewitness-mark.svg"):
               if not root.joinpath(name).is_file():
                   raise SystemExit(f"missing installed GUI asset: {name}")

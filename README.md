@@ -1,52 +1,42 @@
 # NoteWitness
 
-NoteWitness is a local-first research workbench for recorded music teaching and
-artistic research. It stores source evidence, processing runs, model
-hypotheses, human review decisions, and exports as separate records so that
-later conclusions remain traceable to their source.
+NoteWitness is a local-first evidence workbench for recorded music teaching
+and artistic research. It keeps source evidence, automated hypotheses, human
+review decisions, and exports as separate records so conclusions remain
+traceable to their source.
 
-The repository is an alpha implementation. Its file formats, command-line
-interface, and workbench routes may change before a stable release.
+The project is an alpha. Its file formats, command-line interface, and
+workbench routes may change before a stable release.
 
-## Purpose and scope
+## What it does
 
-NoteWitness supports evidence review around lesson recordings, score excerpts,
-annotations, and derived music-analysis data. It is designed for a single
-researcher working with local project directories.
+- Creates owner-private project directories and validates evidence documents.
+- Imports local media with checksums and explicit rights records.
+- Runs operator-supplied transcription and music-analysis tools through
+  bounded, provenance-recording adapters.
+- Queues, resumes, cancels, recovers, and integrates durable analysis jobs.
+- Keeps machine suggestions separate from append-only human acceptance and
+  revision records.
+- Provides a session-authenticated loopback workbench for playback, review,
+  bookmarks, lesson projections, capture, tuner, and metronome controls.
+- Exports reviewed transcript and music evidence with explicit rights and
+  projection-loss checks.
+- Supports an optional, separately authorized OpenAI text-only suggestion
+  path. It never uploads media automatically.
 
-The core runtime is dependency-free and offline by default. External speech
-recognition, music-analysis, media-inspection, and remote text services are
-optional integrations. NoteWitness records their provenance but does not bundle
-their executables, model weights, or licenses.
+No model, model weight, Whisper installation, FFmpeg/ffprobe executable,
+analysis engine, browser, or media device is bundled. Implemented adapters do
+not establish model accuracy, fairness, corpus suitability, or pedagogical
+validity. See the [capability matrix](docs/capabilities.md) for the exact
+implemented and excluded scope.
 
-## Current capabilities
+## Static interface demo
 
-- Create private project directories and validate their evidence documents.
-- Import local media with a checksum and an explicit rights record.
-- Record actors, review decisions, source ranges, annotations, and provenance.
-- Plan and run local transcription through an explicitly configured adapter.
-- Run staged music analysis through the documented analysis-suite protocol.
-- Queue, resume, cancel, recover, and integrate durable analysis jobs.
-- Inspect the evidence graph and preview proposed relationships.
-- Review lesson notes, bookmarks, hypotheses, and source ranges in a loopback
-  browser workbench.
-- Export reviewed music data as CSV or MIDI.
-- Use a tuner and metronome in the local workbench.
-- Request remote text-only relationship suggestions when project policy,
-  evidence rights, and per-call confirmation through `--allow-remote` all
-  permit it.
+[Open the static workbench demo](https://sebastianspicker.github.io/notewitness/).
+It uses the production renderer with a synthetic example. Controls are marked
+as simulated and cannot access devices, run tools, upload, save, or export.
 
-The screenshots below show the repository's 1440 by 900 workbench fixtures. The
-capture path uses the application UI with synthetic project state. They are
-design references, not evidence of a packaged release.
-
-[Open the static interface demo](https://sebastianspicker.github.io/notewitness/).
-It is generated from the same workbench renderer and synthetic fixture used by
-the screenshot path. Navigation runs in the browser; every command-capable
-control is marked as simulated and cannot access media, run tools, upload,
-persist, or export data.
-
-Build and serve that same artifact locally without installing the package:
+Build the same artifact locally:
 
 ```sh
 demo_root="$(mktemp -d)"
@@ -54,121 +44,48 @@ bash scripts/build_pages_demo.sh "$demo_root/site"
 python3 -m http.server 8000 --bind 127.0.0.1 --directory "$demo_root/site"
 ```
 
-Open `http://127.0.0.1:8000/`. The Pages workflow runs the same builder under
-Python 3.11 and publishes its output at `/notewitness/`; relative asset paths
-keep the artifact subpath-safe. The hosted demo uses only the synthetic fixture
-and its client contains no network requests.
+Then open `http://127.0.0.1:8000/`.
 
-![Workbench overview](docs/screenshots/workbench-overview.png)
-
-![Lesson notes](docs/screenshots/lesson-notes.png)
-
-![Review boundary](docs/screenshots/review-boundary.png)
-
-See [docs/screenshots/README.md](docs/screenshots/README.md) for the capture and
-review procedure.
-
-## Current limitations
-
-- No speech-recognition, music-analysis, or language model is bundled.
-- Local external-tool execution requires macOS because the current runner uses
-  `sandbox-exec` to deny network access.
-- The external-tool sandbox does not provide filesystem confinement. Configured
-  tools retain the filesystem permissions of the current user.
-- The workbench is a loopback, single-user process. It is not a hosted service
-  and has no multi-user authentication or authorization model.
-- The browser tuner depends on microphone permission and browser audio support.
-- Model quality, transcription accuracy, and research validity are not
-  established by the repository test suite.
-- Accessibility tests cover selected interaction contracts. They do not
-  constitute a WCAG conformance audit.
-- Project schemas, provider protocols, and command-line options are still
-  alpha interfaces.
-
-The detailed implementation matrix is in
-[docs/capabilities.md](docs/capabilities.md).
-
-## Requirements and prerequisites
+## Requirements
 
 - Python 3.11 or newer.
 - A current browser for the workbench.
-- Node.js for JavaScript syntax checks in the development verification script.
-- macOS for CLI media ingest and commands that execute configured
-  transcription or analysis tools.
-- `ffprobe` for CLI media ingest and local transcription.
-- Operator-supplied tools, model files, license metadata, and provider
-  configuration for optional processing stages.
+- Node.js for the repository verification script and static demo build.
+- macOS for commands that run external tools through the current
+  network-denying sandbox.
+- Operator-supplied tools, models, and license metadata for optional processing.
 
-The package has no core runtime dependencies. It uses Hatchling as its build
-backend.
+The installed package has no runtime dependencies. Hatchling is used only to
+build the package.
 
 ## Installation
 
-Run directly from the repository root:
+Run directly from a checkout:
 
 ```sh
 PYTHONPATH=src python3 -m notewitness --help
 ```
 
-For an isolated editable installation:
+Or install into a virtual environment:
 
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python3 -m pip install -e .
+python3 -m pip install .
 notewitness --help
 ```
 
-The editable installation requires the Hatchling build backend declared in
-`pyproject.toml`. If that backend is unavailable, use the checkout execution
-path. Package verification status is recorded in
-[RELEASE_STATUS.md](RELEASE_STATUS.md).
-
-The installation exposes these commands:
+The package installs three commands:
 
 - `notewitness`
 - `notewitness-provider-bridge`
 - `notewitness-mt3-events-bridge`
 
-The provider bridge requires the optional package for its selected stage. The
-MT3 events bridge normalizes an operator-supplied decoded-events file and does
-not execute MT3. Both commands fail with a diagnostic when their input contract
-is not satisfied.
+Provider runtimes and model packages remain operator managed.
 
-## Configuration
+## Quick start
 
-NoteWitness starts without a runtime configuration and remains offline.
-Automatic transcription and analysis require a private JSON file that follows
-[docs/workbench-runtime.example.json](docs/workbench-runtime.example.json).
-Copy the template outside the repository and restrict its permissions:
-
-```sh
-cp docs/workbench-runtime.example.json /path/to/private/notewitness-runtime.json
-chmod 600 /path/to/private/notewitness-runtime.json
-```
-
-The runtime file contains paths and license declarations for operator-supplied
-tools and models. Do not commit it.
-
-Remote OpenAI requests require all of the following:
-
-- Project network policy `remote_explicit`.
-- Remote permission on every selected event and each targeted source.
-- Per-call confirmation through the `--allow-remote` command-line flag.
-- `OPENAI_API_KEY` in the process environment.
-- `NOTEWITNESS_OPENAI_MODEL` in the process environment.
-
-The model variable selects the required text model or snapshot. The adapter
-sends only the selected text with request-local aliases, sets `store` to
-`false`, and does not upload media.
-
-See [docs/openai-endpoint.md](docs/openai-endpoint.md) for the request contract
-and [docs/provider-bridges.md](docs/provider-bridges.md) for local provider
-configuration.
-
-## Usage
-
-Create and inspect a project:
+Create and inspect a private project:
 
 ```sh
 PYTHONPATH=src python3 -m notewitness init /path/to/private/project \
@@ -179,225 +96,124 @@ PYTHONPATH=src python3 -m notewitness inspect \
   /path/to/private/project/project.json
 ```
 
-`init` prints the created `project.json` path. Commands that validate or inspect
-the evidence graph take that document path. Workbench and processing commands
-take the containing project directory.
-
-Import media by creating a restricted rights record:
-
-```sh
-PYTHONPATH=src python3 -m notewitness ingest-media \
-  /path/to/private/project \
-  /path/to/private/lesson.wav \
-  --create-restricted-rights \
-  --ffprobe-path /absolute/path/to/ffprobe
-```
-
-The command reports the source identifier used by later processing commands.
-It runs `ffprobe` through the macOS network-deny runner. The workbench can
-stream an import without media probing when no automatic runtime is configured.
-Inspect the available processing options before supplying external tools:
-
-```sh
-PYTHONPATH=src python3 -m notewitness transcription-plan \
-  --job-id job:example \
-  --source-id source:example \
-  --duration-us 1000000 \
-  --model-profile profile:precise
-PYTHONPATH=src python3 -m notewitness capabilities
-PYTHONPATH=src python3 -m notewitness doctor
-PYTHONPATH=src python3 -m notewitness runtime-doctor
-```
-
-`doctor` and `runtime-doctor` exit with status 6 when required local components
-are unavailable or incompatible.
-
-Start the workbench without automatic providers:
+Start the local workbench:
 
 ```sh
 PYTHONPATH=src python3 -m notewitness workbench \
   /path/to/private/project
 ```
 
-Start it with a private runtime configuration:
+The server binds to `127.0.0.1` and opens a single-use launch URL. Use
+`--no-open-browser` to print that URL instead. Do not expose the port through a
+proxy or tunnel.
 
-```sh
-PYTHONPATH=src python3 -m notewitness workbench \
-  /path/to/private/project \
-  --runtime-config /path/to/private/notewitness-runtime.json
-```
-
-Use `--no-open-browser` when the process should print the launch URL without
-opening it. The complete operator workflow, including transcription, staged
-analysis, review, integration, and export commands, is documented in
-[docs/operator-guide.md](docs/operator-guide.md).
-
-A repository fixture is available for non-sensitive inspection:
+Try the commands against the synthetic example:
 
 ```sh
 PYTHONPATH=src python3 -m notewitness validate \
-  fixtures/synthetic_lesson/project.json
+  examples/synthetic-lesson/project.json
 PYTHONPATH=src python3 -m notewitness inspect \
-  fixtures/synthetic_lesson/project.json
+  examples/synthetic-lesson/project.json
 ```
+
+## Local processing
+
+Automatic transcription and analysis require explicit executable, model,
+version, and license configuration. Start from the runtime example, copy it
+outside the checkout, and restrict its permissions:
+
+```sh
+cp docs/workbench-runtime.example.json /path/to/private/runtime.json
+chmod 600 /path/to/private/runtime.json
+PYTHONPATH=src python3 -m notewitness workbench /path/to/private/project \
+  --runtime-config /path/to/private/runtime.json
+```
+
+Run `PYTHONPATH=src python3 -m notewitness runtime-doctor --help` to probe the
+same local tools and models without starting a job.
+
+The current macOS runner denies network access and bounds process execution,
+but it does not confine filesystem access. Approved tools retain the invoking
+user's filesystem authority and must therefore be trusted.
+
+Use these references for the complete contracts:
+
+- [Operator guide](docs/operator-guide.md)
+- [Analysis-suite protocol](docs/analysis-suite-protocol.md)
+- [Local provider bridges](docs/provider-bridges.md)
+- [Optional OpenAI endpoint](docs/openai-endpoint.md)
 
 ## Repository structure
 
 ```text
-.
-├── src/notewitness/          Python package
-│   ├── adapters/             External-tool contracts
-│   ├── application/          Use cases and orchestration
-│   ├── bridges/              Optional provider bridge entry points
-│   ├── domain/               Evidence and transcription domain types
-│   ├── infrastructure/       Local persistence
-│   ├── presentation/         Loopback server and browser assets
-│   └── providers/            Optional remote provider adapters
-├── tests/
-│   ├── support/              Small HTTP double used by transport tests
-│   └── test_*.py             Python persistence, boundary, and security tests
-├── scripts/                  Repository verification and capture tooling
-├── docs/                     Operator, protocol, product, and release references
-├── fixtures/                 Synthetic non-sensitive project fixtures
-├── schemas/                  Evidence graph schema and JSON-LD context
-├── .github/                  CI and contribution templates
-├── pyproject.toml            Package metadata and entry points
-├── SECURITY.md               Security model and vulnerability reporting
-└── CONTRIBUTING.md           Contribution requirements
+src/notewitness/
+  core/          Pure value types and domain rules
+  projects/      Project storage, artifacts, and media
+  analysis/      Local providers, jobs, and run integration
+  lessons/       Human review, projections, and exports
+  workbench/     Loopback server and browser interface
+  interfaces/    CLI and provider bridge entry points
+tests/
+  unit/          Focused filesystem, process, and network boundary tests
+  integration/   Project, analysis-store, and workbench integration tests
+  contract/      CLI, capability, runtime, and architecture contracts
+docs/            Architecture, protocols, operator guidance, and release process
+examples/        Synthetic, non-sensitive project example
+schemas/         Evidence graph schema and JSON-LD context
+scripts/         Verification and static-demo tooling
 ```
 
-The architecture and storage boundaries are described in
-[docs/architecture.md](docs/architecture.md). The original research landscape
-and design rationale remain in [RESEARCH_REPORT.md](RESEARCH_REPORT.md); that
-report is not the authority for current capabilities.
+The package is a feature-modular monolith. Dependencies flow from `interfaces`
+through `workbench`, `lessons`, `analysis`, and `projects` toward the pure
+`core` package. See [architecture.md](docs/architecture.md) and the recorded
+[architectural decision](docs/decisions/0001-feature-modular-monolith.md).
 
-## Development workflow
+The dated [research landscape](RESEARCH_REPORT.md) records prior art and
+product rationale. It is not an implementation or release contract.
 
-1. Read the relevant protocol and architecture documentation before changing a
-   public schema or provider boundary.
-2. Keep project data, media, credentials, model caches, and private runtime
-   configuration outside the checkout.
-3. Add focused tests for behavior changes.
-4. Run the narrowest relevant test during development.
-5. Run the broad repository verification before submitting a change.
-6. Update commands, paths, schemas, examples, and limitations in the same
-   change as the implementation.
+## Development and verification
 
-Do not add a core runtime dependency without an explicit project decision.
-External model behavior belongs behind an adapter with separate provenance for
-code, model weights, and licenses.
+Keep media, participant data, credentials, model artifacts, private runtime
+configuration, and project directories outside the checkout. Add focused
+tests for changed behavior and update public contracts in the same change.
 
-## Testing
-
-Run the Python test suite:
+Run the Python suite while editing:
 
 ```sh
 PYTHONPATH=src python3 -m unittest discover -s tests -t . -v
 ```
 
-Run the broad local verification:
+Run the complete local gate before submitting a change:
 
 ```sh
 bash scripts/verify.sh
 ```
 
-The broad script runs the Python tests, public-file hygiene checks, JSON
-validation, CLI smoke tests, JavaScript syntax checks, and a static Pages demo
-build. The CI configuration runs it on Ubuntu with Python
-3.11 and 3.14. A separate macOS job builds and installs the package, checks the
-installed entry points and package assets, and performs fixture smoke tests.
+The gate checks public-file hygiene, JSON, Python tests, CLI behavior,
+JavaScript syntax, and the static demo build. CI runs it on Python 3.11 and
+3.14, then installs the package on macOS and checks all three entry points.
+These checks do not validate real media, external model quality, browser or
+device compatibility, or research conclusions.
 
-These checks do not verify external model quality, real lesson media, browser
-compatibility across engines, microphone hardware, or research conclusions.
-Current local verification evidence is recorded in
-[RELEASE_STATUS.md](RELEASE_STATUS.md).
+## Security and privacy
 
-## Deployment and operation
+NoteWitness is offline by default. Remote text suggestions require project
+policy `remote_explicit`, rights for every selected source and event, explicit
+per-call confirmation, and the required environment configuration.
 
-NoteWitness has no server deployment configuration, container image, or
-external database. Operate it as a local process:
+The loopback session, Host, Origin, and CSRF controls limit unintended browser
+access. They do not defend against a malicious process running with the same
+user and filesystem authority. Read [SECURITY.md](SECURITY.md) before handling
+sensitive projects and [openai-endpoint.md](docs/openai-endpoint.md) before
+enabling remote processing.
 
-```sh
-PYTHONPATH=src python3 -m notewitness workbench \
-  /path/to/private/project \
-  --port 8765 \
-  --no-open-browser
-```
+## Contributing and releases
 
-The server binds to `127.0.0.1`. It prints a single-use launch URL, exchanges the
-launch token for an `HttpOnly` and `SameSite=Strict` cookie, and validates host,
-origin, and CSRF data on subsequent requests. Do not expose the loopback port
-through a proxy or tunnel.
-
-Stop the process with `Ctrl-C`. Project records, imported media references, job
-state, and exports remain in the selected project directory. Back up that
-directory according to the sensitivity and retention rules of the source
-material.
-
-## Troubleshooting
-
-### A command exits with status 6
-
-Status 6 indicates missing or incompatible runtime prerequisites. Run:
-
-```sh
-PYTHONPATH=src python3 -m notewitness runtime-doctor
-```
-
-For a configured provider, pass the same tool, model, and license paths used by
-the processing command. Resolve every reported incompatibility before running
-the provider.
-
-### The workbench starts without automatic processing
-
-This is the default offline behavior. Supply `--runtime-config` with a valid
-version 2 runtime file if transcription or analysis actions should be enabled.
-
-### The workbench rejects a request
-
-Open the exact launch URL printed by the process. Do not reuse a launch token
-from an earlier process. If the server reports an origin, host, or CSRF error,
-close the old tab and reopen the current launch URL.
-
-### Editable installation cannot find the build backend
-
-Install from an environment that can obtain the build requirement declared in
-`pyproject.toml`, or run from the checkout with `PYTHONPATH=src`.
-
-### A model or tool is rejected
-
-Check its exact version, checksum, path, input contract, and license declaration
-against [docs/provider-bridges.md](docs/provider-bridges.md) and
-[docs/analysis-suite-protocol.md](docs/analysis-suite-protocol.md). NoteWitness
-does not infer compatibility from a filename.
-
-## Security considerations
-
-Keep lesson media, participant identifiers, credentials, model caches,
-restricted scores, project directories, and private runtime files outside the
-repository. Use the default offline mode unless remote text processing is
-explicitly authorized.
-
-Configured external tools execute with the current user's filesystem
-permissions. The network sandbox limits those child processes but does not
-protect against a malicious process already running as the same user. Review
-tool provenance and licenses before execution.
-
-The full threat model, supported versions, and private reporting guidance are
-in [SECURITY.md](SECURITY.md).
-
-## Contribution guidance
-
-Contributions must preserve the evidence layers, privacy boundary, human review
-model, and offline default. Tests should verify public behavior and protocol
-invariants rather than implementation details. Update documentation whenever a
-public command, path, schema, security property, or operating assumption
-changes.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the review checklist and required
-verification.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution requirements and
+[docs/RELEASING.md](docs/RELEASING.md) for the release procedure. Report
+security issues through a private channel as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-NoteWitness is licensed under the GNU Affero General Public License, version 3
-or later. See [LICENSE](LICENSE).
+NoteWitness is licensed under the GNU Affero General Public License v3.0 or
+later. See [LICENSE](LICENSE).

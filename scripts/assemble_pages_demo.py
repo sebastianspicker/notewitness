@@ -80,7 +80,7 @@ def main() -> int:
   <body>
     <a class="skip-link" href="#workbench-main">Skip to workspace</a>
     <div class="demo-bar" role="note">
-      <strong>Static demo · synthetic fixture.</strong>
+      <strong>Static demo · synthetic example.</strong>
       Navigation changes this page only; marked actions are simulated and never run commands.
     </div>
     <div id="app">{payload["workbench"]}</div>

@@ -4,7 +4,7 @@
 import { registerHooks } from "node:module";
 
 const assetsRoot = new URL(
-  "../src/notewitness/presentation/workbench_assets/",
+  "../src/notewitness/workbench/assets/",
   import.meta.url,
 );
 

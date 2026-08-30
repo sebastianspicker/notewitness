@@ -15,7 +15,6 @@ Use the references below for detailed contracts and operator procedures.
 | Understand evidence and trust boundaries | [Architecture](architecture.md) |
 | Review the optional remote text path | [OpenAI endpoint](openai-endpoint.md) |
 | Prepare or publish an alpha | [Releasing](RELEASING.md) |
-| Review screenshot provenance | [Screenshot policy](screenshots/README.md) |
 
 The README, capability matrix, and `notewitness capabilities` command describe
 current behavior. [RESEARCH_REPORT.md](../RESEARCH_REPORT.md) is a dated

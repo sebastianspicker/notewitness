@@ -137,7 +137,7 @@ function simulateTransport(control) {
   if (control.dataset.action === "play") {
     const label = control.querySelector("[data-play-icon]");
     if (label) label.textContent = label.textContent === "Play" ? "Pause" : "Play";
-    showNotice("Simulated transport only. The synthetic fixture contains no playable media.");
+    showNotice("Simulated transport only. The synthetic example contains no playable media.");
     return true;
   }
   if (control.dataset.action === "seek-back" || control.dataset.action === "seek-forward") {

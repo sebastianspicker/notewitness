@@ -26,22 +26,14 @@ annotations, and summaries are separate. A rerun cannot overwrite a human review
 ## Component map
 
 ```text
-CLI
-  +-- project / media_ingest -------- owner-private project and explicit local media
-  +-- adapters/whisper_cli ---------- local ASR, checkpoint, raw artifact normalization
-  +-- adapters/analysis_cli --------- bounded JSON activity/diarization/music/alignment adapter
-  +-- bridges ----------------------- optional pyannote, Basic Pitch, PANNs, MT3 boundaries
-  +-- transcription_runtime --------- ASR manifests, evidence, and export gates
-  +-- speaker_alignment ------------ run-aware anonymous speaker links
-  +-- pedagogical_digest ----------- conservative local assignment suggestions
-  +-- transcript_export ------------ source-specific HTML/TXT/WebVTT projection
-  +-- music_export ----------------- source-aware CSV and deterministic MIDI projection
-  +-- resumable_analysis ------------ SQLite jobs, lease, checkpoint, raw replay
-  +-- workbench_processing ---------- durable GUI queue, retry, cancellation, progress
-  +-- workbench_local_executor ------ startup-approved local ASR/analysis composition
-  +-- workbench_server/assets ------- loopback review, import/playback/capture, Web Audio
-  +-- evidence ---------------------- compatibility façade and provenance validation
-  +-- providers/openai_responses ---- separately gated remote text suggestions
+interfaces/CLI and bridges
+  +-- projects ---------------------- owner-private project, artifacts, and media
+  +-- analysis/adapters ------------ bounded local ASR and music-analysis providers
+  +-- analysis/runs ---------------- SQLite jobs, leases, checkpoints, and raw replay
+  +-- analysis/run_integration ----- normalized provenance-linked evidence
+  +-- lessons ----------------------- review, lesson projections, and guarded exports
+  +-- workbench --------------------- loopback HTTP, durable GUI queue, and browser UI
+  +-- core -------------------------- pure evidence and domain contracts
 ```
 
 ## Capability status

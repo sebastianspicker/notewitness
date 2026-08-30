@@ -1,77 +1,134 @@
 # Architecture
 
-## Decision and evidence boundary
+NoteWitness is a local-first modular application for turning private music
+lesson recordings into provenance-linked evidence, review decisions, lesson
+projections, and exports. It is one installable process, not a collection of
+services. SQLite and project files are local implementation details of that
+process.
 
-The executable spine is a Python 3.11+ standard-library application. Private project state and
-evidence are validated in-process. Long-running local analysis uses SQLite for durable job state;
-media and raw artifacts remain private project files. External ASR and MIR behavior stays behind
-explicit local adapters, with code/model/score licenses and identities recorded separately.
-On macOS the adapter runner denies network operations and bounds process resources, but it does not
-restrict filesystem access by an approved executable.
+## System flow
 
 ```text
-private source media / score
-        |
-        +--> explicit local Whisper or JSON analysis CLI --> raw artifact
-        |                                                    |
-        |                                             normalized hypothesis
-        |                                                    |
-        +----------------------> evidence graph <--- human acceptance/revision
-                                       |
-                  loopback workbench / rights-gated local export
+private media / optional score / rights metadata
+                    |
+             projects (ingest and identity)
+                    |
+       analysis (approved local executables)
+                    |
+       core evidence graph and hypotheses
+                    |
+        lessons (human review and exports)
+                    |
+       workbench HTTP/UI or interfaces CLI
 ```
 
-`notewitness.evidence` is a thin public compatibility façade. Internals operate on payload
-mappings and do not import that façade. Every evidence-bearing event targets source or score
-evidence. Automatic records retain generator/model provenance and stay `machine_suggested` until
-an append-only human adjudication revision accepts or supersedes them.
+Raw provider output, normalized machine hypotheses, append-only human review,
+and derived exports remain separate records. This is the central product
+invariant: conclusions can be traced back to source material and the process
+that produced them.
 
-## Local execution paths
+## Feature boundaries
 
-The ASR path accepts only an explicit local Whisper executable and absolute checkpoint; it does
-not select named models or download weights. It retains raw CLI JSON separately from normalized,
-time-bounded transcript hypotheses and records source, tool, model, settings, and runtime
-identities.
+The Python package is organized by product responsibility:
 
-The analysis path accepts one explicit JSON-producing local CLI. Typed stages cover activity,
-anonymous diarization (including optional overlap and exact cluster counts from 1 to 10), notes,
-continuous pitch, instruments, and optional score alignment. The adapter validates a bounded
-contract but does not attest the engine's installation, license, model quality, or suitability.
+- `core` owns dependency-free evidence, time, audio, transcription, analysis,
+  lesson, and export value types. It performs no I/O.
+- `projects` owns project creation, evidence-graph persistence, private
+  artifacts, media import, hashing, file permissions, and atomic mutation.
+  It is the only feature allowed to mutate the canonical evidence document.
+- `analysis` owns local provider protocols, tool discovery and containment,
+  transcription and music-analysis execution, durable analysis jobs, raw
+  artifacts, normalization, and run integration.
+- `lessons` owns append-only review, actor attribution, lesson projections,
+  transcript and music exports, and the separately authorized remote text
+  suggestion boundary.
+- `workbench` owns the loopback HTTP server, session and request security,
+  browser assets, workbench projections, runtime configuration, capture, and
+  the browser-requested job queue.
+- `interfaces` is the composition boundary. It owns the CLI and installed
+  provider-bridge entry points and may depend on every feature.
 
-`ResumableAnalysisCoordinator` persists jobs in project-local SQLite. A lease owns processing;
-expired leases recover to a resumable state. Stage checkpoints and private raw JSON let a resumed
-job replay completed output rather than rerun it. Resume checks source, adapter, runtime, model,
-score, and settings identities and rejects drift. Cancellation leaves an explicit durable state.
+Dependencies point in one direction:
 
-## Local workbench
+```text
+core
+  ^
+projects
+  ^
+analysis
+  ^
+lessons
+  ^
+workbench
+  ^
+interfaces
+```
 
-The standard-library HTTP server binds only to `127.0.0.1`. A single-use launch URL establishes a
-per-process, host-only session cookie. Private API, job, media, and mutation routes require that
-cookie; mutations also retain Host, Origin, and CSRF checks. This prevents access by local processes
-that do not know the token, but not by a malicious process with the same user's filesystem
-authority. Project actor IDs remain evidence attribution, not authenticated principals.
+A feature may also depend on any earlier feature in that sequence. Earlier
+features must never import later ones, and no feature imports `interfaces`.
+`tests/contract/test_architecture.py` enforces this graph from the Python AST.
 
-The server projects the evidence graph and serves only fixed assets, authenticated same-origin APIs,
-and ingested media with HTTP Range support. It includes
-review/revision, bookmarks, lesson overview, practice state, descriptive statistics, durable
-startup-approved local processing jobs, browser `MediaRecorder` capture, and Web Audio
-tuner/metronome controls. Browser capture/playback is
-runtime-dependent: compatibility, device access, user gesture, and consent remain outside the
-Python server's guarantee.
+Private underscore-prefixed modules split large implementations inside a
+feature; they are not cross-feature extension points. The deliberate
+`notewitness.evidence` module is the sole old public import adapter. New code
+uses `notewitness.core.evidence` directly.
 
-The GUI queue has one exclusive project owner at a time. Its atomic active-job transitions prevent
-two HTTP requests from starting or resuming competing work. Transcription and analysis use
-deterministic per-job attempt run identities; immutable completed publications are reconciled
-before a recovered step can invoke a model again. This closes the crash window between evidence
-graph integration and the GUI's SQLite step checkpoint.
+## State and side effects
 
-## Validation boundary
+Each project directory owns `project.json`, imported media, rights records,
+private raw and export artifacts, and SQLite job stores. Project writes use
+owner-only permissions, no-follow opens where relevant, atomic replacement,
+and content-hash compare-and-swap checks. Project-scoped runtime writes use a
+pinned private-directory capability: direct file creation, staging, sidecar
+handling, and unlinking are directory-FD-relative and revalidate the original
+device/inode. Analysis leases and checkpoints protect long-running provider
+work. The workbench queue is intentionally a separate store because it
+represents browser requests and lifecycle, not provider-stage execution.
 
-The architecture is local-first and offline by default, but it bundles no external models or
-engines. A completed invocation proves a bounded integration path, not recognition accuracy,
-bias, grading validity, identity inference, or noScribe equivalence. Any research claim needs an
-authorized, stratified corpus with defined measures, failure retention, and human review.
+Python's standard `sqlite3` API cannot open relative to a directory FD, and a
+`/dev/fd` SQLite URI is not usable on macOS. Both job stores therefore pin the
+parent FD and revalidate its device/inode immediately before and after the
+pathname-only SQLite lifecycle. Replacement is detected and the operation is
+rejected, although SQLite may touch the replacement target before that
+detection. This cannot eliminate a race by a malicious process running as the
+same user; that actor is outside the workbench's trust model.
 
-The optional OpenAI provider is separate from local analysis. It may receive only explicitly
-selected text after project policy, rights, and per-call gates; it uses `store: false` and produces
-machine-suggested relations only.
+External executables are operator supplied and explicitly identified. The
+macOS runner denies network access and bounds process execution, but it does
+not confine filesystem access beyond the permissions of the current user.
+Provider code, model artifacts, settings, licenses, raw output, and normalized
+results retain separate identities.
+
+The optional OpenAI path is not part of local analysis. It sends only selected
+text after project policy, rights, and per-call consent checks, uses a fixed
+endpoint and `store: false`, and records only machine-suggested relations.
+
+## External interfaces
+
+The supported external surface is intentionally small:
+
+- the `notewitness` CLI and its documented exit statuses;
+- `notewitness-provider-bridge` and `notewitness-mt3-events-bridge`;
+- the evidence graph, project layout, runtime configuration, analysis-suite
+  JSON, and bridge formats documented under `schemas/` and `docs/`;
+- the authenticated loopback workbench routes used by the bundled browser UI.
+
+Python modules below those entry points are internal alpha implementation.
+Internal paths may change when the feature boundaries remain coherent.
+
+## Workbench trust boundary
+
+The server binds only to `127.0.0.1`. A single-use launch token creates an
+`HttpOnly`, host-only, `SameSite=Strict` session cookie. Private reads require
+the session; mutations additionally validate Host, Origin, and CSRF data.
+Project actor IDs provide evidence attribution, not authentication or
+authorization. The process is for one local user and must not be exposed
+through a proxy or tunnel.
+
+## Architectural decisions
+
+The rationale for the modular-monolith feature graph is recorded in
+[decisions/0001-feature-modular-monolith.md](decisions/0001-feature-modular-monolith.md).
+The architecture deliberately avoids generic service layers, shared utility
+packages, dependency-injection frameworks, and protocol abstractions unless a
+real replaceable boundary needs them.

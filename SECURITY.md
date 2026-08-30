@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-No NoteWitness version has been published. The `0.1.0a0` working tree receives security fixes during
-local review, but it is not a supported release or deployment target.
+No NoteWitness version has been published. The current alpha branch is not a
+supported release or deployment target.
 
 ## Reporting a vulnerability
 
@@ -11,13 +11,9 @@ Do not open a public issue for a vulnerability, private-data exposure, credentia
 not attach lesson media, participant identifiers, API keys, model artifacts, project databases, or
 restricted scores.
 
-Before a public alpha is published, the maintainer must enable and verify GitHub private
-vulnerability reporting. If that service is unavailable, the maintainer may establish and document
-another specific private channel. Until one of those channels is verified, the release remains
-blocked as recorded in the repository release status.
-
-If you are reviewing this local candidate, share security details only through a private channel
-that you have independently established with the maintainer. Use synthetic data and include only the
+Use GitHub private vulnerability reporting from the repository's Security tab
+when it is available. Otherwise, establish a private contact channel with a
+maintainer before sharing details. Use synthetic data and include only the
 minimum reproduction material.
 
 A useful report identifies:

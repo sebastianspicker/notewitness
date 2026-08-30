@@ -50,5 +50,5 @@ The design target is WCAG 2.2 AA, but conformance has not been audited. The
 repository checks selected keyboard, status, and workbench interaction
 contracts. It does not verify screen-reader behavior, browser coverage, text
 scaling, reduced motion, touch target size, or complete audio alternatives.
-Screenshot review must check focus, clipping, status accuracy, and readable
-scaling.
+Manual interface review must check focus, clipping, status accuracy, and
+readable scaling.

@@ -1,4 +1,0 @@
-pytest
-ruff
-
-# forced-processing-1

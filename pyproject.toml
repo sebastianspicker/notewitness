@@ -31,9 +31,9 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-notewitness = "notewitness.cli:main"
-notewitness-provider-bridge = "notewitness.bridges.dispatcher:main"
-notewitness-mt3-events-bridge = "notewitness.bridges.mt3_decoded_events_bridge:main"
+notewitness = "notewitness.interfaces.cli.main:main"
+notewitness-provider-bridge = "notewitness.interfaces.bridges.dispatcher:main"
+notewitness-mt3-events-bridge = "notewitness.interfaces.bridges.mt3_decoded_events_bridge:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/notewitness"]

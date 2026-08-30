@@ -1,0 +1,51 @@
+"""Typed, dependency-free contracts for local analysis and durable jobs."""
+
+from notewitness.core.analysis.analysis import (
+    ActivityHypothesis,
+    AlignmentOutcome,
+    AnalysisBatch,
+    AnalysisRequest,
+    AnalysisResult,
+    AnalysisStage,
+    AnalysisState,
+    DerivedFeatureHypothesis,
+    InstrumentHypothesis,
+    JobCheckpoint,
+    JobState,
+    MediaProbeHypothesis,
+    NoteHypothesis,
+    PedagogicalRelationHypothesis,
+    PitchPointHypothesis,
+    RhythmHarmonyHypothesis,
+    ScoreAlignmentHypothesis,
+    SpeakerSegmentHypothesis,
+    SpeechSegmentHypothesis,
+    WordHypothesis,
+)
+from notewitness.core.analysis.jobs import AnalysisJobSpec, DurableJob
+
+
+__all__ = (
+    "ActivityHypothesis",
+    "AlignmentOutcome",
+    "AnalysisBatch",
+    "AnalysisJobSpec",
+    "AnalysisRequest",
+    "AnalysisResult",
+    "AnalysisStage",
+    "AnalysisState",
+    "DerivedFeatureHypothesis",
+    "DurableJob",
+    "InstrumentHypothesis",
+    "JobCheckpoint",
+    "JobState",
+    "MediaProbeHypothesis",
+    "NoteHypothesis",
+    "PedagogicalRelationHypothesis",
+    "PitchPointHypothesis",
+    "RhythmHarmonyHypothesis",
+    "ScoreAlignmentHypothesis",
+    "SpeakerSegmentHypothesis",
+    "SpeechSegmentHypothesis",
+    "WordHypothesis",
+)

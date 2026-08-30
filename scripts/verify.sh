@@ -10,12 +10,12 @@ export PYTHONPATH="$repo_dir/src"
 
 python3 -m json.tool schemas/v0.1/evidence-graph.schema.json >/dev/null
 python3 -m json.tool schemas/v0.1/context.jsonld >/dev/null
-python3 -m json.tool fixtures/synthetic_lesson/project.json >/dev/null
+python3 -m json.tool examples/synthetic-lesson/project.json >/dev/null
 python3 -m json.tool docs/workbench-runtime.example.json >/dev/null
 python3 scripts/verify_public_hygiene.py
 python3 -m unittest discover -s tests -t . -v
-python3 -m notewitness validate fixtures/synthetic_lesson/project.json
-python3 -m notewitness inspect fixtures/synthetic_lesson/project.json >/dev/null
+python3 -m notewitness validate examples/synthetic-lesson/project.json
+python3 -m notewitness inspect examples/synthetic-lesson/project.json >/dev/null
 python3 -m notewitness capabilities >/dev/null
 python3 -m notewitness --version >/dev/null
 doctor_status=0
@@ -37,22 +37,13 @@ python3 -m notewitness transcription-plan \
   --source-id source:verify \
   --duration-us 1000000 \
   --model-profile profile:precise >/dev/null
-node --check src/notewitness/presentation/workbench_assets/app.js
-node --check src/notewitness/presentation/workbench_assets/workbench_ui.mjs
-node --check src/notewitness/presentation/workbench_assets/ui/utils.mjs
-node --check src/notewitness/presentation/workbench_assets/ui/shell.mjs
-node --check src/notewitness/presentation/workbench_assets/ui/timeline.mjs
-node --check src/notewitness/presentation/workbench_assets/ui/panels.mjs
-node --check src/notewitness/presentation/workbench_assets/ui/processing.mjs
-node --check src/notewitness/presentation/workbench_assets/ui/context.mjs
-node --check src/notewitness/presentation/workbench_assets/ui/transport.mjs
-node --check src/notewitness/presentation/workbench_assets/js/api.mjs
-node --check src/notewitness/presentation/workbench_assets/js/playback.mjs
-node --check src/notewitness/presentation/workbench_assets/js/processing.mjs
-node --check src/notewitness/presentation/workbench_assets/js/actions.mjs
+while IFS= read -r module; do
+  node --check "$module"
+done < <(find src/notewitness/workbench/assets -type f \( -name '*.js' -o -name '*.mjs' \) | sort)
 node --check scripts/render_pages_demo.mjs
 node --check scripts/pages_demo_client.js
 python3 -m py_compile scripts/assemble_pages_demo.py
+python3 -m py_compile scripts/build_demo_state.py
 pages_site_dir=$(mktemp -d "${TMPDIR:-/tmp}/notewitness-pages.XXXXXX")
 trap 'rm -rf "$pages_site_dir"' EXIT
 bash scripts/build_pages_demo.sh "$pages_site_dir"

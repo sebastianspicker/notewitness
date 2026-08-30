@@ -1,6 +1,6 @@
 # Local provider bridges
 
-`src/notewitness/bridges/` contains optional executable adapters for the strict
+`src/notewitness/interfaces/bridges/` contains optional executable adapters for the strict
 [analysis-suite JSON v1 protocol](analysis-suite-protocol.md). They are not
 installed Python dependencies and they do not choose, download, cache, or name
 models. The host continues to own the private media/model identities, model

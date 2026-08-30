@@ -11,7 +11,7 @@ identifiers.
 - Add `notewitness --version` and extend installed-package CI smoke checks.
 - Include the complete AGPL-3.0 license text.
 
-## [0.1.0a0] - Unreleased candidate
+## [0.1.0a0] - Unreleased
 
-Proposed first alpha of the local-first evidence workbench. Scope and limitations are recorded in
-[`docs/releases/0.1.0a0.md`](docs/releases/0.1.0a0.md).
+Planned first alpha of the local-first evidence workbench. The current scope
+and limitations are documented in [`docs/capabilities.md`](docs/capabilities.md).
