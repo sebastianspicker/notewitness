@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import time
 import unittest
 
-from notewitness.analysis.adapters.analysis_cli import (
+from notewitness.analysis.suite.adapter import (
     AnalysisCLICancelled,
     AnalysisCLIExecutionError,
     LocalAnalysisCLIExecution,

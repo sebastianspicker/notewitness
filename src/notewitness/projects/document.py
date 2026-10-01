@@ -13,21 +13,16 @@ from notewitness.core.evidence.contract import (
     ValidationIssue,
 )
 from notewitness.core.evidence.graph import EvidenceGraph
+from notewitness.core.strict_json import reject_duplicate_keys
 
 
 class _DuplicateKeyError(ValueError):
     pass
 
 
-def _object_without_duplicate_keys(
-    pairs: list[tuple[str, Any]],
-) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise _DuplicateKeyError(f"duplicate object key {key!r}")
-        result[key] = value
-    return result
+_object_without_duplicate_keys = reject_duplicate_keys(
+    lambda key: _DuplicateKeyError(f"duplicate object key {key!r}")
+)
 
 
 def _reject_nonstandard_number(value: str) -> None:

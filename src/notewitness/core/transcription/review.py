@@ -7,10 +7,8 @@ from enum import StrEnum
 
 from notewitness.core.time import MediaSpan
 from notewitness.core.transcription.shared import (
-    _finite_number_in_range,
     _require_bool,
     _require_enum,
-    _validate_timestamp,
 )
 from notewitness.core.transcription._review_validation import (
     validate_speaker_correction,
@@ -63,30 +61,6 @@ class SpeakerCorrection:
 
 
 @dataclass(frozen=True, slots=True)
-class TranscriptCorrection:
-    correction_id: str
-    source_word_ids: tuple[str, ...]
-    replacement_text: str
-    author_id: str
-    reason: str
-    parent_revision_ids: tuple[str, ...]
-    created_at: str
-
-    def __post_init__(self) -> None:
-        if not self.correction_id or not self.source_word_ids or not self.author_id:
-            raise ValueError("Transcript corrections require IDs, words, and author.")
-        if len(self.source_word_ids) != len(set(self.source_word_ids)):
-            raise ValueError("Transcript correction word IDs must be unique.")
-        if not self.reason or not self.parent_revision_ids:
-            raise ValueError(
-                "Transcript corrections require a reason and parent revision."
-            )
-        if len(self.parent_revision_ids) != len(set(self.parent_revision_ids)):
-            raise ValueError("Transcript correction parent revisions must be unique.")
-        _validate_timestamp(self.created_at, "created_at", required=True)
-
-
-@dataclass(frozen=True, slots=True)
 class TranscriptReplacementPreview:
     """Non-mutating search/replace preview over canonical word IDs."""
 
@@ -104,35 +78,6 @@ class TranscriptReplacementPreview:
         if len(self.matched_word_ids) != len(set(self.matched_word_ids)):
             raise ValueError("Replacement preview word IDs must be unique.")
         _require_bool(self.case_sensitive, "case_sensitive")
-
-
-@dataclass(frozen=True, slots=True)
-class TranscriptEditorPreferences:
-    follow_selection: bool = True
-    playback_speed: float = 1.0
-    zoom: float = 1.0
-
-    def __post_init__(self) -> None:
-        _require_bool(self.follow_selection, "follow_selection")
-        if not _finite_number_in_range(self.playback_speed, 0.25, 3.0):
-            raise ValueError("playback_speed must be in [0.25, 3.0].")
-        if not _finite_number_in_range(self.zoom, 0.5, 4.0):
-            raise ValueError("zoom must be in [0.5, 4.0].")
-
-
-@dataclass(frozen=True, slots=True)
-class TranscriptDraftCheckpoint:
-    run_id: str
-    revision_id: str
-    last_word_id: str | None
-    partial: bool
-    created_at: str
-
-    def __post_init__(self) -> None:
-        if not self.run_id or not self.revision_id:
-            raise ValueError("Draft checkpoints require run and revision IDs.")
-        _require_bool(self.partial, "partial")
-        _validate_timestamp(self.created_at, "created_at", required=True)
 
 
 @dataclass(frozen=True, slots=True)

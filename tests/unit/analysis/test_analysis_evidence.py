@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import unittest
 
-from notewitness.analysis.analysis_evidence import (
+from notewitness.analysis.suite.evidence import (
     AnalysisEvidenceContext,
     AnalysisEvidenceError,
     append_analysis_batches,

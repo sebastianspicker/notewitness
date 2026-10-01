@@ -6,10 +6,10 @@ import threading
 import time
 import unittest
 
-from notewitness.analysis.adapters.analysis_cli import LocalAnalysisCLIExecution
-from notewitness.analysis.resumable_analysis import ResumableAnalysisCoordinator
+from notewitness.analysis.suite.adapter import LocalAnalysisCLIExecution
+from notewitness.analysis.suite.coordinator import ResumableAnalysisCoordinator
 from notewitness.core.analysis.analysis import AnalysisStage
-from notewitness.analysis.runs.sqlite_job_store import JobConflictError
+from notewitness.analysis.suite.job_store import JobConflictError
 from notewitness.projects.store import ProjectStore
 
 from tests.integration.analysis.support import fixture, configure_note_continuation

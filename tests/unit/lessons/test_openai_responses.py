@@ -6,9 +6,8 @@ from pathlib import Path
 import unittest
 
 from notewitness.evidence import EvidenceGraph
+from notewitness.core.evidence.contract import NetworkAccessDenied, NetworkMode
 from notewitness.lessons.network import (
-    NetworkAccessDenied,
-    NetworkMode,
     OpenAIHTTPTransport,
     OPENAI_RESPONSES_URL,
 )

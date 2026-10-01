@@ -10,26 +10,24 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from notewitness.analysis.adapters.analysis_cli import (
+from notewitness.analysis.suite.adapter import (
     LocalAnalysisCLIAdapter,
     LocalAnalysisCLISettings,
     LocalAnalysisSource,
 )
-from notewitness.analysis.analysis_runtime import (
+from notewitness.analysis.suite.runtime import (
     LocalAnalysisRunRequest,
     LocalAnalysisRuntime,
     LocalAnalysisRuntimeError,
     LocalAnalysisStep,
 )
-from notewitness.analysis.run_integration import (
-    RunIntegrationError,
-    integrate_completed_run,
-)
-from notewitness.lessons.transcript_review_service import add_project_actor
+from notewitness.analysis.runs.integration import integrate_completed_run
+from notewitness.analysis.runs.publication import RunIntegrationError
+from notewitness.lessons.actors import add_project_actor
 from notewitness.lessons.evidence_review import create_exact_time_bookmark
 from notewitness.core.analysis.analysis import AnalysisStage
 from notewitness.core.time import MediaSpan
-from notewitness.analysis.local_tools import LocalTool
+from notewitness.analysis.local_tools.discovery import LocalTool
 from notewitness.projects.media import ingest_media
 from notewitness.projects.initialize import initialize_project
 from notewitness.projects.store import ProjectStore
@@ -158,7 +156,7 @@ class LocalAnalysisRuntimeTests(unittest.TestCase):
             )
 
             with patch(
-                "notewitness.analysis.analysis_runtime.integrate_completed_run",
+                "notewitness.analysis.suite.runtime.integrate_completed_run",
                 side_effect=RunIntegrationError("injected publication failure"),
             ), self.assertRaises(LocalAnalysisRuntimeError):
                 LocalAnalysisRuntime().run(request)

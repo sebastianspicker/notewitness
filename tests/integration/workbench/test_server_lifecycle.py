@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
-from notewitness.workbench.processing import WorkbenchProcessingError
+from notewitness.workbench.jobs import WorkbenchProcessingError
 from notewitness.workbench.server import LocalWorkbenchServer, serve_workbench
 from notewitness.projects.initialize import initialize_project
 

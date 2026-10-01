@@ -11,35 +11,42 @@ import threading
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from notewitness.lessons._review_contracts import ReviewError
+from notewitness.lessons.actors import TranscriptReviewError
+from notewitness.lessons.review_rules import ReviewError
 from notewitness.lessons.music_export import MusicExportError
-from notewitness.projects.artifacts import LocalArtifactError
+from notewitness.projects.artifacts import LocalArtifactError, TranscriptPublicationError
 from notewitness.projects.media import MediaIngestError
 from notewitness.projects.store import ProjectConflictError, ProjectStore, ProjectStoreError
 
 from .api import WorkbenchApiMixin
+from .executor import LocalWorkbenchExecutor
+from .jobs import WorkbenchExecutor, WorkbenchProcessingError
 from .media import WorkbenchMediaMixin
 from .protocol import (
-    _ALLOWED_BIND_HOST,
-    _ASSETS,
-    _LAUNCH_PATH_PREFIX,
-    _SESSION_COOKIE_NAME,
+    RequestError,
+    ALLOWED_BIND_HOST,
+    ASSETS,
+    LAUNCH_PATH_PREFIX,
+    SESSION_COOKIE_NAME,
     WorkbenchProtocolMixin,
     WorkbenchServerError,
-    _coarse_log_route,
+    coarse_log_route,
 )
-from .local_executor import LocalWorkbenchExecutor
-from .processing import (
-    WorkbenchExecutor,
-    WorkbenchProcessingError,
-    WorkbenchProcessingService,
-)
+from .processing import WorkbenchProcessingService
 
 
 _POST_ERROR_RESPONSES = (
     ((ProjectConflictError,), HTTPStatus.CONFLICT, "project_changed"),
     (
-        (ReviewError, ValueError, LocalArtifactError, MusicExportError),
+        (
+            RequestError,
+            ReviewError,
+            TranscriptReviewError,
+            ValueError,
+            LocalArtifactError,
+            TranscriptPublicationError,
+            MusicExportError,
+        ),
         HTTPStatus.UNPROCESSABLE_ENTITY,
         None,
     ),
@@ -108,7 +115,7 @@ class WorkbenchRequestHandler(
 
     def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
         method = self.command if self.command in {"GET", "HEAD", "POST"} else "OTHER"
-        route = _coarse_log_route(urlsplit(self.path).path)
+        route = coarse_log_route(urlsplit(self.path).path)
         safe_code = str(code) if isinstance(code, int) or str(code).isdigit() else "-"
         safe_size = str(size) if isinstance(size, int) or str(size).lstrip("-").isdigit() else "-"
         sys.stderr.write(f"notewitness-workbench: {method} {route} {safe_code} {safe_size}\n")
@@ -132,10 +139,10 @@ class WorkbenchRequestHandler(
         self._json_error(HTTPStatus.NOT_FOUND, "route_not_found", send_body=send_body)
 
     def _dispatch_public_get(self, path: str, *, send_body: bool) -> bool:
-        if path in _ASSETS:
+        if path in ASSETS:
             self._asset(path, send_body=send_body)
             return True
-        if path.startswith(_LAUNCH_PATH_PREFIX):
+        if path.startswith(LAUNCH_PATH_PREFIX):
             self._launch(path, send_body=send_body)
             return True
         return False
@@ -153,7 +160,7 @@ class WorkbenchRequestHandler(
                 return True
             try:
                 self._media(unquote(encoded_source_id, errors="strict"), send_body=send_body)
-            except (UnicodeError, ReviewError, ProjectStoreError, OSError):
+            except (UnicodeError, RequestError, ReviewError, ProjectStoreError, OSError):
                 self._json_error(HTTPStatus.NOT_FOUND, "media_not_found")
             return True
         return False
@@ -180,12 +187,12 @@ class WorkbenchRequestHandler(
         tokens: list[str] = []
         for component in self.headers.get("Cookie", "").split(";"):
             name, separator, value = component.strip().partition("=")
-            if separator and name == _SESSION_COOKIE_NAME:
+            if separator and name == SESSION_COOKIE_NAME:
                 tokens.append(value)
         return len(tokens) == 1 and self.server.session_is_authenticated(tokens[0])
 
     def _launch(self, path: str, *, send_body: bool) -> None:
-        token = path.removeprefix(_LAUNCH_PATH_PREFIX)
+        token = path.removeprefix(LAUNCH_PATH_PREFIX)
         if not send_body:
             self._json_error(HTTPStatus.METHOD_NOT_ALLOWED, "launch_requires_get", send_body=False)
             return
@@ -200,7 +207,7 @@ class WorkbenchRequestHandler(
         self.end_headers()
 
     def _asset(self, path: str, *, send_body: bool) -> None:
-        filename, content_type = _ASSETS[path]
+        filename, content_type = ASSETS[path]
         try:
             body = (self.server.assets_root / filename).read_bytes()
         except OSError:
@@ -243,7 +250,7 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
                 self.project_root, runtime_config_path
             )
         self._processing_closed = True
-        super().__init__((_ALLOWED_BIND_HOST, port), WorkbenchRequestHandler)
+        super().__init__((ALLOWED_BIND_HOST, port), WorkbenchRequestHandler)
         try:
             self.processing = WorkbenchProcessingService(self.project_root, executor)
         except BaseException:
@@ -259,7 +266,7 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
 
     @property
     def origin(self) -> str:
-        return f"http://{_ALLOWED_BIND_HOST}:{self.server_port}"
+        return f"http://{ALLOWED_BIND_HOST}:{self.server_port}"
 
     @property
     def launch_url(self) -> str:
@@ -267,7 +274,7 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
             token = self._launch_token
         if token is None:
             raise WorkbenchServerError("workbench launch URL has already been used.")
-        return f"{self.origin}{_LAUNCH_PATH_PREFIX}{token}"
+        return f"{self.origin}{LAUNCH_PATH_PREFIX}{token}"
 
     def consume_launch_token(self, token: str) -> bool:
         with self._launch_token_lock:
@@ -282,11 +289,11 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
 
     @property
     def session_cookie(self) -> str:
-        return f"{_SESSION_COOKIE_NAME}={self._session_token}; HttpOnly; SameSite=Strict; Path=/"
+        return f"{SESSION_COOKIE_NAME}={self._session_token}; HttpOnly; SameSite=Strict; Path=/"
 
     @property
     def allowed_hosts(self) -> frozenset[str]:
-        return frozenset({f"{_ALLOWED_BIND_HOST}:{self.server_port}", f"localhost:{self.server_port}"})
+        return frozenset({f"{ALLOWED_BIND_HOST}:{self.server_port}", f"localhost:{self.server_port}"})
 
     @property
     def allowed_origins(self) -> frozenset[str]:
@@ -294,6 +301,6 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
 
 
 def _require_assets(root: Path) -> None:
-    missing = [filename for filename, _ in _ASSETS.values() if not (root / filename).is_file()]
+    missing = [filename for filename, _ in ASSETS.values() if not (root / filename).is_file()]
     if missing:
         raise WorkbenchServerError(f"Workbench assets are missing: {', '.join(sorted(missing))}.")

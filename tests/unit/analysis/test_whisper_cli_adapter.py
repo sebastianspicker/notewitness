@@ -7,12 +7,12 @@ import stat
 from tempfile import TemporaryDirectory
 import unittest
 
-from notewitness.analysis.adapters.whisper_cli import (
+from notewitness.analysis.transcription.whisper_cli import (
     WhisperCLIAdapter,
     WhisperCLIError,
     WhisperCLISettings,
 )
-from notewitness.analysis.local_tools import LocalTool
+from notewitness.analysis.local_tools.discovery import LocalTool
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "macOS isolation contract")

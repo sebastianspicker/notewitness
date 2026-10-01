@@ -82,3 +82,7 @@ class WorkbenchServerExportTests(WorkbenchServerTestCase):
         exported = self.project / "exports" / "lesson-transcript.txt"
         self.assertIn("[UNREVIEWED MACHINE SUGGESTION]", exported.read_text(encoding="utf-8"))
         self.assertEqual(0o600, stat.S_IMODE(exported.stat().st_mode))
+        status, _, raw = self._request("POST", "/api/exports/transcript", body=json.dumps(request).encode(), headers=headers)
+        self.assertEqual(422, status)
+        self.assertIn("error", json.loads(raw))
+        self.assertIn("[UNREVIEWED MACHINE SUGGESTION]", exported.read_text(encoding="utf-8"))

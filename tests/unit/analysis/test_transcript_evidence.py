@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from notewitness.analysis.transcript_evidence import (
+from notewitness.analysis.transcription.evidence import (
     TranscriptEvidenceError,
     _append_or_require_unknown_actor,
 )

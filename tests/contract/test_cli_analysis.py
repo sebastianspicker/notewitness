@@ -8,7 +8,7 @@ import platform
 from tempfile import TemporaryDirectory
 import unittest
 
-from notewitness.workbench._projection import project_workbench
+from notewitness.workbench.snapshot import project_workbench
 from notewitness.interfaces.cli.main import main
 from notewitness.projects.media import ingest_media
 from notewitness.projects.initialize import initialize_project

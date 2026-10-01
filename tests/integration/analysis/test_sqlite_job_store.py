@@ -11,26 +11,27 @@ from unittest.mock import patch
 from notewitness.core.analysis.analysis import AnalysisStage, JobState
 from notewitness.core.analysis.jobs import AnalysisJobSpec
 from notewitness.core.time import MediaSpan
-from notewitness.projects._private_paths import private_directory
-from notewitness.analysis.runs.sqlite_job_store import (
+from notewitness.projects.private_fs import private_directory
+from notewitness.analysis.suite.job_store import (
     JobConflictError,
     JobStoreError,
     SQLiteJobStore,
-    _secure_private_sidecar,
+    _job_store_error,
 )
+from notewitness.projects.private_sqlite import PrivateSQLiteFailure
 
 
 SHA = "a" * 64
 
 
-def _secure(sidecar: Path) -> None:
+def _secure(store: SQLiteJobStore, sidecar: Path) -> None:
     with private_directory(sidecar.parent) as parent:
-        _secure_private_sidecar(parent, sidecar.name)
+        store._database.secure_sidecar(parent, sidecar.name)
 
 
 def _secure_store_sidecars(store: SQLiteJobStore) -> None:
     with private_directory(store.path.parent) as parent:
-        store._private_sidecars(parent)
+        store._database.secure_sidecars(parent)
 
 
 def spec(**overrides: object) -> AnalysisJobSpec:
@@ -329,7 +330,7 @@ class SQLiteJobStoreTests(unittest.TestCase):
                 return real_open(path, flags, mode, **kwargs)
 
             with patch(
-                "notewitness.analysis.runs.sqlite_job_store.os.open",
+                "notewitness.projects.private_sqlite.os.open",
                 side_effect=disappear,
             ):
                 _secure_store_sidecars(store)
@@ -363,7 +364,7 @@ class SQLiteJobStoreTests(unittest.TestCase):
                 return real_open(path, flags, mode, **kwargs)
 
             with patch(
-                "notewitness.analysis.runs.sqlite_job_store.os.open", side_effect=deny):
+                "notewitness.projects.private_sqlite.os.open", side_effect=deny):
                 with self.assertRaisesRegex(
                     JobStoreError,
                     "^database sidecar could not be secured$",
@@ -372,6 +373,7 @@ class SQLiteJobStoreTests(unittest.TestCase):
 
     def test_sidecar_chmod_uses_open_descriptor_after_pathname_swap(self) -> None:
         with TemporaryDirectory() as temporary:
+            store = SQLiteJobStore(Path(temporary) / "store.sqlite")
             parent = Path(temporary)
             sidecar = parent / "jobs.sqlite-wal"
             secured = parent / "opened-sidecar"
@@ -388,16 +390,17 @@ class SQLiteJobStoreTests(unittest.TestCase):
                 real_fchmod(descriptor, mode)
 
             with patch(
-                "notewitness.analysis.runs.sqlite_job_store.os.fchmod",
+                "notewitness.projects.private_sqlite.os.fchmod",
                 side_effect=swap_then_chmod,
             ):
-                _secure(sidecar)
+                _secure(store, sidecar)
 
             self.assertEqual(0o600, secured.stat().st_mode & 0o777)
             self.assertEqual(0o644, sidecar.stat().st_mode & 0o777)
 
     def test_sidecar_close_failure_never_replaces_earlier_failure(self) -> None:
         with TemporaryDirectory() as temporary:
+            store = SQLiteJobStore(Path(temporary) / "store.sqlite")
             sidecar = Path(temporary) / "jobs.sqlite-wal"
             sidecar.write_bytes(b"sidecar")
             real_close = os.close
@@ -411,11 +414,11 @@ class SQLiteJobStoreTests(unittest.TestCase):
 
             with (
                 patch(
-                    "notewitness.analysis.runs.sqlite_job_store.os.fchmod",
+                    "notewitness.projects.private_sqlite.os.fchmod",
                     side_effect=OSError("chmod failure"),
                 ),
                 patch(
-                    "notewitness.analysis.runs.sqlite_job_store.os.close",
+                    "notewitness.projects.private_sqlite.os.close",
                     side_effect=close_then_fail,
                 ),
                 self.assertRaisesRegex(
@@ -423,12 +426,13 @@ class SQLiteJobStoreTests(unittest.TestCase):
                     "^database sidecar could not be secured$",
                 ) as caught,
             ):
-                _secure(sidecar)
+                _secure(store, sidecar)
 
             self.assertEqual("chmod failure", str(caught.exception.__cause__))
 
     def test_sidecar_close_failure_replaces_success(self) -> None:
         with TemporaryDirectory() as temporary:
+            store = SQLiteJobStore(Path(temporary) / "store.sqlite")
             sidecar = Path(temporary) / "jobs.sqlite-wal"
             sidecar.write_bytes(b"sidecar")
             real_close = os.close
@@ -442,7 +446,7 @@ class SQLiteJobStoreTests(unittest.TestCase):
 
             with (
                 patch(
-                    "notewitness.analysis.runs.sqlite_job_store.os.close",
+                    "notewitness.projects.private_sqlite.os.close",
                     side_effect=close_then_fail,
                 ),
                 self.assertRaisesRegex(
@@ -450,7 +454,7 @@ class SQLiteJobStoreTests(unittest.TestCase):
                     "^database sidecar could not be secured$",
                 ) as caught,
             ):
-                _secure(sidecar)
+                _secure(store, sidecar)
 
             self.assertEqual("close failure", str(caught.exception.__cause__))
 
@@ -459,6 +463,7 @@ class SQLiteJobStoreTests(unittest.TestCase):
             pass
 
         with TemporaryDirectory() as temporary:
+            store = SQLiteJobStore(Path(temporary) / "store.sqlite")
             sidecar = Path(temporary) / "jobs.sqlite-wal"
             sidecar.write_bytes(b"sidecar")
             sentinel = SentinelFailure()
@@ -483,16 +488,16 @@ class SQLiteJobStoreTests(unittest.TestCase):
 
             with (
                 patch(
-                    "notewitness.analysis.runs.sqlite_job_store.os.fstat",
+                    "notewitness.projects.private_sqlite.os.fstat",
                     side_effect=fail_fstat,
                 ),
                 patch(
-                    "notewitness.analysis.runs.sqlite_job_store.os.close",
+                    "notewitness.projects.private_sqlite.os.close",
                     side_effect=close_then_fail,
                 ),
                 self.assertRaises(SentinelFailure) as caught,
             ):
-                _secure(sidecar)
+                _secure(store, sidecar)
 
             self.assertIs(sentinel, caught.exception)
             self.assertEqual(descriptors, file_closes)
@@ -504,6 +509,7 @@ class SQLiteJobStoreTests(unittest.TestCase):
             pass
 
         with TemporaryDirectory() as temporary:
+            store = SQLiteJobStore(Path(temporary) / "store.sqlite")
             sidecar = Path(temporary) / "jobs.sqlite-wal"
             sidecar.write_bytes(b"sidecar")
             sentinel = SentinelFailure()
@@ -525,18 +531,88 @@ class SQLiteJobStoreTests(unittest.TestCase):
 
             with (
                 patch(
-                    "notewitness.analysis.runs.sqlite_job_store.os.fchmod",
+                    "notewitness.projects.private_sqlite.os.fchmod",
                     side_effect=fail_fchmod,
                 ),
                 patch(
-                    "notewitness.analysis.runs.sqlite_job_store.os.close",
+                    "notewitness.projects.private_sqlite.os.close",
                     side_effect=close_then_fail,
                 ),
                 self.assertRaises(SentinelFailure) as caught,
             ):
-                _secure(sidecar)
+                _secure(store, sidecar)
 
             self.assertIs(sentinel, caught.exception)
             self.assertEqual(descriptors, file_closes)
             with self.assertRaises(OSError):
                 os.fstat(descriptors[0])
+
+
+class SQLiteJobStoreErrorTranslationTests(unittest.TestCase):
+    def test_every_shared_failure_keeps_its_job_store_message(self) -> None:
+        expected = {
+            PrivateSQLiteFailure.PARENT_NOT_PRIVATE:
+                "database parent must be an existing private directory",
+            PrivateSQLiteFailure.PARENT_IDENTITY_CHANGED:
+                "database parent identity changed or is not private",
+            PrivateSQLiteFailure.DATABASE_NOT_REGULAR:
+                "database path must be a regular owner-private non-symlink file",
+            PrivateSQLiteFailure.DATABASE_NOT_PRIVATE:
+                "database path must be a regular owner-private non-symlink file",
+            PrivateSQLiteFailure.SIDECAR_NOT_REGULAR:
+                "database path must be a regular non-symlink file",
+            PrivateSQLiteFailure.SIDECAR_NOT_PRIVATE: "database file must be owner-private",
+            PrivateSQLiteFailure.SIDECAR_ACCESS_FAILED: "database sidecar could not be secured",
+        }
+        self.assertEqual(set(PrivateSQLiteFailure), set(expected))
+        for failure, message in expected.items():
+            with self.subTest(failure=failure):
+                error = _job_store_error(failure)
+                self.assertIs(JobStoreError, type(error))
+                self.assertEqual(message, str(error))
+
+    def test_observable_store_failures_keep_their_messages(self) -> None:
+        with TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            shared = parent / "shared"; shared.mkdir(); shared.chmod(0o755)
+            with self.assertRaisesRegex(
+                JobStoreError, "^database parent must be an existing private directory$"
+            ):
+                SQLiteJobStore(shared / "jobs.sqlite")
+
+            private = parent / "private"; private.mkdir(mode=0o700)
+            readable = private / "readable.sqlite"; readable.touch(mode=0o600)
+            readable.chmod(0o644)
+            with self.assertRaisesRegex(
+                JobStoreError,
+                "^database path must be a regular owner-private non-symlink file$",
+            ):
+                SQLiteJobStore(readable)
+
+            store = SQLiteJobStore(private / "jobs.sqlite")
+            private.rename(parent / "displaced")
+            private.mkdir(mode=0o700)
+            with self.assertRaisesRegex(
+                JobStoreError, "^database parent identity changed or is not private$"
+            ):
+                store.get("job:test")
+
+    def test_close_failure_defers_to_an_active_exception(self) -> None:
+        with TemporaryDirectory() as temporary:
+            store = SQLiteJobStore(Path(temporary) / "jobs.sqlite")
+            real_close = os.close
+            real_fstat = os.fstat
+
+            def close_then_fail(descriptor: int) -> None:
+                is_file = stat.S_ISREG(real_fstat(descriptor).st_mode)
+                real_close(descriptor)
+                if is_file:
+                    raise OSError("close failure")
+
+            with patch(
+                "notewitness.projects.private_sqlite.os.close", side_effect=close_then_fail
+            ):
+                try:
+                    raise KeyError("body failure")
+                except KeyError:
+                    _secure_store_sidecars(store)

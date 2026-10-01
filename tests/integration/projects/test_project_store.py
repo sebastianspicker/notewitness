@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from notewitness.projects.initialize import initialize_project
-from notewitness.projects._private_paths import PrivatePathError, private_directory
+from notewitness.projects.private_fs import PrivatePathError, private_directory
 from notewitness.projects.store import (
     ProjectConflictError,
     ProjectStore,

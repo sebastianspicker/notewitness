@@ -11,8 +11,7 @@ import time
 import unittest
 from unittest import mock
 
-from notewitness.analysis.local_tools import (
-    BoundedLocalToolRunner,
+from notewitness.analysis.local_tools.contracts import (
     LocalToolCancelled,
     LocalToolError,
     LocalToolIdentityChanged,
@@ -21,8 +20,9 @@ from notewitness.analysis.local_tools import (
     LocalToolUnavailable,
     MAX_TOOL_OUTPUT_BYTES,
     NetworkIsolationUnavailable,
-    discover_local_tool,
 )
+from notewitness.analysis.local_tools.discovery import discover_local_tool
+from notewitness.analysis.local_tools.runner import BoundedLocalToolRunner
 from notewitness.analysis.local_tools.policy import (
     resource_limited_launcher_command,
     trusted_python_launcher,

@@ -5,14 +5,14 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from notewitness.lessons.pedagogical_digest import suggest_practice_relations
-from notewitness.lessons.transcript_review_service import add_project_actor
-from notewitness.lessons._review_contracts import ReviewError as WorkbenchError
+from notewitness.lessons.actors import add_project_actor
+from notewitness.lessons.review_rules import ReviewError
 from notewitness.lessons.evidence_review import (
     accept_evidence_suggestion,
     accept_relation_suggestion,
     reject_relation_suggestion,
 )
-from notewitness.workbench._projection import project_workbench
+from notewitness.workbench.snapshot import project_workbench
 from notewitness.evidence import EvidenceGraph
 from notewitness.projects.media import ingest_media
 from notewitness.projects.initialize import initialize_project
@@ -47,7 +47,7 @@ class PedagogicalDigestTests(unittest.TestCase):
             relation_id = suggest_practice_relations(str(project)).relation_ids[0]
             before = ProjectStore(project).load()
 
-            with self.assertRaisesRegex(WorkbenchError, "Accept the transcript evidence"):
+            with self.assertRaisesRegex(ReviewError, "Accept the transcript evidence"):
                 accept_relation_suggestion(
                     str(project), relation_id=relation_id, author_id="actor:researcher",
                     reason="Reviewed locally.", expected_sha256=before.sha256,

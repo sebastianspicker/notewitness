@@ -8,12 +8,6 @@ from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
-from notewitness.core.evidence.contract import (
-    NetworkAccessDenied,
-    NetworkMode,
-    NetworkPolicy,
-)
-
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 MAX_REQUEST_BYTES = 64 * 1024
@@ -23,9 +17,6 @@ MAX_API_KEY_CHARS = 512
 
 __all__ = (
     "MAX_API_KEY_CHARS",
-    "NetworkAccessDenied",
-    "NetworkMode",
-    "NetworkPolicy",
     "OPENAI_RESPONSES_URL",
     "OpenAIHTTPTransport",
     "TransportFailure",

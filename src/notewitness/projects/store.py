@@ -21,6 +21,8 @@ from notewitness.core.evidence.graph import (
     EvidenceGraphError,
     MAX_PROJECT_BYTES,
 )
+from notewitness.core.strict_json import is_sha256_hex, reject_duplicate_keys
+from notewitness.projects.private_fs import open_directory_no_follow, trusted_absolute_path
 
 
 _DIRECTORY_MODE = 0o700
@@ -55,7 +57,7 @@ class ProjectStore:
         target = Path(project_root)
         if target.name == _PROJECT_NAME:
             target = target.parent
-        self.root = _trusted_absolute_path(target)
+        self.root = trusted_absolute_path(target)
 
     def load(self) -> ProjectSnapshot:
         """Load and validate the current project document without mutating it."""
@@ -81,7 +83,7 @@ class ProjectStore:
         expected_sha256: str | None = None,
     ) -> ProjectSnapshot:
         """Validate and atomically publish a mutation, optionally compare-and-swap."""
-        if expected_sha256 is not None and not _is_sha256(expected_sha256):
+        if expected_sha256 is not None and not is_sha256_hex(expected_sha256):
             raise ProjectConflictError("expected_sha256 must be a lowercase SHA-256 digest")
         with self.locked():
             with self._open_root() as root_descriptor:
@@ -147,37 +149,25 @@ class ProjectStore:
         return ProjectSnapshot(candidate, hashlib.sha256(raw).hexdigest())
 
 
-def _trusted_absolute_path(target: Path) -> Path:
-    absolute_target = Path(os.path.abspath(os.fspath(target)))
-    var_alias = Path("/var")
-    private_var = Path("/private/var")
-    if absolute_target == var_alias or var_alias in absolute_target.parents:
-        if var_alias.is_symlink() and Path(os.path.realpath(var_alias)) == private_var:
-            return private_var / absolute_target.relative_to(var_alias)
-    return absolute_target
-
-
 def _open_existing_private_directory(directory: Path) -> int:
     if directory == Path(os.path.sep):
         raise ProjectStoreError("project root must not be the filesystem root")
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    descriptor = os.open(os.path.sep, flags)
+    descriptor: int | None = None
     try:
-        for component in directory.parts[1:]:
-            child = os.open(component, flags, dir_fd=descriptor)
-            os.close(descriptor)
-            descriptor = child
+        descriptor = open_directory_no_follow(directory)
         _require_private_directory(descriptor, directory)
         return descriptor
     except OSError as exc:
-        os.close(descriptor)
+        if descriptor is not None:
+            os.close(descriptor)
         if exc.errno in {errno.ELOOP, errno.ENOTDIR, errno.ENOENT}:
             raise ProjectStoreError(
                 f"project root must be an existing non-symlink directory: {directory}"
             ) from exc
         raise
     except BaseException:
-        os.close(descriptor)
+        if descriptor is not None:
+            os.close(descriptor)
         raise
 
 
@@ -229,17 +219,12 @@ def _require_private_regular(metadata: os.stat_result, name: str) -> None:
         raise ProjectStoreError(f"project file must deny group and other access: {name}")
 
 
-def _parse_payload(raw: bytes) -> dict[str, Any]:
-    def no_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for key, value in pairs:
-            if key in result:
-                raise ValueError(f"duplicate object key {key!r}")
-            result[key] = value
-        return result
+_no_duplicates = reject_duplicate_keys(lambda key: ValueError(f"duplicate object key {key!r}"))
 
+
+def _parse_payload(raw: bytes) -> dict[str, Any]:
     try:
-        payload = json.loads(raw.decode("utf-8"), object_pairs_hook=no_duplicates)
+        payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicates)
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise ProjectStoreError(f"project document contains invalid JSON: {exc}") from exc
     if not isinstance(payload, dict):
@@ -312,7 +297,3 @@ def _open_lock(directory_descriptor: int) -> int:
     except BaseException:
         os.close(descriptor)
         raise
-
-
-def _is_sha256(value: str) -> bool:
-    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)

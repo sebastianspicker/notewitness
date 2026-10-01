@@ -28,9 +28,9 @@ annotations, and summaries are separate. A rerun cannot overwrite a human review
 ```text
 interfaces/CLI and bridges
   +-- projects ---------------------- owner-private project, artifacts, and media
-  +-- analysis/adapters ------------ bounded local ASR and music-analysis providers
-  +-- analysis/runs ---------------- SQLite jobs, leases, checkpoints, and raw replay
-  +-- analysis/run_integration ----- normalized provenance-linked evidence
+  +-- analysis/transcription ------- bounded local Whisper ASR and transcript evidence
+  +-- analysis/suite --------------- analysis-suite provider, durable jobs, checkpoints, raw replay
+  +-- analysis/runs ---------------- run workspace, sealed publication, provenance-linked integration
   +-- lessons ----------------------- review, lesson projections, and guarded exports
   +-- workbench --------------------- loopback HTTP, durable GUI queue, and browser UI
   +-- core -------------------------- pure evidence and domain contracts

@@ -5,9 +5,9 @@ import shutil
 from tempfile import TemporaryDirectory
 import unittest
 
-from notewitness.lessons.transcript_review_service import add_project_actor
+from notewitness.lessons.actors import add_project_actor
 from notewitness.lessons.pedagogical_digest import suggest_practice_relations
-from notewitness.lessons._review_contracts import ReviewError as WorkbenchError
+from notewitness.lessons.review_rules import ReviewError
 from notewitness.lessons.evidence_review import (
     accept_evidence_suggestion,
     accept_relation_suggestion,
@@ -15,7 +15,7 @@ from notewitness.lessons.evidence_review import (
     revise_evidence_annotation,
     set_practice_task_completed,
 )
-from notewitness.workbench._projection import project_workbench
+from notewitness.workbench.snapshot import project_workbench
 from notewitness.projects.media import ingest_media
 from notewitness.projects.initialize import initialize_project
 from notewitness.projects.store import ProjectConflictError, ProjectStore
@@ -33,7 +33,7 @@ class WorkbenchApplicationTests(unittest.TestCase):
             _append_note_suggestion(project, source_id)
             before = ProjectStore(project).load()
 
-            with self.assertRaisesRegex(WorkbenchError, "explicit human"):
+            with self.assertRaisesRegex(ReviewError, "explicit human"):
                 accept_evidence_suggestion(
                     str(project),
                     event_id="event:note-suggestion",
@@ -66,7 +66,7 @@ class WorkbenchApplicationTests(unittest.TestCase):
             for role in ("unknown", "machine", "system", "analysis"):
                 self.assertFalse(actors[f"actor:{role}"]["human_evidence_eligible"])
                 before = ProjectStore(project).load()
-                with self.assertRaisesRegex(WorkbenchError, "explicit human"):
+                with self.assertRaisesRegex(ReviewError, "explicit human"):
                     accept_evidence_suggestion(
                         str(project),
                         event_id="event:note-suggestion",
@@ -161,7 +161,7 @@ class WorkbenchApplicationTests(unittest.TestCase):
             self.assertEqual(1, len(lesson["full_transcript"]))
             self.assertEqual(0, len(lesson["transcript_suggestions"]))
 
-            with self.assertRaisesRegex(WorkbenchError, "was already reviewed"):
+            with self.assertRaisesRegex(ReviewError, "was already reviewed"):
                 accept_evidence_suggestion(
                     str(project),
                     event_id="event:note-suggestion",
@@ -258,7 +258,7 @@ class WorkbenchApplicationTests(unittest.TestCase):
                 accepted_relation.record_ids[0],
                 revisions[accepted_relation.revision_ids[1]]["record_id"],
             )
-            with self.assertRaisesRegex(WorkbenchError, "already reviewed"):
+            with self.assertRaisesRegex(ReviewError, "already reviewed"):
                 accept_relation_suggestion(
                     str(project),
                     relation_id=relation_id,

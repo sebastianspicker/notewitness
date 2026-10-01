@@ -11,17 +11,12 @@ import time
 import unittest
 from urllib.parse import urlsplit
 
-from notewitness.analysis.local_tools import (
-    BoundedLocalToolRunner,
-    LocalToolCancelled,
-    discover_local_tool,
-)
-from notewitness.lessons.transcript_review_service import add_project_actor
-from notewitness.workbench.processing import (
-    WorkbenchJobKind,
-    WorkbenchJobState,
-    WorkbenchProcessingService,
-)
+from notewitness.analysis.local_tools.contracts import LocalToolCancelled
+from notewitness.analysis.local_tools.discovery import discover_local_tool
+from notewitness.analysis.local_tools.runner import BoundedLocalToolRunner
+from notewitness.lessons.actors import add_project_actor
+from notewitness.workbench.jobs import WorkbenchJobKind, WorkbenchJobState
+from notewitness.workbench.processing import WorkbenchProcessingService
 from notewitness.projects.media import ingest_media
 from notewitness.workbench.server import LocalWorkbenchServer
 from notewitness.projects.initialize import initialize_project

@@ -153,7 +153,7 @@ CAPABILITIES = (
         "v0.1",
         CapabilityLevel.AVAILABLE,
         "Run a bounded local Whisper CLI with an explicit checkpoint and no network.",
-        "notewitness.analysis.adapters.whisper_cli.WhisperCLIAdapter",
+        "notewitness.analysis.transcription.whisper_cli.WhisperCLIAdapter",
         "Execution remains conditional on local tools, a checkpoint, and declared licenses.",
     ),
     _capability(
@@ -227,13 +227,13 @@ CAPABILITIES = (
         "v0.1",
         CapabilityLevel.AVAILABLE,
         "Run bounded JSON-speaking diarization and music engines with network denied.",
-        "notewitness.analysis.adapters.analysis_cli.LocalAnalysisCLIAdapter",
+        "notewitness.analysis.suite.adapter.LocalAnalysisCLIAdapter",
         "Tools, models, scores, versions, and licenses must be supplied explicitly.",
     ),
     _capability(
         "bounded_resumable_jobs", "runtime", "v0.1", CapabilityLevel.AVAILABLE,
         "Persist leases, cancellation, checkpoints, raw replay, and atomic publication.",
-        "notewitness.analysis.resumable_analysis",
+        "notewitness.analysis.suite.coordinator",
         "The prototype runs local workers from the CLI; no background daemon is installed.",
     ),
     _capability(
@@ -271,7 +271,7 @@ CAPABILITIES = (
         CapabilityLevel.AVAILABLE,
         "Validate source checksums, exact artifacts, effective settings, "
         "language probabilities, partial state, and retry lineage.",
-        "notewitness.analysis.transcription_runtime.LocalTranscriptionRuntime",
+        "notewitness.analysis.transcription.runtime.LocalTranscriptionRuntime",
         "The prototype writes completed-run manifests; resumable retry storage is separate.",
     ),
     _capability(
@@ -304,7 +304,7 @@ CAPABILITIES = (
     _capability(
         "human_review", "research", "v0.1", CapabilityLevel.AVAILABLE,
         "Keep machine suggestions separate from append-only human acceptance and correction.",
-        "notewitness.lessons.transcript_review_service",
+        "notewitness.lessons.transcript_review",
         "The graphical workbench covers acceptance and revision; contestation is future work.",
     ),
     _capability(
@@ -357,7 +357,7 @@ CAPABILITIES = (
     _capability(
         "persistent_voice_identity", "excluded", "all", CapabilityLevel.EXCLUDED,
         "No cross-project voiceprints or automatic identity inference.",
-        "notewitness.lessons.actor_eligibility",
+        "notewitness.lessons.actors",
     ),
 )
 

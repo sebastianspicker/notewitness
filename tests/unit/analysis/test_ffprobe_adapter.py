@@ -6,8 +6,9 @@ import platform
 from tempfile import TemporaryDirectory
 import unittest
 
-from notewitness.analysis.adapters.ffprobe import FFprobeMediaProbe, MediaProbeError
-from notewitness.analysis.local_tools import LocalTool, LocalToolIdentityChanged
+from notewitness.analysis.media_probe import FFprobeMediaProbe, MediaProbeError
+from notewitness.analysis.local_tools.contracts import LocalToolIdentityChanged
+from notewitness.analysis.local_tools.discovery import LocalTool
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "macOS isolation contract")

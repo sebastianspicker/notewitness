@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from notewitness.analysis.runs.sqlite_job_store import (
+from notewitness.analysis.suite.job_store import (
     JobConflictError,
     JobStoreError,
     SQLiteJobStore,

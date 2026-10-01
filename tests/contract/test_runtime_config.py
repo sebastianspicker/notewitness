@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from notewitness.projects.initialize import initialize_project
-from notewitness.workbench.local_executor import (
+from notewitness.workbench.executor import (
     LocalWorkbenchExecutor,
     WorkbenchRuntimeConfigurationError,
 )

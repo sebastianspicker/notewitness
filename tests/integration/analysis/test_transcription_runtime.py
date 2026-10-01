@@ -13,23 +13,21 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from notewitness.analysis.adapters.ffprobe import FFprobeMediaProbe
-from notewitness.analysis.adapters.whisper_cli import WhisperCLIAdapter, WhisperCLISettings
-from notewitness.analysis.transcription_runtime import (
+from notewitness.analysis.media_probe import FFprobeMediaProbe
+from notewitness.analysis.transcription.whisper_cli import WhisperCLIAdapter, WhisperCLISettings
+from notewitness.analysis.transcription.runtime import (
     LocalTranscriptionRequest,
     LocalTranscriptionRuntime,
     LocalTranscriptionRuntimeError,
 )
-from notewitness.analysis.run_integration import (
-    RunIntegrationError,
-    integrate_completed_run,
-)
-from notewitness.lessons.transcript_review_service import add_project_actor
+from notewitness.analysis.runs.integration import integrate_completed_run
+from notewitness.analysis.runs.publication import RunIntegrationError
+from notewitness.lessons.actors import add_project_actor
 from notewitness.lessons.evidence_review import create_exact_time_bookmark
 from notewitness.interfaces.cli.main import main
 from notewitness.core.transcription.options import TranscriptExportFormat
 from notewitness.core.transcription.options import DisfluencyPolicy
-from notewitness.analysis.local_tools import LocalTool
+from notewitness.analysis.local_tools.discovery import LocalTool
 from notewitness.projects.media import ingest_media
 from notewitness.projects.initialize import initialize_project
 from notewitness.projects.store import ProjectStore
@@ -194,7 +192,7 @@ class LocalTranscriptionRuntimeTests(unittest.TestCase):
             imported = ingest_media(root, source_path, create_restricted_rights=True)
 
             with patch(
-                "notewitness.analysis.transcription_runtime._publish_export",
+                "notewitness.analysis.transcription.runtime._publish_export",
                 side_effect=OSError("injected export failure"),
             ), self.assertRaises(LocalTranscriptionRuntimeError):
                 _runtime(parent, transcript=True, language=None).run(

@@ -15,6 +15,7 @@ from notewitness.analysis.local_tools.contracts import (
     LocalToolIdentityChanged,
     LocalToolUnavailable,
 )
+from notewitness.projects.private_fs import is_owner_private
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +132,7 @@ def validated_private_current_user_directory(path: Path) -> Path:
         metadata = resolved.stat()
     except OSError as exc:
         raise ValueError("Private directory is unavailable.") from exc
-    if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) & 0o077:
+    if not is_owner_private(metadata):
         raise ValueError(
             "Private directory must deny group and other access and be owned "
             "by the current user."
@@ -171,7 +172,7 @@ def _executable_identity(path: Path) -> LocalExecutableIdentity:
         raise LocalToolUnavailable("Local tool executable is unavailable.") from exc
     finally:
         os.close(descriptor)
-    if _stat_identity(before) != _stat_identity(after):
+    if executable_stat_identity(before) != executable_stat_identity(after):
         raise LocalToolUnavailable(
             "Local tool executable changed while its identity was captured."
         )
@@ -187,7 +188,8 @@ def _executable_identity(path: Path) -> LocalExecutableIdentity:
     )
 
 
-def _stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
+def executable_stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    """Identify an operator artifact including its owner and permission bits."""
     return (
         metadata.st_dev,
         metadata.st_ino,

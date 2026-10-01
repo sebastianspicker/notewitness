@@ -9,7 +9,7 @@ from notewitness.lessons.transcript_export import (
     TranscriptExportError,
     _source_targets,
 )
-from notewitness.lessons.transcript_review_service import add_project_actor
+from notewitness.lessons.actors import add_project_actor
 from notewitness.lessons.evidence_review import (
     accept_evidence_suggestion,
     revise_evidence_annotation,

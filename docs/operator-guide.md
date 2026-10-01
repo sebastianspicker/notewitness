@@ -95,7 +95,9 @@ Durable jobs live in `runs/analysis-jobs.sqlite` and use bounded leases, active 
 checkpoints, and up to 64 continuation chunks per stage. On restart, completed raw chunks are
 replayed from private artifacts, not rerun; raw output written just before a crash advances the
 next checkpoint after validated replay. Resume refuses changed source, model, adapter, runtime,
-score, or settings identities. The analyzer's captured byte and filesystem identity is part of
+score, or settings identities. The runtime identity hashes the NoteWitness analysis-suite
+coordinator, checkpoint, adapter, protocol, identity, and evidence modules and the core analysis
+validation module (`notewitness.core.analysis.analysis`), so an upgrade that changes any of them refuses to resume jobs enqueued before it. The analyzer's captured byte and filesystem identity is part of
 the durable fingerprint and is checked immediately before and after each stage; a replacement or
 in-place mutation fails the job before raw output or graph evidence can be published.
 

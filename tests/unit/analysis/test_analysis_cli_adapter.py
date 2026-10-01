@@ -7,7 +7,7 @@ import platform
 from tempfile import TemporaryDirectory
 import unittest
 
-from notewitness.analysis.adapters.analysis_cli import (
+from notewitness.analysis.suite.adapter import (
     AnalysisCLICancelled,
     AnalysisCLIError,
     AnalysisCLIExecutionError,
@@ -15,7 +15,7 @@ from notewitness.analysis.adapters.analysis_cli import (
     LocalAnalysisCLISettings,
     LocalAnalysisSource,
 )
-from notewitness.analysis.adapters.analysis_cli_identity import analysis_artifact_identity
+from notewitness.analysis.suite.identity import analysis_artifact_identity
 from notewitness.core.analysis.analysis import (
     AnalysisRequest,
     AnalysisStage,
@@ -25,7 +25,8 @@ from notewitness.core.analysis.analysis import (
     SpeakerSegmentHypothesis,
 )
 from notewitness.core.time import MediaSpan
-from notewitness.analysis.local_tools import LocalTool, LocalToolCancelled
+from notewitness.analysis.local_tools.contracts import LocalToolCancelled
+from notewitness.analysis.local_tools.discovery import LocalTool
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "macOS isolation contract")

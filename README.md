@@ -149,13 +149,13 @@ Use these references for the complete contracts:
 src/notewitness/
   core/          Pure value types and domain rules
   projects/      Project storage, artifacts, and media
-  analysis/      Local providers, jobs, and run integration
+  analysis/      Local execution, transcription and analysis-suite pipelines, runs
   lessons/       Human review, projections, and exports
   workbench/     Loopback server and browser interface
   interfaces/    CLI and provider bridge entry points
 tests/
-  unit/          Focused filesystem, process, and network boundary tests
-  integration/   Project, analysis-store, and workbench integration tests
+  unit/          Focused value-rule and filesystem, process, and network boundary tests
+  integration/   Project, analysis, lesson, and workbench integration tests
   contract/      CLI, capability, runtime, and architecture contracts
 docs/            Architecture, protocols, operator guidance, and release process
 examples/        Synthetic, non-sensitive project example
@@ -166,7 +166,9 @@ scripts/         Verification and static-demo tooling
 The package is a feature-modular monolith. Dependencies flow from `interfaces`
 through `workbench`, `lessons`, `analysis`, and `projects` toward the pure
 `core` package. See [architecture.md](docs/architecture.md) and the recorded
-[architectural decision](docs/decisions/0001-feature-modular-monolith.md).
+architectural decisions
+([0001](docs/decisions/0001-feature-modular-monolith.md),
+[0002](docs/decisions/0002-authority-layers-and-feature-subpackages.md)).
 
 The dated [research landscape](RESEARCH_REPORT.md) records prior art and
 product rationale. It is not an implementation or release contract.

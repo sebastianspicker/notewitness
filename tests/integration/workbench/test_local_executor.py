@@ -6,16 +6,15 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from notewitness.workbench.local_executor import (
+from notewitness.workbench.executor import (
     LocalWorkbenchExecutor,
+    _workbench_run_token,
+)
+from notewitness.workbench.runtime_config import (
     WorkbenchRuntimeConfigurationError,
+    read_private_configuration,
 )
-from notewitness.workbench._executor_identity import _workbench_run_token
-from notewitness.workbench._executor_config import (
-    WorkbenchRuntimeConfigurationError as PrivateConfigurationError,
-    _read_private_configuration,
-)
-from notewitness.workbench.processing import WorkbenchJobKind
+from notewitness.workbench.jobs import WorkbenchJobKind
 from notewitness.projects.initialize import initialize_project
 from notewitness.projects.store import ProjectStore
 
@@ -191,7 +190,7 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
         replacement = self.parent / "replacement.json"
         replacement.write_text(json.dumps({"version": 2}), encoding="utf-8")
         replacement.chmod(0o600)
-        import notewitness.workbench._executor_config as configuration
+        import notewitness.workbench.runtime_config as configuration
 
         original_read = configuration.os.read
         replaced = False
@@ -206,14 +205,14 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
             return chunk
 
         with patch.object(configuration.os, "read", side_effect=replace_after_read):
-            with self.assertRaisesRegex(PrivateConfigurationError, "owner_private"):
-                _read_private_configuration(path)
+            with self.assertRaisesRegex(WorkbenchRuntimeConfigurationError, "owner_private"):
+                read_private_configuration(path)
 
     def test_private_config_rejects_mutation_during_descriptor_read(self) -> None:
         path = self.parent / "runtime.json"
         path.write_text(json.dumps({"version": 1}), encoding="utf-8")
         path.chmod(0o600)
-        import notewitness.workbench._executor_config as configuration
+        import notewitness.workbench.runtime_config as configuration
 
         original_read = configuration.os.read
         mutated = False
@@ -228,8 +227,8 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
             return chunk
 
         with patch.object(configuration.os, "read", side_effect=mutate_after_read):
-            with self.assertRaisesRegex(PrivateConfigurationError, "owner_private"):
-                _read_private_configuration(path)
+            with self.assertRaisesRegex(WorkbenchRuntimeConfigurationError, "owner_private"):
+                read_private_configuration(path)
 
     def test_v2_config_uses_distinct_provider_and_model_per_stage(self) -> None:
         diarization = _executable(self.parent / "pyannote-bridge")
@@ -423,7 +422,7 @@ class WorkbenchLocalExecutorConfigurationTests(unittest.TestCase):
                 )
 
             with patch(
-                "notewitness.workbench._executor_identity."
+                "notewitness.workbench.executor."
                 "integrate_completed_run"
             ) as integrate:
                 executor.execute(

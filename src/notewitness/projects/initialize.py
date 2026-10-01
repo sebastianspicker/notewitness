@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from notewitness.core.evidence.graph import EvidenceGraph, SCHEMA_VERSION
+from notewitness.projects.private_fs import trusted_absolute_path
 
 
 class ProjectInitializationError(RuntimeError):
@@ -18,19 +19,6 @@ class ProjectInitializationError(RuntimeError):
 
 _DIRECTORY_MODE = 0o700
 _FILE_MODE = 0o600
-
-
-def _trusted_absolute_path(target: Path) -> Path:
-    """Return a lexical absolute path, allowing only macOS's system ``/var`` alias."""
-    absolute_target = Path(os.path.abspath(os.fspath(target)))
-    var_alias = Path("/var")
-    private_var = Path("/private/var")
-    if absolute_target == var_alias or var_alias in absolute_target.parents:
-        # macOS exposes /var as this OS-owned alias. Normalize it before opening
-        # from / so every user-controlled component is still opened no-follow.
-        if var_alias.is_symlink() and Path(os.path.realpath(var_alias)) == private_var:
-            return private_var / absolute_target.relative_to(var_alias)
-    return absolute_target
 
 
 def _open_or_create_private_directory(
@@ -86,7 +74,7 @@ def _require_empty_private_directory(descriptor: int, target: Path) -> None:
 
 def _open_empty_private_directory(target: Path) -> int:
     """Open an empty project directory from the trusted root descriptor."""
-    absolute_target = _trusted_absolute_path(target)
+    absolute_target = trusted_absolute_path(target)
     if absolute_target == Path(os.path.sep):
         raise ProjectInitializationError("Refusing to initialize the filesystem root.")
     if absolute_target.is_symlink():

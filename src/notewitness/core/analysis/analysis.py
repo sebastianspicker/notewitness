@@ -445,38 +445,6 @@ class AnalysisBatch:
             )
 
 
-@dataclass(frozen=True, slots=True)
-class JobCheckpoint:
-    job_id: str
-    stage: AnalysisStage
-    state: JobState
-    completed_span_count: int
-    continuation_token: str | None
-
-    def __post_init__(self) -> None:
-        if not self.job_id:
-            raise ValueError("job_id must not be empty.")
-        if not isinstance(self.stage, AnalysisStage) or not isinstance(
-            self.state, JobState
-        ):
-            raise ValueError("Job checkpoints require typed stage and state values.")
-        if (
-            not isinstance(self.completed_span_count, int)
-            or isinstance(self.completed_span_count, bool)
-            or self.completed_span_count < 0
-        ):
-            raise ValueError("completed_span_count must be a non-negative integer.")
-        _validate_continuation_token(self.continuation_token)
-        if self.state is JobState.QUEUED and (
-            self.completed_span_count or self.continuation_token is not None
-        ):
-            raise ValueError("Queued checkpoints cannot contain completed work.")
-        if self.state is JobState.PAUSED and self.continuation_token is None:
-            raise ValueError("Paused checkpoints require a continuation token.")
-        if self.state is JobState.COMPLETED and self.continuation_token is not None:
-            raise ValueError("Completed checkpoints cannot retain continuation tokens.")
-
-
 def _validate_hypothesis_identity(hypothesis_id: str, generator_id: str) -> None:
     if not hypothesis_id or not generator_id:
         raise ValueError("Hypotheses require IDs and generator provenance.")

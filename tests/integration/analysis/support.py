@@ -3,13 +3,13 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from notewitness.analysis.adapters.analysis_cli import (
+from notewitness.analysis.suite.adapter import (
     LocalAnalysisCLIExecution,
     LocalAnalysisCLISettings,
     LocalAnalysisSource,
     LocalAnalysisCLIAdapter,
 )
-from notewitness.analysis.resumable_analysis import ResumableAnalysisCoordinator, ResumableAnalysisStep
+from notewitness.analysis.suite.coordinator import ResumableAnalysisCoordinator, ResumableAnalysisStep
 from notewitness.core.analysis.analysis import (
     AnalysisBatch,
     AnalysisResult,
@@ -20,8 +20,8 @@ from notewitness.core.analysis.analysis import (
 )
 from notewitness.core.analysis.jobs import AnalysisJobSpec
 from notewitness.core.time import MediaSpan
-from notewitness.analysis.runs.sqlite_job_store import SQLiteJobStore
-from notewitness.analysis.local_tools import LocalTool
+from notewitness.analysis.suite.job_store import SQLiteJobStore
+from notewitness.analysis.local_tools.discovery import LocalTool
 from notewitness.projects.media import ingest_media
 from notewitness.projects.initialize import initialize_project
 from notewitness.projects.store import ProjectStore

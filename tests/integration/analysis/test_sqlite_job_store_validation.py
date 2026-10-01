@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import MagicMock, patch
 
-from notewitness.analysis.runs.sqlite_job_store import SQLiteJobStore, _lease_seconds
+from notewitness.analysis.suite.job_store import SQLiteJobStore, _lease_seconds
 
 
 class LeaseSecondsValidationTests(unittest.TestCase):
@@ -60,7 +60,7 @@ class BusyTimeoutValidationTests(unittest.TestCase):
     def test_connection_uses_a_bounded_decimal_pragma(self) -> None:
         connection = MagicMock()
         with TemporaryDirectory() as temporary, patch(
-            "notewitness.analysis.runs.sqlite_job_store.sqlite3.connect", return_value=connection
+            "notewitness.projects.private_sqlite.sqlite3.connect", return_value=connection
         ):
             SQLiteJobStore(Path(temporary) / "jobs.sqlite", busy_timeout_ms=12_345)
 

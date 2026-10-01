@@ -26,7 +26,8 @@ from notewitness.core.transcription.options import (
 from notewitness.core.transcription.export import transcript_export_losses
 from notewitness.core.audio import MetronomePlan, tuner_reading
 from notewitness.lessons.lesson_notes import LessonNotesProjector
-from notewitness.lessons.network import NetworkAccessDenied, TransportFailure
+from notewitness.core.evidence.contract import NetworkAccessDenied
+from notewitness.lessons.network import TransportFailure
 from notewitness.lessons.openai_responses import (
     OpenAIConfigurationError,
     OpenAIOutputError,
@@ -36,7 +37,7 @@ from notewitness.projects.artifacts import LocalArtifactError, write_new_private
 from notewitness.projects.document import load_evidence_graph
 from notewitness.projects.initialize import ProjectInitializationError, initialize_project
 from notewitness.projects.store import ProjectStoreError
-from notewitness.workbench.processing import WorkbenchProcessingError
+from notewitness.workbench.jobs import WorkbenchProcessingError
 from notewitness.workbench.server import WorkbenchServerError, serve_workbench
 
 from .commands import handle_operational_command

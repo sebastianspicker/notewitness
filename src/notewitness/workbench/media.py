@@ -13,17 +13,20 @@ import stat
 from typing import Any, BinaryIO
 from urllib.parse import unquote
 
-from notewitness.lessons._review_contracts import ReviewError
-from notewitness.projects._private_paths import (
+from notewitness.lessons.capture import capture_publication_hook
+from notewitness.core.strict_json import is_sha256_hex
+from notewitness.projects.private_fs import (
     PrivateDirectory,
     PrivatePathError,
+    content_stat_identity,
+    is_owner_private,
     private_directory,
 )
 from notewitness.projects.media import MAX_INGEST_BYTES, ingest_open_media
 from notewitness.projects.store import ProjectStore
 
-from ._projection import capture_publication_hook, resolve_media_source
-from .protocol import WorkbenchServerError, _required_header
+from .protocol import RequestError, WorkbenchServerError, required_header
+from .snapshot import resolve_media_source
 
 
 MAX_CAPTURE_BYTES = 512 * 1024 * 1024
@@ -51,7 +54,7 @@ class WorkbenchMediaMixin:
             str(self.server.project_root), source_id
         )
         if len(relative.parts) != 2 or relative.parts[0] != "media":
-            raise ReviewError("Media path is not an ingested source.")
+            raise RequestError("Media path is not an ingested source.")
         directory_descriptor = os.open(
             self.server.project_root / "media", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
         )
@@ -63,10 +66,9 @@ class WorkbenchMediaMixin:
             metadata = os.fstat(descriptor)
             if (
                 not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_uid != os.getuid()
-                or stat.S_IMODE(metadata.st_mode) & 0o077
+                or not is_owner_private(metadata)
             ):
-                raise ReviewError("Media must be an owner-private regular file.")
+                raise RequestError("Media must be an owner-private regular file.")
             _require_verified_media(
                 self.server, source_id, descriptor, metadata, source.get("sha256")
             )
@@ -109,17 +111,17 @@ class WorkbenchMediaMixin:
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip()
         suffix = _CAPTURE_SUFFIXES.get(content_type)
         if suffix is None:
-            raise ReviewError("Capture media type is unsupported.")
+            raise RequestError("Capture media type is unsupported.")
         capture_name = self.headers.get("X-Capture-Name", "Browser recording")
         if not capture_name.strip() or len(capture_name) > 255:
-            raise ReviewError("Capture name must be bounded non-empty text.")
-        author_id = _required_header(self.headers, "X-Capture-Author", 256)
-        started_at = _required_header(self.headers, "X-Capture-Started-At", 64)
-        duration_raw = _required_header(self.headers, "X-Capture-Duration-Ms", 16)
+            raise RequestError("Capture name must be bounded non-empty text.")
+        author_id = required_header(self.headers, "X-Capture-Author", 256)
+        started_at = required_header(self.headers, "X-Capture-Started-At", 64)
+        duration_raw = required_header(self.headers, "X-Capture-Duration-Ms", 16)
         try:
             duration_ms = int(duration_raw)
         except ValueError as exc:
-            raise ReviewError("Capture duration must be an integer.") from exc
+            raise RequestError("Capture duration must be an integer.") from exc
         publication_hook = capture_publication_hook(
             author_id=author_id,
             capture_name=capture_name,
@@ -154,7 +156,7 @@ class WorkbenchMediaMixin:
                     descriptor = None
                     raise
         except PrivatePathError as exc:
-            raise ReviewError("Capture staging directory changed during import.") from exc
+            raise RequestError("Capture staging directory changed during import.") from exc
         finally:
             if descriptor is not None:
                 os.close(descriptor)
@@ -174,11 +176,11 @@ class WorkbenchMediaMixin:
     def _import_media(self) -> None:
         length = self._content_length(MAX_INGEST_BYTES)
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip()
-        encoded_name = _required_header(self.headers, "X-Media-Name", 768)
+        encoded_name = required_header(self.headers, "X-Media-Name", 768)
         try:
             media_name = unquote(encoded_name, errors="strict")
         except (UnicodeError, ValueError) as exc:
-            raise ReviewError("Imported media name is invalid.") from exc
+            raise RequestError("Imported media name is invalid.") from exc
         suffix = _safe_import_suffix(content_type, media_name)
         runs = ProjectStore(self.server.project_root).ensure_private_directory("runs")
         staging_name = f"import-{secrets.token_hex(16)}{suffix}"
@@ -211,7 +213,7 @@ class WorkbenchMediaMixin:
                     descriptor = None
                     raise
         except PrivatePathError as exc:
-            raise ReviewError("Import staging directory changed during import.") from exc
+            raise RequestError("Import staging directory changed during import.") from exc
         finally:
             if descriptor is not None:
                 os.close(descriptor)
@@ -272,7 +274,7 @@ def _stream_request(source: BinaryIO, descriptor: int, length: int) -> None:
     while remaining:
         chunk = source.read(min(_STREAM_CHUNK_BYTES, remaining))
         if not chunk:
-            raise ReviewError("Capture ended before Content-Length.")
+            raise RequestError("Capture ended before Content-Length.")
         offset = 0
         while offset < len(chunk):
             offset += os.write(descriptor, chunk[offset:])
@@ -282,13 +284,9 @@ def _stream_request(source: BinaryIO, descriptor: int, length: int) -> None:
 def _require_verified_media(
     server: Any, source_id: str, descriptor: int, metadata: os.stat_result, expected_sha256: object
 ) -> None:
-    if (
-        not isinstance(expected_sha256, str)
-        or len(expected_sha256) != 64
-        or any(character not in "0123456789abcdef" for character in expected_sha256)
-    ):
-        raise ReviewError("Media source checksum is invalid.")
-    identity = _stat_identity(metadata)
+    if not is_sha256_hex(expected_sha256):
+        raise RequestError("Media source checksum is invalid.")
+    identity = content_stat_identity(metadata)
     with server.media_verification_lock:
         if server.media_verifications.get(source_id) == (identity, expected_sha256):
             return
@@ -297,20 +295,14 @@ def _require_verified_media(
         while offset < metadata.st_size:
             chunk = os.pread(descriptor, min(_STREAM_CHUNK_BYTES, metadata.st_size - offset), offset)
             if not chunk:
-                raise ReviewError("Media changed during checksum verification.")
+                raise RequestError("Media changed during checksum verification.")
             digest.update(chunk)
             offset += len(chunk)
-        if _stat_identity(os.fstat(descriptor)) != identity:
-            raise ReviewError("Media changed during checksum verification.")
+        if content_stat_identity(os.fstat(descriptor)) != identity:
+            raise RequestError("Media changed during checksum verification.")
         if digest.hexdigest() != expected_sha256:
-            raise ReviewError("Media checksum no longer matches its source record.")
+            raise RequestError("Media checksum no longer matches its source record.")
         server.media_verifications[source_id] = (identity, expected_sha256)
-
-
-def _stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
-    return (
-        metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns
-    )
 
 
 def _validate_capture_container(descriptor: int, content_type: str) -> None:
@@ -324,7 +316,7 @@ def _validate_capture_container(descriptor: int, content_type: str) -> None:
         "video/mp4": _is_mp4_header(header),
     }.get(content_type, False)
     if not valid:
-        raise ReviewError("Capture bytes do not match the declared media container.")
+        raise RequestError("Capture bytes do not match the declared media container.")
 
 
 def _safe_import_suffix(content_type: str, media_name: str) -> str:
@@ -333,15 +325,15 @@ def _safe_import_suffix(content_type: str, media_name: str) -> str:
         or len(media_name) > 255
         or any(character in media_name for character in ("/", "\\", "\x00", "\r", "\n"))
     ):
-        raise ReviewError("Imported media name must be bounded plain text.")
+        raise RequestError("Imported media name must be bounded plain text.")
     suffix = _IMPORT_SUFFIXES.get(content_type)
     name_suffix = Path(media_name).suffix.lower()
     if suffix is None and content_type == "application/octet-stream":
         suffix = name_suffix if name_suffix in _IMPORT_NAME_SUFFIXES else None
     if suffix is None:
-        raise ReviewError("Imported media type is unsupported.")
+        raise RequestError("Imported media type is unsupported.")
     if name_suffix in _IMPORT_NAME_SUFFIXES and not _compatible_suffixes(suffix, name_suffix):
-        raise ReviewError("Imported media name and declared type disagree.")
+        raise RequestError("Imported media name and declared type disagree.")
     return suffix
 
 
@@ -367,7 +359,7 @@ def _validate_import_container(descriptor: int, suffix: str) -> None:
         ".webm": header.startswith(b"\x1a\x45\xdf\xa3"),
     }
     if not checks.get(suffix, False):
-        raise ReviewError("Imported bytes do not match the selected media container.")
+        raise RequestError("Imported bytes do not match the selected media container.")
 
 
 def _read_header(descriptor: int, error: str) -> bytes:
@@ -377,7 +369,7 @@ def _read_header(descriptor: int, error: str) -> bytes:
             raise OSError("staging file is not regular")
         return os.pread(descriptor, min(64, metadata.st_size), 0)
     except OSError as exc:
-        raise ReviewError(error) from exc
+        raise RequestError(error) from exc
 
 
 def _is_mp4_header(header: bytes) -> bool:

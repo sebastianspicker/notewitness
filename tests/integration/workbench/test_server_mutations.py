@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from notewitness.lessons._review_contracts import ReviewMutation as WorkbenchMutation
+from notewitness.lessons.review_rules import ReviewMutation as WorkbenchMutation
 from notewitness.projects.store import ProjectStore
 
 from tests.integration.workbench.support import WorkbenchServerTestCase

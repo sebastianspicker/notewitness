@@ -1,1 +1,1 @@
-"""Framework-neutral view models for the accessible local workbench."""
+"""Loopback workbench server, runtime configuration, processing jobs, and browser assets."""

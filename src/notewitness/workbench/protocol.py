@@ -7,17 +7,17 @@ import json
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 
-from notewitness.lessons._review_contracts import ReviewError
+from notewitness.core.strict_json import reject_duplicate_keys
 
 
 MAX_JSON_REQUEST_BYTES = 1024 * 1024
 MAX_REQUEST_PATH_CHARS = 4_096
-_ALLOWED_BIND_HOST = "127.0.0.1"
-_LAUNCH_PATH_PREFIX = "/launch/"
-_SESSION_COOKIE_NAME = "notewitness_session"
+ALLOWED_BIND_HOST = "127.0.0.1"
+LAUNCH_PATH_PREFIX = "/launch/"
+SESSION_COOKIE_NAME = "notewitness_session"
 _JS_TYPE = "text/javascript; charset=utf-8"
 _CSS_TYPE = "text/css; charset=utf-8"
-_ASSETS = {
+ASSETS = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/assets/app.css": ("app.css", _CSS_TYPE),
     "/assets/app.js": ("app.js", _JS_TYPE),
@@ -56,6 +56,10 @@ _ASSETS = {
 }
 
 
+class RequestError(RuntimeError):
+    """A browser request or media transfer was malformed or unavailable."""
+
+
 class WorkbenchServerError(RuntimeError):
     """The local workbench server could not uphold its runtime contract."""
 
@@ -76,17 +80,17 @@ class WorkbenchProtocolMixin:
     def _json_request(self) -> Mapping[str, Any]:
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip()
         if content_type != "application/json":
-            raise ReviewError("JSON endpoints require application/json.")
+            raise RequestError("JSON endpoints require application/json.")
         length = self._content_length(MAX_JSON_REQUEST_BYTES)
         raw = self.rfile.read(length)
         if len(raw) != length:
-            raise ReviewError("Request body ended before Content-Length.")
+            raise RequestError("Request body ended before Content-Length.")
         try:
             payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ReviewError("Request body is not valid JSON.") from exc
+            raise RequestError("Request body is not valid JSON.") from exc
         if not isinstance(payload, dict):
-            raise ReviewError("Request JSON must be an object.")
+            raise RequestError("Request JSON must be an object.")
         return payload
 
     def _content_length(self, maximum: int) -> int:
@@ -94,9 +98,9 @@ class WorkbenchProtocolMixin:
         try:
             length = int(raw) if raw is not None else -1
         except ValueError as exc:
-            raise ReviewError("Content-Length is invalid.") from exc
+            raise RequestError("Content-Length is invalid.") from exc
         if not 0 < length <= maximum:
-            raise ReviewError(f"Content-Length must be between 1 and {maximum}.")
+            raise RequestError(f"Content-Length must be between 1 and {maximum}.")
         return length
 
     def _json(
@@ -143,8 +147,8 @@ class WorkbenchProtocolMixin:
         self.send_header("X-Frame-Options", "DENY")
 
 
-def _coarse_log_route(path: str) -> str:
-    if path.startswith(_LAUNCH_PATH_PREFIX):
+def coarse_log_route(path: str) -> str:
+    if path.startswith(LAUNCH_PATH_PREFIX):
         return "/launch/:token"
     if path.startswith("/api/media/"):
         return "/api/media/:source"
@@ -163,54 +167,48 @@ def _coarse_log_route(path: str) -> str:
     return "/:unknown"
 
 
-def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ReviewError(f"Duplicate JSON key: {key}.")
-        result[key] = value
-    return result
+_unique_object = reject_duplicate_keys(lambda key: RequestError(f"Duplicate JSON key: {key}."))
 
 
-def _required_string(payload: Mapping[str, Any], name: str) -> str:
+def required_string(payload: Mapping[str, Any], name: str) -> str:
     value = payload.get(name)
     if not isinstance(value, str) or not value:
-        raise ReviewError(f"{name} must be a non-empty string.")
+        raise RequestError(f"{name} must be a non-empty string.")
     return value
 
 
-def _optional_string(payload: Mapping[str, Any], name: str) -> str | None:
+def optional_string(payload: Mapping[str, Any], name: str) -> str | None:
     value = payload.get(name)
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ReviewError(f"{name} must be a string or null.")
+        raise RequestError(f"{name} must be a string or null.")
     return value
 
 
-def _required_integer(payload: Mapping[str, Any], name: str) -> int:
+def required_integer(payload: Mapping[str, Any], name: str) -> int:
     value = payload.get(name)
     if not isinstance(value, int) or isinstance(value, bool):
-        raise ReviewError(f"{name} must be an integer.")
+        raise RequestError(f"{name} must be an integer.")
     return value
 
 
-def _required_number(payload: Mapping[str, Any], name: str) -> float:
+def required_number(payload: Mapping[str, Any], name: str) -> float:
     value = payload.get(name)
     if not isinstance(value, (int, float)) or isinstance(value, bool):
-        raise ReviewError(f"{name} must be a number.")
+        raise RequestError(f"{name} must be a number.")
     return float(value)
 
 
-def _optional_number(payload: Mapping[str, Any], name: str, *, default: float) -> float:
+def optional_number(payload: Mapping[str, Any], name: str, *, default: float) -> float:
     value = payload.get(name, default)
     if not isinstance(value, (int, float)) or isinstance(value, bool):
-        raise ReviewError(f"{name} must be a number.")
+        raise RequestError(f"{name} must be a number.")
     return float(value)
 
 
-def _required_header(headers: Mapping[str, str], name: str, maximum: int) -> str:
+def required_header(headers: Mapping[str, str], name: str, maximum: int) -> str:
     value = headers.get(name)
     if value is None or not value.strip() or len(value) > maximum:
-        raise ReviewError(f"{name} must be bounded non-empty text.")
+        raise RequestError(f"{name} must be bounded non-empty text.")
     return value.strip()

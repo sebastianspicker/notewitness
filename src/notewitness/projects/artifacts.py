@@ -10,6 +10,8 @@ import stat
 from typing import Any, Mapping
 from uuid import uuid4
 
+from notewitness.projects.private_fs import open_directory_no_follow, trusted_absolute_path
+
 
 _FILE_MODE = 0o600
 MAX_LOCAL_JSON_BYTES = 256 * 1024 * 1024
@@ -93,11 +95,11 @@ def write_new_private_bytes(
         raise ValueError("maximum_bytes exceeds the local artifact bound.")
     if len(contents) > maximum_bytes:
         raise LocalArtifactError(f"Artifact exceeds {maximum_bytes} bytes.")
-    target = _trusted_absolute_path(Path(path))
+    target = trusted_absolute_path(Path(path))
     if target == Path(os.path.sep) or target.name in {"", ".", ".."}:
         raise LocalArtifactError(f"Invalid artifact path: {path}")
     try:
-        parent_descriptor = _open_existing_directory(target.parent)
+        parent_descriptor = open_directory_no_follow(target.parent)
     except OSError as exc:
         if exc.errno in {errno.ELOOP, errno.ENOTDIR, errno.ENOENT}:
             raise LocalArtifactError(
@@ -115,30 +117,6 @@ def write_new_private_bytes(
     finally:
         os.close(parent_descriptor)
     return target
-
-
-def _trusted_absolute_path(target: Path) -> Path:
-    absolute_target = Path(os.path.abspath(os.fspath(target)))
-    var_alias = Path("/var")
-    private_var = Path("/private/var")
-    if absolute_target == var_alias or var_alias in absolute_target.parents:
-        if var_alias.is_symlink() and Path(os.path.realpath(var_alias)) == private_var:
-            return private_var / absolute_target.relative_to(var_alias)
-    return absolute_target
-
-
-def _open_existing_directory(directory: Path) -> int:
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    descriptor = os.open(os.path.sep, flags)
-    try:
-        for component in directory.parts[1:]:
-            child_descriptor = os.open(component, flags, dir_fd=descriptor)
-            os.close(descriptor)
-            descriptor = child_descriptor
-        return descriptor
-    except BaseException:
-        os.close(descriptor)
-        raise
 
 
 def _write_new_private_file(

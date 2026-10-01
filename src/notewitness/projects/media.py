@@ -6,10 +6,11 @@ from dataclasses import dataclass
 import errno
 import hashlib
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import stat
 from typing import Protocol
 
+from notewitness.projects.private_fs import is_owner_private, trusted_absolute_path
 from notewitness.projects.store import ProjectSnapshot, ProjectStore, ProjectStoreError
 
 
@@ -80,6 +81,27 @@ class ImportedMedia:
     byte_count: int
     metadata: MediaMetadata | None
     project: ProjectSnapshot
+
+
+def is_project_media_uri(uri: object, *, nested: bool) -> bool:
+    """Whether ``uri`` names a file under the project-owned ``media/`` directory.
+
+    ``nested=False`` accepts only ``media/<name>``; ``nested=True`` also accepts
+    deeper paths below ``media/``. The URI is judged on its normalised POSIX
+    parts, as every caller resolves it through ``PurePosixPath``.
+    """
+
+    if not isinstance(uri, str) or "\\" in uri:
+        return False
+    relative = PurePosixPath(uri)
+    parts = relative.parts
+    return bool(
+        not relative.is_absolute()
+        and parts
+        and parts[0] == "media"
+        and (nested or len(parts) == 2)
+        and all(part not in {"", ".", ".."} for part in parts)
+    )
 
 
 def ingest_media(
@@ -266,8 +288,7 @@ def _open_private_media_directory(root_descriptor: int) -> int:
         info = os.fstat(descriptor)
         if (
             not stat.S_ISDIR(info.st_mode)
-            or info.st_uid != os.getuid()
-            or stat.S_IMODE(info.st_mode) & 0o077
+            or not is_owner_private(info)
         ):
             raise MediaIngestError("project media directory must be owner-private")
         return descriptor
@@ -388,7 +409,7 @@ def _unlink_if_present(directory_descriptor: int, name: str) -> None:
 
 
 def _open_explicit_regular_file(source: Path) -> int:
-    absolute = _trusted_absolute_path(source)
+    absolute = trusted_absolute_path(source)
     if absolute == Path(os.path.sep):
         raise MediaIngestError("source path must be a regular file")
     directory = os.open(os.path.sep, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -445,16 +466,6 @@ def _safe_suffix(name: str) -> str:
     ):
         return ""
     return suffix
-
-
-def _trusted_absolute_path(source: Path) -> Path:
-    absolute = Path(os.path.abspath(os.fspath(source)))
-    var_alias = Path("/var")
-    private_var = Path("/private/var")
-    if absolute == var_alias or var_alias in absolute.parents:
-        if var_alias.is_symlink() and Path(os.path.realpath(var_alias)) == private_var:
-            return private_var / absolute.relative_to(var_alias)
-    return absolute
 
 
 def _valid_id(value: str) -> bool:

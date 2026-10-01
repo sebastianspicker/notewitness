@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 from uuid import uuid4
 
-from notewitness.lessons._review_contracts import (
+from notewitness.lessons.review_rules import (
     MAX_BOOKMARK_LABEL_CHARS,
     MAX_REPLACEMENT_TEXT_CHARS,
     MAX_REVIEW_REASON_CHARS,

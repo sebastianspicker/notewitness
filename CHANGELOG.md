@@ -10,6 +10,23 @@ identifiers.
   workbench operations.
 - Add `notewitness --version` and extend installed-package CI smoke checks.
 - Include the complete AGPL-3.0 license text.
+- Remove rejected browser captures and imports from `runs/` again; since the
+  feature reorganization a failed capture or import left its private staging
+  file behind.
+- Reorganize the package internals (see `docs/architecture.md` and ADR 0002):
+  analysis feature subpackages, one implementation of each private-storage
+  primitive, and workbench and lessons modules named by responsibility. The
+  `code_surface` module paths printed by `notewitness capabilities` changed
+  accordingly; commands, file formats, protocols, and existing routes did not.
+- Add `POST /api/review/reject` to record a human rejection of a machine
+  evidence suggestion as an append-only revision. Rejected suggestions leave the
+  review queue, and a suggestion that was already accepted or rejected can no
+  longer be accepted ("was already reviewed"). The browser control for this
+  route is not included yet.
+- Return 422 instead of dropping the connection when a workbench actor already
+  exists or a transcript export filename is already taken.
+- Derive the durable analysis-job runtime fingerprint from an explicit list of analysis-suite
+  modules; jobs enqueued before this change must be re-enqueued rather than resumed.
 
 ## [0.1.0a0] - Unreleased
 

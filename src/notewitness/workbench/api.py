@@ -11,7 +11,7 @@ from urllib.parse import unquote
 
 from notewitness.core.audio import MetronomePlan, tuner_reading
 from notewitness.core.transcription.options import TranscriptExportFormat
-from notewitness.lessons._review_contracts import ReviewError
+from notewitness.lessons.review_rules import ReviewError
 from notewitness.lessons.evidence_review import (
     accept_evidence_suggestion,
     accept_relation_suggestion,
@@ -27,18 +27,19 @@ from notewitness.lessons.transcript_export import (
     TranscriptEvidenceLayer,
     TranscriptExportError,
 )
-from notewitness.lessons.transcript_review_service import add_project_actor
+from notewitness.lessons.actors import add_project_actor
 from notewitness.projects.store import ProjectStoreError
 
-from ._projection import project_workbench
-from .processing import WorkbenchProcessingError
+from .jobs import WorkbenchProcessingError
 from .protocol import (
-    _optional_number,
-    _optional_string,
-    _required_integer,
-    _required_number,
-    _required_string,
+    RequestError,
+    optional_number,
+    optional_string,
+    required_integer,
+    required_number,
+    required_string,
 )
+from .snapshot import project_workbench
 
 
 class WorkbenchApiMixin:
@@ -49,7 +50,7 @@ class WorkbenchApiMixin:
             payload = project_workbench(str(self.server.project_root))
             payload["csrf_token"] = self.server.csrf_token
             self._json(HTTPStatus.OK, payload, send_body=send_body)
-        except (ReviewError, ProjectStoreError, ValueError):
+        except (RequestError, ReviewError, ProjectStoreError, ValueError):
             self._json_error(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 "project_projection_failed",
@@ -68,12 +69,12 @@ class WorkbenchApiMixin:
         request = self._json_request()
         result = accept_evidence_suggestion(
             str(self.server.project_root),
-            event_id=_required_string(request, "event_id"),
-            author_id=_required_string(request, "author_id"),
-            actor_id=_required_string(request, "actor_id"),
-            reason=_required_string(request, "reason"),
-            expected_sha256=_required_string(request, "project_sha256"),
-            replacement_text=_optional_string(request, "replacement_text"),
+            event_id=required_string(request, "event_id"),
+            author_id=required_string(request, "author_id"),
+            actor_id=required_string(request, "actor_id"),
+            reason=required_string(request, "reason"),
+            expected_sha256=required_string(request, "project_sha256"),
+            replacement_text=optional_string(request, "replacement_text"),
         )
         self._json(HTTPStatus.CREATED, asdict(result))
 
@@ -81,10 +82,10 @@ class WorkbenchApiMixin:
         request = self._json_request()
         result = accept_relation_suggestion(
             str(self.server.project_root),
-            relation_id=_required_string(request, "relation_id"),
-            author_id=_required_string(request, "author_id"),
-            reason=_required_string(request, "reason"),
-            expected_sha256=_required_string(request, "project_sha256"),
+            relation_id=required_string(request, "relation_id"),
+            author_id=required_string(request, "author_id"),
+            reason=required_string(request, "reason"),
+            expected_sha256=required_string(request, "project_sha256"),
         )
         self._json(HTTPStatus.CREATED, asdict(result))
 
@@ -92,13 +93,13 @@ class WorkbenchApiMixin:
         request = self._json_request()
         expected_fields = {"event_id", "author_id", "reason", "project_sha256"}
         if set(request) != expected_fields:
-            raise ReviewError("Evidence rejection request fields are invalid.")
+            raise RequestError("Evidence rejection request fields are invalid.")
         result = reject_evidence_suggestion(
             str(self.server.project_root),
-            event_id=_required_string(request, "event_id"),
-            author_id=_required_string(request, "author_id"),
-            reason=_required_string(request, "reason"),
-            expected_sha256=_required_string(request, "project_sha256"),
+            event_id=required_string(request, "event_id"),
+            author_id=required_string(request, "author_id"),
+            reason=required_string(request, "reason"),
+            expected_sha256=required_string(request, "project_sha256"),
         )
         self._json(HTTPStatus.CREATED, asdict(result))
 
@@ -106,10 +107,10 @@ class WorkbenchApiMixin:
         request = self._json_request()
         result = reject_relation_suggestion(
             str(self.server.project_root),
-            relation_id=_required_string(request, "relation_id"),
-            author_id=_required_string(request, "author_id"),
-            reason=_required_string(request, "reason"),
-            expected_sha256=_required_string(request, "project_sha256"),
+            relation_id=required_string(request, "relation_id"),
+            author_id=required_string(request, "author_id"),
+            reason=required_string(request, "reason"),
+            expected_sha256=required_string(request, "project_sha256"),
         )
         self._json(HTTPStatus.CREATED, asdict(result))
 
@@ -117,12 +118,12 @@ class WorkbenchApiMixin:
         request = self._json_request()
         result = create_exact_time_bookmark(
             str(self.server.project_root),
-            source_id=_required_string(request, "source_id"),
-            start_us=_required_integer(request, "start_us"),
-            duration_us=_required_integer(request, "duration_us"),
-            label=_required_string(request, "label"),
-            author_id=_required_string(request, "author_id"),
-            expected_sha256=_required_string(request, "project_sha256"),
+            source_id=required_string(request, "source_id"),
+            start_us=required_integer(request, "start_us"),
+            duration_us=required_integer(request, "duration_us"),
+            label=required_string(request, "label"),
+            author_id=required_string(request, "author_id"),
+            expected_sha256=required_string(request, "project_sha256"),
         )
         self._json(HTTPStatus.CREATED, asdict(result))
 
@@ -130,10 +131,10 @@ class WorkbenchApiMixin:
         request = self._json_request()
         snapshot = add_project_actor(
             str(self.server.project_root),
-            actor_id=_required_string(request, "actor_id"),
-            role=_required_string(request, "role"),
+            actor_id=required_string(request, "actor_id"),
+            role=required_string(request, "role"),
             visibility="restricted",
-            expected_sha256=_required_string(request, "project_sha256"),
+            expected_sha256=required_string(request, "project_sha256"),
         )
         self._json(HTTPStatus.CREATED, {"project_sha256": snapshot.sha256})
 
@@ -141,12 +142,12 @@ class WorkbenchApiMixin:
         request = self._json_request()
         result = revise_evidence_annotation(
             str(self.server.project_root),
-            event_id=_required_string(request, "event_id"),
-            author_id=_required_string(request, "author_id"),
-            actor_id=_required_string(request, "actor_id"),
-            reason=_required_string(request, "reason"),
-            replacement_text=_required_string(request, "replacement_text"),
-            expected_sha256=_required_string(request, "project_sha256"),
+            event_id=required_string(request, "event_id"),
+            author_id=required_string(request, "author_id"),
+            actor_id=required_string(request, "actor_id"),
+            reason=required_string(request, "reason"),
+            replacement_text=required_string(request, "replacement_text"),
+            expected_sha256=required_string(request, "project_sha256"),
         )
         self._json(HTTPStatus.CREATED, asdict(result))
 
@@ -154,32 +155,32 @@ class WorkbenchApiMixin:
         request = self._json_request()
         completed = request.get("completed")
         if not isinstance(completed, bool):
-            raise ReviewError("completed must be a boolean.")
+            raise RequestError("completed must be a boolean.")
         result = set_practice_task_completed(
             str(self.server.project_root),
-            task_id=_required_string(request, "task_id"),
+            task_id=required_string(request, "task_id"),
             completed=completed,
-            author_id=_required_string(request, "author_id"),
-            expected_sha256=_required_string(request, "project_sha256"),
+            author_id=required_string(request, "author_id"),
+            expected_sha256=required_string(request, "project_sha256"),
         )
         self._json(HTTPStatus.CREATED, asdict(result))
 
     def _tuner(self) -> None:
         request = self._json_request()
         reading = tuner_reading(
-            _required_number(request, "frequency_hz"),
-            a4_hz=_optional_number(request, "a4_hz", default=440.0),
+            required_number(request, "frequency_hz"),
+            a4_hz=optional_number(request, "a4_hz", default=440.0),
         )
         self._json(HTTPStatus.OK, asdict(reading))
 
     def _metronome(self) -> None:
         request = self._json_request()
         plan = MetronomePlan(
-            bpm=_required_number(request, "bpm"),
-            beats_per_bar=_required_integer(request, "beats_per_bar"),
-            subdivisions_per_beat=_required_integer(request, "subdivisions"),
+            bpm=required_number(request, "bpm"),
+            beats_per_bar=required_integer(request, "beats_per_bar"),
+            subdivisions_per_beat=required_integer(request, "subdivisions"),
         )
-        ticks = plan.schedule(_required_integer(request, "bars"))
+        ticks = plan.schedule(required_integer(request, "bars"))
         self._json(
             HTTPStatus.OK,
             {
@@ -193,7 +194,7 @@ class WorkbenchApiMixin:
     def _enqueue_job(self) -> None:
         payload = self._json_request()
         job = self.server.processing.enqueue(
-            _required_string(payload, "kind"), _required_string(payload, "source_id")
+            required_string(payload, "kind"), required_string(payload, "source_id")
         )
         self._json(HTTPStatus.ACCEPTED, job.as_public_dict())
 
@@ -203,17 +204,17 @@ class WorkbenchApiMixin:
             "acknowledge_export_losses", "authorize_local_export", "filename", "format", "source_id"
         }
         if set(payload) != expected:
-            raise ReviewError("Music export request has unknown or missing fields.")
+            raise RequestError("Music export request has unknown or missing fields.")
         authorized = payload.get("authorize_local_export")
         acknowledged = payload.get("acknowledge_export_losses")
         if not isinstance(authorized, bool) or not isinstance(acknowledged, bool):
-            raise ReviewError("Music export decisions must be booleans.")
+            raise RequestError("Music export decisions must be booleans.")
         result = SymbolicMusicExportService.for_project(self.server.project_root).export(
-            export_format=MusicExportFormat(_required_string(payload, "format")),
-            filename=_required_string(payload, "filename"),
+            export_format=MusicExportFormat(required_string(payload, "format")),
+            filename=required_string(payload, "filename"),
             rights_authorized=authorized,
             loss_preview_acknowledged=acknowledged,
-            source_id=_required_string(payload, "source_id"),
+            source_id=required_string(payload, "source_id"),
         )
         self._json(HTTPStatus.CREATED, _music_export_response(result))
 
@@ -225,24 +226,24 @@ class WorkbenchApiMixin:
             "visible_timestamps",
         }
         if set(payload) != expected:
-            raise ReviewError("Transcript export request has unknown or missing fields.")
+            raise RequestError("Transcript export request has unknown or missing fields.")
         authorized = payload.get("authorize_local_export")
         acknowledged = payload.get("acknowledge_export_losses")
         visible = payload.get("visible_timestamps")
         interval = payload.get("timestamp_interval_ms")
         pause = payload.get("pause_threshold_ms")
         if not all(isinstance(value, bool) for value in (authorized, acknowledged, visible)):
-            raise ReviewError("Transcript export decisions must be booleans.")
+            raise RequestError("Transcript export decisions must be booleans.")
         if not isinstance(interval, int) or isinstance(interval, bool):
-            raise ReviewError("timestamp_interval_ms must be an integer.")
+            raise RequestError("timestamp_interval_ms must be an integer.")
         if pause is not None and (not isinstance(pause, int) or isinstance(pause, bool)):
-            raise ReviewError("pause_threshold_ms must be an integer or null.")
+            raise RequestError("pause_threshold_ms must be an integer or null.")
         try:
             result = TranscriptEvidenceExportService.for_project(self.server.project_root).export(
-                export_format=TranscriptExportFormat(_required_string(payload, "format")),
-                filename=_required_string(payload, "filename"),
-                source_id=_required_string(payload, "source_id"),
-                evidence_layer=TranscriptEvidenceLayer(_required_string(payload, "evidence_layer")),
+                export_format=TranscriptExportFormat(required_string(payload, "format")),
+                filename=required_string(payload, "filename"),
+                source_id=required_string(payload, "source_id"),
+                evidence_layer=TranscriptEvidenceLayer(required_string(payload, "evidence_layer")),
                 rights_authorized=authorized,
                 loss_preview_acknowledged=acknowledged,
                 visible_timestamps=visible,

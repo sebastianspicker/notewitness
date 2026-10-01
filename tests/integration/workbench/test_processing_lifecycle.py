@@ -5,15 +5,15 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from notewitness.projects._private_paths import private_directory
-from notewitness.workbench.processing import (
+from notewitness.projects.private_fs import private_directory
+from notewitness.workbench.jobs import (
     DisabledWorkbenchExecutor,
-    WorkbenchJobState,
-    WorkbenchProcessingError,
-    WorkbenchProcessingService,
     WorkbenchJobKind,
+    WorkbenchJobState,
     WorkbenchJobStore,
+    WorkbenchProcessingError,
 )
+from notewitness.workbench.processing import WorkbenchProcessingService
 
 from tests.integration.workbench.support import (
     ControlledExecutor,
@@ -27,7 +27,7 @@ from tests.integration.workbench.support import (
 
 def _secure_store_sidecars(store: WorkbenchJobStore) -> None:
     with private_directory(store.path.parent) as parent:
-        store._private_sidecars(parent)
+        store._database.secure_sidecars(parent)
 
 
 class WorkbenchProcessingLifecycleSidecarShutdownTests(
@@ -44,7 +44,7 @@ class WorkbenchProcessingLifecycleSidecarShutdownTests(
                 raise FileNotFoundError()
             return real_open(path, flags, mode, **kwargs)
 
-        with patch("notewitness.workbench._processing_store.os.open", side_effect=disappear):
+        with patch("notewitness.projects.private_sqlite.os.open", side_effect=disappear):
             _secure_store_sidecars(store)
 
     def test_sqlite_sidecar_symlink_is_rejected_without_touching_target(self) -> None:
@@ -70,7 +70,7 @@ class WorkbenchProcessingLifecycleSidecarShutdownTests(
                 raise PermissionError("private details must not escape")
             return real_open(path, flags, mode, **kwargs)
 
-        with patch("notewitness.workbench._processing_store.os.open", side_effect=deny):
+        with patch("notewitness.projects.private_sqlite.os.open", side_effect=deny):
             with self.assertRaisesRegex(WorkbenchProcessingError, "^job_store_sidecar_access_failed$"):
                 _secure_store_sidecars(store)
 

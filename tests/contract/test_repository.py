@@ -27,7 +27,7 @@ NETWORK_CAPABLE_MODULES = {
 # Reviewed boundary modules, relative to src/notewitness.
 ALLOWED_RUNTIME_IMPORTS = {
     "lessons/network.py": NETWORK_CAPABLE_MODULES,
-    "analysis/local_tools/__init__.py": {"subprocess"},
+    "analysis/local_tools/runner.py": {"subprocess"},
     "analysis/local_tools/process.py": {"subprocess"},
     "workbench/api.py": {"http", "urllib"},
     "workbench/http.py": {"http", "urllib"},
@@ -142,10 +142,7 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertEqual([], offenders)
 
     def test_package_initializers_do_not_re_export(self) -> None:
-        allowed = {
-            PACKAGE / "__init__.py",
-            PACKAGE / "analysis" / "local_tools" / "__init__.py",
-        }
+        allowed = {PACKAGE / "__init__.py"}
         offenders: list[str] = []
         for path in PACKAGE.rglob("__init__.py"):
             if path in allowed:

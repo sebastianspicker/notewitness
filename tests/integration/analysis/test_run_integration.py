@@ -5,15 +5,17 @@ import stat
 from tempfile import TemporaryDirectory
 import unittest
 
-from notewitness.analysis.run_integration import (
+from notewitness.analysis.runs.integration import (
+    RunIntegrationResult,
+    capture_source_identity,
+    integrate_completed_run,
+    select_publication_records,
+)
+from notewitness.analysis.runs.publication import (
     MAX_PUBLICATION_BYTES,
     PUBLICATION_FILENAME,
     RunIntegrationError,
-    RunIntegrationResult,
-    capture_source_identity,
     completed_artifact_sha256s,
-    integrate_completed_run,
-    select_publication_records,
     write_completed_publication,
 )
 from notewitness.projects.initialize import initialize_project

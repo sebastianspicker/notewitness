@@ -9,18 +9,20 @@ import platform
 import sys
 from tempfile import TemporaryDirectory
 
-from notewitness.analysis.adapters.analysis_cli import AnalysisCLIError
-from notewitness.analysis.adapters.ffprobe import MediaProbeError
-from notewitness.analysis.adapters.whisper_cli import WhisperCLIError, WhisperCLISettings
-from notewitness.analysis.analysis_runtime import LocalAnalysisRuntimeError
-from notewitness.analysis.resumable_analysis import ResumableAnalysisError
-from notewitness.analysis.run_integration import RunIntegrationError
-from notewitness.analysis.runs.sqlite_job_store import JobStoreError
+from notewitness.analysis.suite.adapter import AnalysisCLIError
+from notewitness.analysis.media_probe import MediaProbeError
+from notewitness.analysis.transcription.whisper_cli import WhisperCLIError, WhisperCLISettings
+from notewitness.analysis.suite.runtime import LocalAnalysisRuntimeError
+from notewitness.analysis.suite.checkpoints import ResumableAnalysisError
+from notewitness.analysis.runs.publication import RunIntegrationError
+from notewitness.analysis.suite.job_store import JobStoreError
 from notewitness.analysis.speaker_alignment import SpeakerAlignmentError
-from notewitness.analysis.transcription_runtime import LocalTranscriptionRuntimeError
-from notewitness.analysis.local_tools import BoundedLocalToolRunner, LocalTool, LocalToolError, discover_local_tool
+from notewitness.analysis.transcription.runtime import LocalTranscriptionRuntimeError
+from notewitness.analysis.local_tools.contracts import LocalToolError
+from notewitness.analysis.local_tools.discovery import LocalTool, discover_local_tool
+from notewitness.analysis.local_tools.runner import BoundedLocalToolRunner
 from notewitness.lessons.music_export import MusicExportError
-from notewitness.lessons.transcript_review_service import TranscriptReviewError
+from notewitness.lessons.transcript_review import TranscriptReviewError
 from notewitness.projects.artifacts import LocalArtifactError
 from notewitness.projects.media import MediaIngestError
 from notewitness.projects.store import ProjectStoreError

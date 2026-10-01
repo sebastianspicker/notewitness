@@ -4,11 +4,13 @@ import io
 import unittest
 from urllib.error import HTTPError
 
-from notewitness.lessons.network import (
-    MAX_RESPONSE_BYTES,
+from notewitness.core.evidence.contract import (
     NetworkAccessDenied,
     NetworkMode,
     NetworkPolicy,
+)
+from notewitness.lessons.network import (
+    MAX_RESPONSE_BYTES,
     OpenAIHTTPTransport,
     TransportFailure,
 )

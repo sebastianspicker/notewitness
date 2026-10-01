@@ -1,1 +1,1 @@
-"""Durable state for local analysis jobs."""
+"""Shared lifecycle for private local runs: workspace, publication, integration."""

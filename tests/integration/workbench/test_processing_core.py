@@ -4,13 +4,13 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from notewitness.workbench.processing import (
+from notewitness.workbench.jobs import (
     DisabledWorkbenchExecutor,
     WorkbenchJobKind,
     WorkbenchJobState,
     WorkbenchProcessingError,
-    WorkbenchProcessingService,
 )
+from notewitness.workbench.processing import WorkbenchProcessingService
 
 from tests.integration.workbench.support import (
     ControlledExecutor,
