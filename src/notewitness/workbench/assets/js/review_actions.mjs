@@ -35,6 +35,22 @@ export function createReviewActions(c) {
     if (saved) c.setNotice(next ? "Evidence accepted. The next suggestion is ready." : "Evidence accepted. Review queue complete for this view.", "success");
   }
 
+  async function rejectSuggestion(eventId) {
+    const author = requireHumanActor();
+    if (!author) return;
+    const current = reviewItems(c.state);
+    const next = current[current.findIndex((item) => encodeId(item.event_id) === eventId) + 1];
+    const saved = await c.runMutation(`review-${eventId}`, "Saving human rejection", async () => {
+      await c.request("/api/review/reject", { method: "POST", headers: c.actionHeaders(), body: JSON.stringify({
+        event_id: decodeURIComponent(eventId), author_id: author.id,
+        reason: "Rejected after local evidence review.", project_sha256: c.projectSha(),
+      }) });
+      if (next) c.state.pendingFocus = encodeId(next.event_id);
+      await c.load({ preservePlayback: true, quiet: true });
+    });
+    if (saved) c.setNotice(next ? "Evidence rejected. The next suggestion is ready; the original remains in the audit trail." : "Evidence rejected. Review queue complete for this view; the original remains in the audit trail.", "success");
+  }
+
   async function reviewRelation(relationId, decision) {
     const author = requireHumanActor();
     if (!author) return;
@@ -129,6 +145,6 @@ export function createReviewActions(c) {
     if (saved) c.setNotice(completed ? "Practice task marked complete." : "Practice task reopened.", "success"); else checkbox.checked = !completed;
   }
 
-  return { acceptSuggestion, reviewRelation, openRevision, openBookmarkDialog, openReviewerSetup,
+  return { acceptSuggestion, rejectSuggestion, reviewRelation, openRevision, openBookmarkDialog, openReviewerSetup,
     openRenderedDialog, closeDialog, submitDialog, updatePractice, requireHumanActor, attributedActorId };
 }

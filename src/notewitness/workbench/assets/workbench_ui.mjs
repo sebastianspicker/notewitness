@@ -19,6 +19,7 @@ export {
   sourceDurationSeconds,
   timelineTicks,
   reviewItems,
+  selectedReviewItem,
   transcriptItems,
   sourceName,
   mediaCount,
@@ -42,3 +43,4 @@ export {
 export { renderTimeline } from "/assets/ui/timeline.mjs";
 export { renderPanel } from "/assets/ui/panels.mjs";
 export { renderTransport } from "/assets/ui/transport.mjs";
+export { renderContextInspector } from "/assets/ui/context.mjs";

@@ -8,6 +8,7 @@ import { createPlayback } from "/assets/js/playback.mjs";
 import { createProcessing } from "/assets/js/processing.mjs";
 
 const state = createWorkbenchState();
+document.documentElement.dataset.theme = state.theme;
 const c = { state, app: document.querySelector("#app") };
 Object.assign(c, createApi(c), createRendering(c), createPlayback(c));
 Object.assign(c, createLoading(c), createProcessing(c));

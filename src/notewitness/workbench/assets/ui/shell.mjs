@@ -13,10 +13,7 @@ import { renderProcessing } from "/assets/ui/processing.mjs";
 import { renderTimeline } from "/assets/ui/timeline.mjs";
 import { renderPanel } from "/assets/ui/panels.mjs";
 import {
-  renderAtAGlance,
-  renderIntegrity,
-  renderMusicExport,
-  renderQuickPractice,
+  renderContextInspector,
 } from "/assets/ui/context.mjs";
 import { renderTransport } from "/assets/ui/transport.mjs";
 
@@ -30,21 +27,19 @@ export function renderWorkbench(state) {
         ${renderNotice(state.notice)}
       </div>
       <div class="workbench-layout body">
-        <aside class="tool-rail col col-side col-left" aria-label="Sources, processing, and music tools">
+        <aside class="tool-rail col col-side col-left" aria-label="Project navigation and source controls">
+          ${renderWorkspaceTabs(state)}
           ${renderSources(state)}
           ${renderProcessing(state)}
           ${renderUtilities(state)}
+          <p class="nav-foot keyboard-hint"><kbd>J/K</kbd> select <span aria-hidden="true">·</span> <kbd>A</kbd> accept <span aria-hidden="true">·</span> <kbd>R</kbd> revise <span aria-hidden="true">·</span> <kbd>X</kbd> reject <span aria-hidden="true">·</span> <kbd>Space</kbd> play</p>
         </aside>
         <main class="workspace col-main" id="workbench-main" tabindex="-1">
-          ${renderWorkspaceTabs(state)}
           <div data-timeline-root>${renderTimeline(state)}</div>
           <div data-workspace-panel>${renderPanel(state)}</div>
         </main>
-        <aside class="context-rail col col-side col-right" aria-label="Lesson overview">
-          ${renderAtAGlance(state, lesson)}
-          ${renderQuickPractice(state, lesson)}
-          ${renderMusicExport(state, lesson)}
-          ${renderIntegrity(state, lesson)}
+        <aside class="context-rail col col-side col-right" data-context-inspector aria-label="Evidence inspector">
+          ${renderContextInspector(state)}
         </aside>
       </div>
       ${renderTransport(state)}
@@ -75,6 +70,7 @@ function renderHeader(state, lesson) {
           : '<button class="secondary-button" data-action="open-reviewer-setup">Set up reviewer</button>'}
         <button class="linkish" data-action="open-bookmark"
           ${actor && state.activeSourceId ? "" : "disabled"}>Bookmark</button>
+        <button class="theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle light and dark theme" aria-pressed="${state.theme === "dark"}">Theme</button>
       </div>
     </header>`;
 }

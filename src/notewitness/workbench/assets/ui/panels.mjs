@@ -11,6 +11,7 @@ import {
   renderConfidence,
   renderPairs,
   reviewItems,
+  selectedReviewItem,
   transcriptItems,
   anchor,
 } from "/assets/ui/utils.mjs";
@@ -30,6 +31,7 @@ function renderPanelHeader(state, title, description, count) {
 
 function renderReviewPanel(state) {
   const items = reviewItems(state);
+  const selected = selectedReviewItem(state);
   const all = list(state.data?.lesson?.transcript_suggestions).filter((item) => {
     return !state.activeSourceId || itemSource(item) === state.activeSourceId;
   });
@@ -39,40 +41,28 @@ function renderReviewPanel(state) {
     <div class="filter-row"><label>Evidence type <select data-review-kind>
       <option value="all">All evidence</option>${kinds.map((kind) => `<option value="${escapeHTML(kind)}" ${state.reviewKind === kind ? "selected" : ""}>${escapeHTML(kind.replaceAll("_", " "))}</option>`).join("")}
     </select></label><p class="supporting">Suggested items require a named human decision before acceptance.</p></div>
-    <ol class="evidence-list review-list">${items.length ? items.map((item, index) => renderReviewItem(state, item, index)).join("")
-      : `<li class="empty-state"><strong>Nothing matches this review view</strong><p>${all.length ? "Clear the search or evidence filter." : "No machine suggestions are waiting for this source."}</p></li>`}</ol>
+    <ol class="evidence-list review-list" aria-label="Machine suggestions waiting for review">${items.length ? items.map((item) => renderReviewItem(state, item, selected)).join("")
+      : `<li class="empty-state queue-empty"><strong>${all.length ? "Nothing matches this review view" : "Review queue is empty"}</strong><p>${all.length ? "Clear the search or evidence filter." : "No machine suggestions are waiting for this source. New local processing results will appear here for human review."}</p></li>`}</ol>
   </section>`;
 }
 
-function renderReviewItem(state, item, index) {
-  const actor = humanActor(state);
+function renderReviewItem(state, item, selected) {
   const eventId = encodeId(item.event_id);
-  const canRevise = typeof item.body_value === "string";
   const start = itemTime(item);
   const end = start + itemDuration(item);
   const status = String(item.review_status || "machine_suggested");
   const suggested = status === "machine_suggested" || status.includes("suggest");
-  return `<li class="evidence-card evidence" data-review-card="${eventId}" tabindex="-1">
+  const active = selected?.event_id === item.event_id;
+  return `<li class="evidence-card evidence ${active ? "is-selected" : ""}" data-review-card="${eventId}" data-select-review="${eventId}" role="button" aria-current="${active ? "true" : "false"}" tabindex="0">
     <div class="status-line">
       <span class="tag ${suggested ? "suggested" : "accepted"}">${suggested ? "Suggested" : escapeHTML(status.replaceAll("_", " "))}</span>
-      <span class="dot">·</span>
       <span class="kind-label">${escapeHTML(String(item.content_kind || "evidence").replaceAll("_", " "))}</span>
-      <span class="dot">·</span>
       <button class="time-button play-link" data-seek="${start}" data-source="${escapeHTML(itemSource(item))}">
         ${formatTime(start, false)} – ${formatTime(end, false)}</button>
-      <span class="dot">·</span>
       <span>${escapeHTML(item.actor_role, "unattributed")}</span>
-      <span class="dot">·</span>
       <span>${renderConfidence(item.confidence)}</span>
     </div>
     <blockquote class="claim">${escapeHTML(item.display_text)}</blockquote>
-    <div class="review-controls adjudicate"><label class="field">Attribute to
-      <select class="attribution" data-attribution="${eventId}">
-        ${renderActorAttributionOptionsHTML(state, item.actor_id, true)}
-      </select></label><div class="row-actions actions">
-        ${canRevise ? `<button class="secondary-button" data-revise="${eventId}" ${actor ? "" : "disabled"}>Revise</button>` : ""}
-        <button class="primary-button" data-accept="${eventId}" data-busy-key="review-${eventId}" ${actor ? "" : "disabled"}>Accept${index < reviewItems(state).length - 1 ? " & next" : ""}</button>
-      </div></div>
   </li>`;
 }
 

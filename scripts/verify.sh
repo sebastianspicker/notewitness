@@ -43,6 +43,7 @@ done < <(find src/notewitness/workbench/assets -type f \( -name '*.js' -o -name 
 node --check scripts/render_pages_demo.mjs
 node --check scripts/pages_demo_client.js
 python3 -m py_compile scripts/assemble_pages_demo.py
+python3 -m py_compile scripts/assemble_pages_tour.py
 python3 -m py_compile scripts/build_demo_state.py
 pages_site_dir=$(mktemp -d "${TMPDIR:-/tmp}/notewitness-pages.XXXXXX")
 trap 'rm -rf "$pages_site_dir"' EXIT

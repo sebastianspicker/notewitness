@@ -1,29 +1,36 @@
 # Capability matrix
 
-## Implemented scope
+This page is the canonical list of what NoteWitness does today and what it
+leaves out. The [README](../README.md) summarizes it, and
+`notewitness capabilities` prints the same scope from the installed package.
 
-NoteWitness currently implements:
+## Implemented
 
-- private regular-file ingestion and bounded local `ffprobe` inspection;
-- explicit local Whisper CLI ASR with an absolute checkpoint, raw/normalized artifacts, and
-  provenance;
-- explicit JSON CLI adapters for activity, anonymous diarization/overlap, note, pitch,
-  instrument detection/diarization, and optional score-alignment hypotheses, with packaged local
-  pyannote, Basic Pitch, and PANNs speech/music and instrument-activity bridges;
-- deterministic, run-aware speech-to-anonymous-speaker alignment and source-aware private CSV/MIDI
-  note export plus HTML/TXT/WebVTT transcript export with explicit rights and projection-loss gates;
-- SQLite-backed resumable analysis jobs with leases, heartbeats, bounded continuation chunks,
-  cancellation, checkpoints, raw replay, exact executable checks around every stage, and
-  identity checks before resume; and
-- a session-authenticated `127.0.0.1` graphical workbench for streaming media import, media range playback, durable
-  exclusively owned local-model jobs, bounded cancellation/resume, crash-safe publication
-  reconciliation, browser capture, reviewer onboarding, evidence and pedagogical-relation review,
-  bookmarks, lesson/practice views, descriptive statistics, tuner, and metronome.
+- Private regular-file ingestion and bounded local `ffprobe` inspection.
+- Explicit local Whisper CLI ASR with an absolute checkpoint, raw and normalized
+  artifacts, and provenance.
+- Explicit JSON CLI adapters for activity, anonymous diarization and overlap,
+  note, pitch, instrument detection and diarization, and optional score
+  alignment, with packaged local pyannote, Basic Pitch, and PANNs speech/music
+  and instrument-activity bridges.
+- Deterministic, run-aware speech-to-anonymous-speaker alignment, plus
+  source-aware private CSV/MIDI note export and HTML/TXT/WebVTT transcript
+  export behind explicit rights and projection-loss gates.
+- SQLite-backed resumable analysis jobs with leases, heartbeats, bounded
+  continuation chunks, cancellation, checkpoints, raw replay, exact executable
+  checks around every stage, and identity checks before resume.
+- A session-authenticated `127.0.0.1` workbench for streaming media import,
+  media range playback, durable exclusively owned local-model jobs, bounded
+  cancellation and resume, crash-safe publication reconciliation, browser
+  capture, reviewer onboarding, evidence and pedagogical-relation review,
+  bookmarks, lesson and practice views, descriptive statistics, tuner, and
+  metronome.
 
-The evidence graph remains the boundary: raw model output, normalized hypotheses, accepted
-annotations, and summaries are separate. A rerun cannot overwrite a human review record.
+The evidence graph is the boundary: raw model output, normalized hypotheses,
+accepted annotations, and summaries stay separate, and a rerun cannot overwrite
+a human review record.
 
-## Component map
+## Where the code lives
 
 ```text
 interfaces/CLI and bridges
@@ -58,37 +65,42 @@ interfaces/CLI and bridges
 | Tuner/metronome | Web Audio and deterministic calculations | Browser/host audio availability |
 | Human acceptance | Append-only acceptance and revision | Qualified human review |
 
-## Excluded and unverified scope
+## Out of scope and unverified
 
-No models, checkpoints, Whisper, pyannote, Basic Pitch, PANNs, FFmpeg/ffprobe, browser, or device
-are bundled. The optional provider bridges do not download or select model weights.
-An adapter being implemented does not mean a compatible engine is installed, licensed, available,
-or accurate for the intended lesson/corpus. The prototype does not persist voice identity, assign
-teacher/student identity automatically, grade performance, diagnose learners, or establish
-pedagogical conclusions.
+The repository bundles no models, checkpoints, Whisper, pyannote, Basic Pitch,
+PANNs, FFmpeg/ffprobe, browser, or device. The provider bridges do not download
+or select model weights. An adapter existing does not mean a compatible engine
+is installed, licensed, available, or accurate for your lesson or corpus. The
+prototype does not persist voice identity, assign teacher and student identity
+automatically, grade performance, diagnose learners, or reach pedagogical
+conclusions.
 
-It makes no full empirical accuracy, fairness, or noScribe-equivalence claim. Those require an
-authorized, stratified corpus, predeclared measures, retained failures, and a human-review
-protocol. Runtime success is integration evidence, not corpus validation.
+It makes no full empirical accuracy, fairness, or noScribe-equivalence claim.
+Those need an authorized, stratified corpus, predeclared measures, retained
+failures, and a human-review protocol. Passing at runtime is integration
+evidence, not corpus validation.
 
-## Privacy, licenses, and remote boundary
+## Privacy, licenses, and the remote boundary
 
-The local workflows are offline by default. On macOS external local tools run under
-`sandbox-exec` with network access denied and have bounded time, arguments, and output. This
-subprocess contract does not itself establish a third-party binary's safety or licensing. Model
-code, weights, external tools, media, and scores each need separate provenance and rights review.
-The sandbox does not restrict filesystem reads or writes, so every approved executable and model
-loader must be trusted with the invoking user's filesystem authority.
+Local workflows are offline by default. On macOS, external local tools run under
+`sandbox-exec` with network access denied and bounded time, arguments, and
+output. This subprocess contract does not make a third-party binary safe or
+licensed. Model code, weights, external tools, media, and scores each need
+separate provenance and rights review. The sandbox does not restrict filesystem
+reads or writes, so every approved executable and model loader must be trusted
+with the invoking user's filesystem authority.
 
-The optional OpenAI Responses feature is outside the local analysis path: it is text-only,
-requires `remote_explicit`, source/evidence rights, and a per-call confirmation, uses `store:
-false`, and returns a machine suggestion. It never uploads media automatically.
+The optional OpenAI Responses feature sits outside the local analysis path. It
+is text-only, requires `remote_explicit`, source and evidence rights, and a
+per-call confirmation, uses `store: false`, and returns a machine suggestion. It
+never uploads media automatically.
 
-The executable Whisper export subset honors pause markers and timestamp visibility/interval.
-ASR segments and anonymous speaker turns are linked by maximum positive temporal overlap while
-preserving equal-overlap ties and isolating diarization reruns. This is deterministic integration,
-not a word-speaker-error or identity-accuracy claim. Disfluency suppression and empirical noScribe
-parity remain unclaimed; unsupported behavior is rejected or represented as a separate reviewable
-evidence layer.
+The executable Whisper export subset honors pause markers and timestamp
+visibility and interval. ASR segments and anonymous speaker turns link by
+maximum positive temporal overlap while preserving equal-overlap ties and
+isolating diarization reruns. This is deterministic integration, not a
+word-speaker-error or identity-accuracy claim. Disfluency suppression and
+empirical noScribe parity remain unclaimed; unsupported behavior is rejected or
+kept as a separate reviewable evidence layer.
 
 See [operator-guide.md](operator-guide.md) for commands and recovery actions.

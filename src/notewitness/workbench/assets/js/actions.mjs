@@ -9,6 +9,13 @@ export function createActions(c) {
   const capture = createCaptureActions(c);
   const audio = createAudioActions(c);
   const exports = createExportActions(c);
+  function toggleTheme() {
+    c.state.theme = c.state.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = c.state.theme;
+    try { globalThis.localStorage?.setItem("notewitness-theme", c.state.theme); } catch {}
+    const control = c.app.querySelector('[data-action="toggle-theme"]');
+    control?.setAttribute("aria-pressed", String(c.state.theme === "dark"));
+  }
   const handlers = new Map([
     ["play", audio.togglePlayback], ["seek-back", () => c.seek((c.state.media?.currentTime || 0) - 5)],
     ["seek-forward", () => c.seek((c.state.media?.currentTime || 0) + 5)], ["open-bookmark", review.openBookmarkDialog],
@@ -17,6 +24,7 @@ export function createActions(c) {
     ["tempo-down", () => audio.setTempo(-1)], ["tempo-up", () => audio.setTempo(1)], ["enqueue-job", c.enqueueJob],
     ["export-csv", () => exports.exportMusic("csv")], ["export-midi", () => exports.exportMusic("midi")],
     ["export-transcript", exports.exportTranscript], ["reload", c.load],
+    ["toggle-theme", toggleTheme],
   ]);
   async function action(name) {
     const handler = handlers.get(name);

@@ -1,16 +1,15 @@
 # NoteWitness: research landscape and project proposal
 
-> Research snapshot: 18 July 2026
+> **Research snapshot: 18 July 2026.** Project: NoteWitness. Scope: recorded
+> interviews, one-to-one lessons, masterclasses, and teaching-research material.
 >
-> Project name: NoteWitness
->
-> Scope: recorded interviews, one-to-one lessons, masterclasses, and teaching-research material
->
-> This is a research snapshot and proposed maturity roadmap, not current product truth. Implemented
-> behavior is documented in [README.md](README.md),
-> [docs/capabilities.md](docs/capabilities.md), and the machine-readable
-> `notewitness capabilities` output. Roadmap phase labels below are research-planning labels, not
-> package-version promises.
+> This is a frozen research proposal and maturity roadmap, not current product
+> truth, and the implementation has moved on since it was written. For what
+> exists today, see [README.md](README.md),
+> [docs/capabilities.md](docs/capabilities.md), the
+> [interactive demo](https://sebastianspicker.github.io/notewitness/), and the
+> machine-readable `notewitness capabilities` output. Roadmap phase labels below
+> are research-planning labels, not package-version promises.
 
 ## Executive summary
 

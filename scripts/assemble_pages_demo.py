@@ -9,46 +9,49 @@ import sys
 
 
 DEMO_STYLES = """
-  .demo-bar {
-    min-height: 28px;
-    padding: 6px 16px;
-    border-bottom: 1px solid var(--rule);
-    background: var(--indigo-soft);
-    color: var(--indigo-deep);
-    font-size: 11px;
-    letter-spacing: .02em;
-    text-align: center;
-  }
-  .demo-bar strong { font-weight: 700; }
-  .app-shell { height: calc(100vh - 28px); max-height: calc(100vh - 28px); }
-  [data-demo-command="simulated"]::after, .demo-action-label {
-    display: inline-block;
-    margin-left: 6px;
-    color: currentColor;
-    font-size: 8px;
-    font-weight: 700;
-    letter-spacing: .08em;
-    line-height: 1;
-    text-transform: uppercase;
-    opacity: .72;
-  }
-  [data-demo-command="simulated"]::after { content: "Simulated"; }
-  .file-button .demo-action-label { margin-left: 4px; }
-  .record-group .demo-action-label,
-  .practice-list .demo-action-label,
-  .quick-plan .demo-action-label { margin: 3px 0 0; }
-  .demo-command-help {
-    margin: 8px 0 0;
+  .demo-session-note {
+    display: grid;
+    gap: 2px;
+    margin: 12px 0 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--rule);
     color: var(--mute);
     font-size: 11px;
-    line-height: 1.45;
+    line-height: 1.4;
   }
-  .demo-command-help strong { color: var(--indigo-deep); font-weight: 650; }
+  .demo-session-note strong { color: var(--ink); font-weight: 650; }
+  .demo-tour-link { margin-top: 6px; color: var(--indigo); font-size: 11px; font-weight: 600; }
+  .demo-audit { margin-top: 16px; }
+  .demo-audit ol { margin: 8px 0 0; padding-left: 18px; }
+  .demo-audit li { margin: 4px 0; color: var(--mute); font-size: 12px; }
+  .demo-revision-dialog { max-width: 520px; }
+  .demo-revision-dialog textarea { width: 100%; min-height: 100px; }
+  .demo-decision-summary { margin: 0 24px 24px; padding: 16px 0; border-top: 1px solid var(--rule); }
+  .demo-decision-summary h3 { margin: 0 0 8px; font-size: 14px; }
+  .demo-decision-summary ol { margin: 0; padding-left: 20px; }
+  .demo-decision-summary li { margin: 5px 0; color: var(--mute); font-size: 12px; }
+  body[data-demo-mode="mock"] .processing-section,
+  body[data-demo-mode="mock"] .utilities-section,
+  body[data-demo-mode="mock"] .source-section .file-button,
+  body[data-demo-mode="mock"] [data-action="open-bookmark"],
+  body[data-demo-mode="mock"] .record-group { display: none !important; }
+  body[data-demo-mode="mock"] .full-select.is-hidden { display: none !important; }
+  .demo-session-note-mobile { display: none; }
   .demo-hidden { display: none !important; }
-  .full-select.is-hidden { width: 1px; min-height: 0; }
-  @media (max-width: 780px) {
-    .demo-bar { text-align: left; }
-    .app-shell { height: auto; max-height: none; }
+  @media (max-width: 680px) {
+    .app-header .demo-session-note-mobile {
+      display: grid;
+      position: absolute;
+      top: 8px;
+      right: 56px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      font-size: 9px;
+      line-height: 1.25;
+      text-align: right;
+    }
+    .app-header { position: relative; }
   }
 """
 
@@ -63,6 +66,17 @@ def main() -> int:
         )
         for panel in payload["panels"]
     )
+    contexts = "\n".join(
+        (
+            f'<template data-demo-context="{context["name"]}">'
+            f'{context["markup"]}</template>'
+        )
+        for context in payload["contexts"]
+    )
+    review_contexts = "\n".join(
+        f'<template data-demo-review-context="{context["id"]}">{context["markup"]}</template>'
+        for context in payload["reviewContexts"]
+    )
     document = f"""<!doctype html>
 <html lang="en">
   <head>
@@ -70,23 +84,24 @@ def main() -> int:
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <meta name="theme-color" content="#ffffff">
-    <meta name="description"
-      content="Static, synthetic walkthrough of the NoteWitness local evidence workbench.">
-    <title>NoteWitness · static interface demo</title>
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'self' data:; media-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+    <meta name="description" content="Browser-only mock lesson data rendered with the NoteWitness Evidence Ledger interface.">
+    <title>NoteWitness · mock lesson ledger</title>
     <link rel="icon" href="/assets/notewitness-mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/assets/app.css">
     <style>{DEMO_STYLES}</style>
   </head>
-  <body>
+  <body data-demo-mode="mock">
     <a class="skip-link" href="#workbench-main">Skip to workspace</a>
-    <div class="demo-bar" role="note">
-      <strong>Static demo · synthetic example.</strong>
-      Navigation changes this page only; marked actions are simulated and never run commands.
-    </div>
     <div id="app">{payload["workbench"]}</div>
+    <p class="demo-session-note" role="status"><strong>Mock lesson · browser-only</strong><span>Changes reset on reload</span></p>
     {panels}
+    {contexts}
+    {review_contexts}
+    <template data-demo-review-context="empty">{payload["emptyReviewContext"]}</template>
     <noscript>
-      This static walkthrough requires JavaScript for tabs and simulated controls.
+      This mock lesson interface needs JavaScript for browser-session interactions.
     </noscript>
     <script type="module" src="/assets/pages-demo.js"></script>
   </body>

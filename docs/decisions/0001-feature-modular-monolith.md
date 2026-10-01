@@ -4,24 +4,25 @@ Status: accepted
 
 ## Context
 
-NoteWitness runs as one local process but previously spread cohesive workflows
-across nominal domain, application, adapter, infrastructure, presentation, and
-provider layers. The application layer became a dependency hub, while project
-persistence and local-tool policy were scattered across package roots.
+NoteWitness runs as one local process, but the code once spread cohesive
+workflows across nominal domain, application, adapter, infrastructure,
+presentation, and provider layers. The application layer turned into a
+dependency hub, and project persistence and local-tool policy were scattered
+across package roots.
 
 ## Decision
 
 Organize the package around six product responsibilities: `core`, `projects`,
 `analysis`, `lessons`, `workbench`, and `interfaces`. Enforce their dependency
-direction with an AST contract test. Keep `projects` as the sole canonical
-evidence-document mutation authority and keep analysis jobs distinct from
-browser queue state. Use small protocols only for actual capture and
-analysis-engine substitution.
+direction with an AST contract test. Keep `projects` as the only authority for
+canonical evidence-document mutation, and keep analysis jobs distinct from
+browser queue state. Use small protocols only where capture and analysis-engine
+substitution actually happens.
 
 ## Consequences
 
-Each concept has one expected home and feature workflows can be changed without
-crossing artificial horizontal layers. The package remains dependency-free at
-runtime and deploys as one process. Internal Python paths are not treated as
-compatibility contracts; the documented CLI, file, protocol, and loopback UI
-contracts remain the external surface.
+Every concept has one home, and feature workflows can change without crossing
+artificial horizontal layers. The package stays dependency-free at runtime and
+deploys as one process. Internal Python paths are not compatibility contracts;
+the documented CLI, file, protocol, and loopback UI contracts are the external
+surface.

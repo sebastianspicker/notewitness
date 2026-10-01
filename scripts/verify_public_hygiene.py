@@ -18,7 +18,6 @@ BANNED_ROOT_DIRECTORIES = frozenset(
         ".claude",
         ".codex",
         ".cursor",
-        ".repowise",
         ".serena",
         "archive",
         "agent-prompts",
@@ -49,6 +48,7 @@ BANNED_FILENAMES = frozenset(
         "copilot-instructions.md",
     }
 )
+SCREENSHOT_SUFFIXES = frozenset({".avif", ".jpeg", ".jpg", ".png", ".webp"})
 BANNED_SUFFIXES = frozenset(
     {
         ".aac",
@@ -174,7 +174,8 @@ def path_violations(path: Path) -> tuple[str, ...]:
     if path.suffix.casefold() in BANNED_SUFFIXES:
         problems.append("private artifact extension")
     if tuple(part.casefold() for part in path.parts[:2]) == ("docs", "screenshots"):
-        problems.append("committed screenshot artifact")
+        if path.suffix.casefold() not in SCREENSHOT_SUFFIXES:
+            problems.append("disallowed screenshot artifact")
     name = path.name.casefold()
     if path.suffix.casefold() == ".md" and (
         name.endswith(("-ledger.md", "_ledger.md"))

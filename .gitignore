@@ -88,7 +88,6 @@ Thumbs.db
 /.cursor/
 /.impeccable/
 /.kilo/
-/.repowise/
 /.serena/
 /.mcp.json
 /.cursorrules
@@ -142,4 +141,6 @@ Thumbs.db
 /RELEASE_STATUS.md
 /.history-maintenance-provenance
 /archive/
-/docs/screenshots/
+
+# Docs screenshots are intentionally tracked: they only ever show the synthetic
+# demo fixture. Keep private media and captures of real lessons out of the tree.

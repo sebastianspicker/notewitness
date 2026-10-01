@@ -1,4 +1,4 @@
-import { renderNotice, renderPanel, renderProcessing, renderTimeline, renderWorkbench } from "/assets/workbench_ui.mjs";
+import { encodeId, renderContextInspector, renderNotice, renderPanel, renderProcessing, renderTimeline, renderWorkbench, reviewItems } from "/assets/workbench_ui.mjs";
 
 export function createRendering(c) {
   const { app, state } = c;
@@ -10,8 +10,12 @@ export function createRendering(c) {
   function render(restore = null) { replaceMarkup(app, renderWorkbench(state)); c.bindMedia(restore); c.openRenderedDialog(); if (state.pendingFocus) { const target = app.querySelector(`[data-review-card="${CSS.escape(state.pendingFocus)}"]`); state.pendingFocus = ""; target?.focus(); } }
   function renderPreservingPlayback() { render(c.snapshotPlayback()); }
   function refreshPanel() { const panel = app.querySelector("[data-workspace-panel]"); if (panel) replaceMarkup(panel, renderPanel(state)); app.querySelectorAll("[data-tab]").forEach((tab) => { const selected = tab.dataset.tab === state.activePanel; if (tab.getAttribute("role") === "tab") { tab.setAttribute("aria-selected", String(selected)); tab.tabIndex = selected ? 0 : -1; } }); }
+  function syncReviewSelection() { const items = reviewItems(state); if (!items.some((item) => encodeId(item.event_id) === state.activeReviewId)) state.activeReviewId = encodeId(items[0]?.event_id || ""); }
+  function refreshContextInspector() { const inspector = app.querySelector("[data-context-inspector]"); if (inspector) replaceMarkup(inspector, renderContextInspector(state)); }
+  function refreshReviewSurface() { syncReviewSelection(); refreshPanel(); refreshContextInspector(); }
+  function selectReview(eventId, focus = false) { if (!reviewItems(state).some((item) => encodeId(item.event_id) === eventId)) return; state.activeReviewId = eventId; refreshReviewSurface(); if (focus) app.querySelector(`[data-review-card="${CSS.escape(eventId)}"]`)?.focus(); }
   function refreshTimeline() { const root = app.querySelector("[data-timeline-root]"); if (root) replaceMarkup(root, renderTimeline(state)); c.syncPlayback(); }
   function refreshProcessing() { const section = app.querySelector(".processing-section"); if (!section) return; const body = new DOMParser().parseFromString(renderProcessing(state), "text/html").body; section.replaceWith(...body.childNodes); }
-  function selectPanel(name, focus = false) { if (!["review", "transcript", "lesson"].includes(name)) return; state.activePanel = name; refreshPanel(); if (focus) app.querySelector(`[data-tab="${name}"][role="tab"]`)?.focus(); }
-  return { renderFatalState, setNotice, setBusy, runMutation, render, renderPreservingPlayback, refreshPanel, refreshTimeline, refreshProcessing, selectPanel };
+  function selectPanel(name, focus = false) { if (!["review", "transcript", "lesson"].includes(name)) return; state.activePanel = name; refreshPanel(); refreshContextInspector(); if (focus) app.querySelector(`[data-tab="${name}"][role="tab"]`)?.focus(); }
+  return { renderFatalState, setNotice, setBusy, runMutation, render, renderPreservingPlayback, refreshPanel, refreshTimeline, refreshProcessing, refreshReviewSurface, selectReview, selectPanel };
 }

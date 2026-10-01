@@ -54,7 +54,9 @@ class WorkbenchServerAccessTests(WorkbenchServerTestCase):
         self.assertIn("script-src 'self'; style-src 'self' 'unsafe-inline'", headers["Content-Security-Policy"])
         self.assertEqual("microphone=(self), camera=()", headers["Permissions-Policy"])
         assets = (
-            "/assets/app.js", "/assets/js/actions.mjs", "/assets/js/review_actions.mjs",
+            "/assets/app.js", "/assets/js/actions.mjs", "/assets/js/app_events.mjs",
+            "/assets/js/app_rendering.mjs", "/assets/js/app_state.mjs",
+            "/assets/js/review_actions.mjs",
             "/assets/js/capture_actions.mjs", "/assets/js/processing.mjs", "/assets/js/api.mjs",
             "/assets/js/playback.mjs", "/assets/workbench_ui.mjs", "/assets/notewitness-mark.svg",
             "/assets/ui/utils.mjs", "/assets/ui/value_utils.mjs", "/assets/ui/filter_utils.mjs",
@@ -72,6 +74,9 @@ class WorkbenchServerAccessTests(WorkbenchServerTestCase):
         client = b"".join(bodies.values())
         self.assertIn(b"actor_id: actorId", bodies["/assets/js/review_actions.mjs"])
         self.assertIn(b"author_id: author.id", bodies["/assets/js/review_actions.mjs"])
+        self.assertIn(b"/api/review/reject", bodies["/assets/js/review_actions.mjs"])
+        self.assertIn(b"data-reject", bodies["/assets/ui/panels.mjs"])
+        self.assertIn(b"toggle-theme", bodies["/assets/js/actions.mjs"])
         self.assertIn(b"/api/imports", bodies["/assets/js/capture_actions.mjs"])
         self.assertIn(b"/api/jobs", bodies["/assets/js/processing.mjs"])
         self.assertIn(b"<title>NoteWitness</title>", bodies["/assets/notewitness-mark.svg"])

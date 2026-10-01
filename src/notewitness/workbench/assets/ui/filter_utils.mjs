@@ -1,7 +1,14 @@
-import { itemSource, list } from "/assets/ui/value_utils.mjs";
+import { encodeId, itemSource, list } from "/assets/ui/value_utils.mjs";
 
 export function reviewItems(state) {
   return filterItems(state, state.data?.lesson?.transcript_suggestions, true);
+}
+
+export function selectedReviewItem(state) {
+  const items = reviewItems(state);
+  return items.find((item) => encodeId(item.event_id) === state.activeReviewId)
+    || items[0]
+    || null;
 }
 
 export function transcriptItems(state) {

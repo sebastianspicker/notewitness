@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Render static Pages markup from a synthetic workbench snapshot on stdin. */
+/** Render Pages markup from a synthetic workbench snapshot on stdin. */
 
 import { registerHooks } from "node:module";
 
@@ -39,11 +39,14 @@ function visibleLaneKinds(snapshot) {
   );
 }
 
-function demoState(snapshot, activePanel = "review") {
+function demoState(snapshot, activePanel = "review", activeReviewId = "") {
   const sourceId = snapshot.source_id;
   const durationSeconds = Number(snapshot.duration_us || 0) / 1e6;
   return {
     activePanel,
+    activeReviewId: activeReviewId || encodeURIComponent(
+      snapshot.lesson?.transcript_suggestions?.[0]?.event_id || "",
+    ),
     activeSourceId: sourceId,
     authorId: "actor:researcher",
     captureState: "idle",
@@ -75,21 +78,42 @@ function demoState(snapshot, activePanel = "review") {
       project: snapshot.project,
       lesson: snapshot.lesson,
       timeline: snapshot.timeline,
-      csrf_token: "static-demo",
+      csrf_token: "mock-data-demo",
     }),
   };
+}
+
+function withEmptyQueue(snapshot) {
+  const empty = clone(snapshot);
+  empty.lesson.transcript_suggestions = [];
+  return empty;
 }
 
 let snapshotInput = "";
 for await (const chunk of process.stdin) snapshotInput += chunk;
 const snapshot = JSON.parse(snapshotInput);
-const { renderPanel, renderWorkbench } = await import("/assets/workbench_ui.mjs");
+const { renderContextInspector, renderPanel, renderWorkbench } = await import("/assets/workbench_ui.mjs");
 const initial = demoState(snapshot);
 const panels = ["review", "transcript", "lesson"].map((name) => {
   return { name, markup: renderPanel(demoState(snapshot, name)) };
 });
+panels.push({
+  name: "review-empty",
+  markup: renderPanel(demoState(withEmptyQueue(snapshot), "review")),
+});
+const contexts = ["transcript", "lesson"].map((name) => {
+  return { name, markup: renderContextInspector(demoState(snapshot, name)) };
+});
+const reviewContexts = (snapshot.lesson?.transcript_suggestions || []).map((item) => ({
+  id: encodeURIComponent(item.event_id),
+  markup: renderContextInspector(demoState(snapshot, "review", encodeURIComponent(item.event_id))),
+}));
+const emptyReviewContext = renderContextInspector(demoState(withEmptyQueue(snapshot), "review"));
 const payload = JSON.stringify({
+  contexts,
+  emptyReviewContext,
   panels,
+  reviewContexts,
   workbench: renderWorkbench(initial),
 });
 console.log(Buffer.from(payload, "utf8").toString("base64"));

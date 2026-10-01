@@ -224,10 +224,12 @@ There is no container, hosted application service, database service, migration
 system, or production deployment definition in this repository. The SQLite job
 stores and `project.json` schema 0.1.0 have no migration mechanism.
 
-The GitHub Pages workflow builds a browser-only, mock-data demo from the bundled
-renderer and the synthetic example. It makes no server requests and cannot
-access devices, run local processing, persist a project, or export. It
-demonstrates the interface; it is not a deployment of the private workbench.
+The GitHub Pages workflow builds two browser-only artifacts from the bundled
+renderer and synthetic fixture: an interactive mock-data demo (`index.html`) and
+a static screenshot tour (`tour.html`) built from the committed captures in
+`docs/screenshots/`. Neither makes server requests or can access devices, run
+local processing, persist a project, or export. They demonstrate the interface;
+they are not a deployment of the private workbench.
 
 ## Invariants and non-goals
 

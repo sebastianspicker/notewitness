@@ -5,6 +5,13 @@ identifiers.
 
 ## [Unreleased]
 
+- Rewrite the documentation set for a general GitHub audience, plain language,
+  and consistent structure.
+- Add a curated screenshot tour to the README and a `tour.html` page to the
+  Pages artifact, captured from the synthetic demo, and allow image files under
+  `docs/screenshots/` in the public-hygiene gate.
+- Replace the static Pages walkthrough with an interactive, session-only
+  Evidence Ledger demo backed exclusively by deterministic synthetic lesson data.
 - Require a per-process workbench session before private API, job, media, or mutation access.
 - Make SQLite sidecar permission handling safe when transient WAL files disappear during concurrent
   workbench operations.
@@ -21,8 +28,8 @@ identifiers.
 - Add `POST /api/review/reject` to record a human rejection of a machine
   evidence suggestion as an append-only revision. Rejected suggestions leave the
   review queue, and a suggestion that was already accepted or rejected can no
-  longer be accepted ("was already reviewed"). The browser control for this
-  route is not included yet.
+  longer be accepted ("was already reviewed"). The review panel offers a
+  reject action next to accept.
 - Return 422 instead of dropping the connection when a workbench actor already
   exists or a transcript export filename is already taken.
 - Derive the durable analysis-job runtime fingerprint from an explicit list of analysis-suite

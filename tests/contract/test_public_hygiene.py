@@ -11,7 +11,7 @@ class PublicHygieneTests(unittest.TestCase):
         cases = (
             "RELEASE_STATUS.md",
             "projects/private/project.json",
-            "docs/screenshots/generated/raw.png",
+            "docs/screenshots/generated/raw.json",
             "fixtures/private-lesson.wav",
             "fixtures/local-test.sqlite3",
         )

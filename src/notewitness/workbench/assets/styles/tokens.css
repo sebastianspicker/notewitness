@@ -1,50 +1,30 @@
-/* Evidence Desk — design tokens (graphite score desk under north light). */
+/* Evidence Ledger: restrained, source-first archival workbench. */
 :root {
   color-scheme: light;
-
-  --bg: #ffffff;
-  --ink: #12141a;
-  --ink-2: #3a3f4a;
-  --mute: #6a7180;
-  --faint: #9aa1ad;
-  --rule: #e6e8ec;
-  --rule-2: #d0d4db;
-  --wash: #f6f7f9;
-  --indigo: #2c4a6e;
-  --indigo-deep: #1e3450;
-  --indigo-soft: #eef2f7;
-  --playhead: #b42318;
-  --ok: #1f4d3a;
-  --suggest: #7a5b2e;
-  --suggest-soft: #faf8f4;
-  --danger: #8f3a32;
-  --danger-soft: #fceeee;
-  --focus: #2c4a6e;
-
+  --paper: #faf9f6; --paper-2: #f2f0ea; --paper-3: #e9e6de;
+  --ink: #1a1c20; --ink-2: #4b4f58; --mute: #6c717b; --faint: #7d828d;
+  --rule: #e4e1d9; --rule-2: #d3cfc4; --wash: var(--paper-2);
+  --indigo: #2e4f74; --indigo-deep: #23405f; --indigo-soft: #e9eef4;
+  --ok: #2f6b4f; --suggest: #8a6413; --suggest-soft: #f7f1e3;
+  --danger: #a13c2e; --danger-soft: #f9ebe8; --playhead: #b42318; --focus: var(--indigo);
   --font: system-ui, "Segoe UI", "Helvetica Neue", sans-serif;
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --fs: 14px;
-  --lh: 1.45;
-  --measure: 62ch;
-  --rail-left: 200px;
-  --rail-right: 220px;
-  --header-pad-x: 36px;
-  --transport-h: 56px;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --fs: 14px; --lh: 1.45; --measure: 68ch;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px;
+  --r-sm: 3px; --r-md: 6px; --nav-w: 184px; --inspector-w: 340px;
+  --header-pad-x: var(--sp-6); --transport-h: 64px;
+  /* Legacy aliases retained for feature-owned renderer markup. */
+  --bg: var(--paper); --surface: var(--paper); --surface-muted: var(--paper-2); --muted: var(--mute);
+  --line: var(--rule); --line-strong: var(--rule-2); --blue: var(--indigo); --blue-dark: var(--indigo-deep); --blue-soft: var(--indigo-soft);
+  --green: var(--ok); --green-soft: #eaf3ec; --amber: var(--suggest); --amber-soft: var(--suggest-soft); --red: var(--danger); --red-soft: var(--danger-soft);
+}
 
-  /* Legacy aliases for transitional class hooks */
-  --paper: var(--bg);
-  --surface: var(--bg);
-  --surface-muted: var(--wash);
-  --muted: var(--mute);
-  --line: var(--rule);
-  --line-strong: var(--rule-2);
-  --blue: var(--indigo);
-  --blue-dark: var(--indigo-deep);
-  --blue-soft: var(--indigo-soft);
-  --green: var(--ok);
-  --green-soft: #e8f5f0;
-  --amber: var(--suggest);
-  --amber-soft: var(--suggest-soft);
-  --red: var(--danger);
-  --red-soft: var(--danger-soft);
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #171613; --paper-2: #201e19; --paper-3: #2a2822;
+  --ink: #ece9e1; --ink-2: #c7c2b7; --mute: #aaa69c; --faint: #aaa69c;
+  --rule: #2c2a24; --rule-2: #3d3a31; --indigo: #8fb4d9; --indigo-deep: #b7cee5; --indigo-soft: #263544;
+  --ok: #8ac39e; --suggest: #dfb55d; --suggest-soft: #342c1d; --danger: #eb9b8e; --danger-soft: #3a2420;
+  --playhead: #ef7066; --focus: #a9c6e2;
 }

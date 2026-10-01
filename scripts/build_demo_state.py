@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Build deterministic workbench state for the public static demo."""
+"""Build deterministic workbench state for the public mock-data demo."""
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict
 import json
 import sys
@@ -15,6 +16,38 @@ from notewitness.workbench.timeline import TimelineViewModel
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = ROOT / "examples" / "synthetic-lesson" / "project.json"
+
+
+MOCK_QUEUE = (
+    (
+        "event:mock-csharp-release",
+        "event:instruction",
+        "speech",
+        "Release the C♯ at the end of bar 18; keep the bow moving.",
+        0.86,
+    ),
+    (
+        "event:mock-bars-18-21",
+        "event:demonstration",
+        "music",
+        "Violin demonstration for bars 18–21.",
+        0.79,
+    ),
+    (
+        "event:mock-listen-release",
+        "event:feedback",
+        "speech",
+        "Listen for the release before repeating bar 21.",
+        0.74,
+    ),
+    (
+        "event:mock-repeat-release",
+        "event:attempt-2",
+        "note",
+        "Compare the next repetition with the C♯ release.",
+        0.71,
+    ),
+)
 
 
 def main() -> int:
@@ -43,7 +76,7 @@ def main() -> int:
     # single-source rail and timeline share one synthetic source identity.
     media = [
         {
-            "display_name": "synthetic-lesson.timeline",
+            "display_name": "mock-violin-lesson.timeline",
             "duration_us": duration_us,
             "kind": "synthetic_timeline",
             "source_id": "source:synthetic-script",
@@ -51,31 +84,37 @@ def main() -> int:
         }
     ]
     lesson = notes.as_dict()
-    # Add one deterministic suggestion without changing the example on disk.
+    entries = {entry["event_id"]: entry for entry in lesson["full_transcript"]}
     suggestions = []
-    for entry in lesson["full_transcript"]:
-        if entry.get("content_kind") == "speech" and entry.get("actor_role") == "teacher":
-            suggestion = dict(entry)
-            suggestion["event_id"] = "event:demo-suggestion"
-            suggestion["review_status"] = "machine_suggested"
-            suggestion["confidence"] = {
-                "kind": "adapter_reported",
-                "value": 0.82,
+    for event_id, source_event_id, content_kind, text, confidence in MOCK_QUEUE:
+        suggestion = deepcopy(entries[source_event_id])
+        suggestion.update(
+            {
+                "event_id": event_id,
+                "content_kind": content_kind,
+                "display_text": text,
+                "body_value": text,
+                "review_status": "machine_suggested",
+                "layer": "mock_input",
+                "generator_id": "generator:mock-ledger",
+                "rights_id": "rights:mock-data",
+                "confidence": {"kind": "adapter_reported", "value": confidence},
             }
-            suggestions.append(suggestion)
-            break
+        )
+        suggestions.append(suggestion)
     lesson["transcript_suggestions"] = suggestions
+    lesson["title"] = "Mock violin lesson · bars 18–21"
 
     snapshot = {
         "actors": actors,
         "capabilities": {
-            "bookmark": True,
-            "capture": True,
-            "metronome": True,
-            "music_export": True,
+            "bookmark": False,
+            "capture": False,
+            "metronome": False,
+            "music_export": False,
             "playback": False,
             "review": True,
-            "tuner": True,
+            "tuner": False,
         },
         "lesson": lesson,
         "media": media,
@@ -89,8 +128,8 @@ def main() -> int:
             "id": str(project.get("id", "")),
             "network_mode": notes.network_mode,
             "saved": True,
-            "sha256": "demo-synthetic",
-            "title": str(project.get("name", "Untitled lesson")),
+            "sha256": "mock-data-only",
+            "title": "Mock violin lesson · bars 18–21",
         },
         "timeline": asdict(timeline),
         "source_id": "source:synthetic-script",
