@@ -12,10 +12,6 @@ from notewitness.core.evidence.contract import (
     SCHEMA_VERSION,
     ValidationIssue,
 )
-from notewitness.core.evidence.validation_assertions import (
-    validate_events,
-    validate_relations,
-)
 from notewitness.core.evidence.validation_common import (
     reject_unknown_fields,
     require_fields,
@@ -23,6 +19,7 @@ from notewitness.core.evidence.validation_common import (
     validate_datetime,
     validate_id,
 )
+from notewitness.core.evidence.validation_events import validate_events
 from notewitness.core.evidence.validation_records import (
     validate_actors,
     validate_generators,
@@ -30,6 +27,7 @@ from notewitness.core.evidence.validation_records import (
     validate_sources,
     validate_targets,
 )
+from notewitness.core.evidence.validation_relations import validate_relations
 from notewitness.core.evidence.validation_review import validate_review_provenance
 from notewitness.core.evidence.validation_revisions import validate_revisions
 

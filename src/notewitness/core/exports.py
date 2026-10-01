@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-import re
-
-
-_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ExportFormat(StrEnum):
@@ -89,28 +85,3 @@ class ExportPreflight:
             and self.loss_preview_acknowledged
             and not any(loss.severity is LossSeverity.BLOCKING for loss in self.losses)
         )
-
-
-@dataclass(frozen=True, slots=True)
-class ExportResult:
-    export_format: ExportFormat
-    path: str
-    record_count: int
-    checksum_sha256: str
-    documented_losses: tuple[ProjectionLoss, ...]
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.export_format, ExportFormat) or not self.path:
-            raise ValueError("Export results require a typed format and path.")
-        if (
-            not isinstance(self.record_count, int)
-            or isinstance(self.record_count, bool)
-            or self.record_count < 0
-        ):
-            raise ValueError("Export record_count must be a non-negative integer.")
-        if not _SHA256.fullmatch(self.checksum_sha256):
-            raise ValueError("Export results require a lowercase SHA-256 checksum.")
-        if not isinstance(self.documented_losses, tuple) or any(
-            not isinstance(loss, ProjectionLoss) for loss in self.documented_losses
-        ):
-            raise ValueError("Export results require typed documented losses.")

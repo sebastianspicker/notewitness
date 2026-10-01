@@ -15,7 +15,6 @@ from ._processing_contracts import (
     WorkbenchExecutor,
     WorkbenchJob,
     WorkbenchJobKind,
-    WorkbenchJobState,
     WorkbenchProcessingError,
     WORKBENCH_SHUTDOWN_WAIT_SECONDS,
     require_project_media,

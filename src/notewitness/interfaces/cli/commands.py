@@ -27,7 +27,7 @@ from notewitness.projects.store import ProjectStoreError
 
 from .analysis_commands import analysis_job as _analysis_job
 from .analysis_commands import analyze_local as _analyze_local
-from .parser import OPERATIONAL_COMMANDS, register_operational_commands
+from .parser import OPERATIONAL_COMMANDS
 from .project_commands import add_actor as _add_actor
 from .project_commands import export_music as _export_music
 from .project_commands import ingest_media_command as _ingest_media

@@ -2,27 +2,28 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from notewitness.analysis.adapters.whisper_cli import WhisperCLIResult, WhisperCLISettings
 from notewitness.core.time import MediaSpan
-from notewitness.core.transcription import (
+from notewitness.core.transcription.run import (
     CanonicalTranscriptEvidence,
     DetectedLanguage,
-    DiarizationMode,
-    DisfluencyPolicy,
-    LanguageMode,
     ResolvedModelProfile,
     ResolvedRunArtifact,
     SourceChecksum,
-    TranscriptExportFormat,
-    TranscriptionJobSpec,
     TranscriptionRunManifest,
     TranscriptionRunState,
     transcription_settings_sha256,
+)
+from notewitness.core.transcription.options import (
+    DiarizationMode,
+    DisfluencyPolicy,
+    LanguageMode,
+    TranscriptExportFormat,
+    TranscriptionJobSpec,
 )
 from notewitness.projects.artifacts import write_new_private_json
 from notewitness.analysis.local_tools import LocalToolFailure

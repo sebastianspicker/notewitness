@@ -11,7 +11,7 @@ from notewitness.projects.store import (
     ProjectStore,
     ProjectStoreError,
 )
-from notewitness.core.evidence import MAX_PROJECT_BYTES
+from notewitness.core.evidence.contract import MAX_PROJECT_BYTES
 
 
 class ProjectStoreTests(unittest.TestCase):

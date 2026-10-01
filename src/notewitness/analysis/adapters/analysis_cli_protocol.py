@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any, Callable, Mapping
+from typing import Any, Mapping
 
 from notewitness.core.analysis.analysis import (
     ActivityHypothesis,
@@ -37,15 +37,6 @@ def parse_batch(
     raw: str,
     request: Any,
     adapter: Any,
-    *,
-    json_value: Callable[[Any, str], Any],
-    unique_object: Callable[[list[tuple[str, Any]]], dict[str, Any]],
-    expect_keys: Callable[[Any, set[str], str], None],
-    enum: Callable[[Any, Any, str], Any],
-    list_value: Callable[[Any, str], list[Any]],
-    string_tuple: Callable[[Any, str], tuple[str, ...]],
-    nullable_string: Callable[[Any, str], str | None],
-    hypothesis: Callable[[Any, Any, Any, int], Any],
 ) -> AnalysisBatch:
     if len(raw.encode("utf-8")) > MAX_JSON_BYTES:
         raise AnalysisCLIError("Analysis CLI JSON output exceeds the bounded contract.")
@@ -93,18 +84,6 @@ def hypothesis(
     request: Any,
     adapter: Any,
     index: int,
-    *,
-    expect_keys_with_optional: Callable[[Any, set[str], set[str], str], None],
-    string: Callable[[Any, str], str],
-    enum: Callable[[Any, Any, str], Any],
-    span: Callable[[Any, Any, str], MediaSpan],
-    nullable_number: Callable[[Any, str], float | None],
-    nullable_string: Callable[[Any, str], str | None],
-    nullable_integer_in_range: Callable[[Any, int, int, str], int | None],
-    number_tuple: Callable[[Any, str], tuple[float, ...]],
-    json_value: Callable[[Any, str], Any],
-    mapping: Callable[[Any, str], Mapping[str, Any]],
-    string_tuple: Callable[[Any, str], tuple[str, ...]],
 ) -> Any:
     label = f"output.hypotheses[{index}]"
     common = {"hypothesis_id", "span", "state", "confidence"}

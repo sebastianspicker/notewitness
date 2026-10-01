@@ -12,7 +12,10 @@ from notewitness.analysis.run_integration import integrate_completed_run
 from notewitness.analysis.speaker_alignment import align_speech_to_anonymous_speakers
 from notewitness.analysis.transcription_runtime import LocalTranscriptionRequest, LocalTranscriptionRuntime
 from notewitness.analysis.local_tools import discover_local_tool
-from notewitness.core.transcription import DisfluencyPolicy, TranscriptExportFormat
+from notewitness.core.transcription.options import (
+    DisfluencyPolicy,
+    TranscriptExportFormat,
+)
 from notewitness.lessons.music_export import MusicExportFormat, SymbolicMusicExportService
 from notewitness.lessons.transcript_review_service import (
     TranscriptReviewDecision,

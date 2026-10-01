@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any
 
 
 class CapabilityLevel(StrEnum):
@@ -243,17 +243,17 @@ CAPABILITIES = (
         CapabilityLevel.CONTRACT_READY,
         "Snapshot source ranges, model profile, language, diarization, "
         "overlap, pauses, disfluencies, timestamps, and output.",
-        "notewitness.core.transcription.TranscriptionJobSpec",
+        "notewitness.core.transcription.options.TranscriptionJobSpec",
     ),
     _capability(
         "transcription_language_modes", "noscribe_parity", "v0.1", CapabilityLevel.CONTRACT_READY,
         "Distinguish fixed, automatic, and multilingual requests from detected language evidence.",
-        "notewitness.core.transcription.LanguageMode",
+        "notewitness.core.transcription.options.LanguageMode",
     ),
     _capability(
         "transcription_speaker_options", "noscribe_parity", "v0.1", CapabilityLevel.CONTRACT_READY,
         "Support diarization off, automatic, or exact 1-10 speakers plus optional overlap.",
-        "notewitness.core.transcription.DiarizationMode",
+        "notewitness.core.transcription.options.DiarizationMode",
     ),
     _capability(
         "transcript_correction_workspace",
@@ -286,7 +286,7 @@ CAPABILITIES = (
     _capability(
         "project_domain_lexicon", "research_extension", "v0.1", CapabilityLevel.CONTRACT_READY,
         "Keep project terminology separate from model tokenizers and adapter prompts.",
-        "notewitness.core.transcription.ProjectLexicon",
+        "notewitness.core.transcription.review.ProjectLexicon",
         "This is a NoteWitness extension, not a noScribe parity claim.",
     ),
     _capability(
@@ -414,11 +414,6 @@ PROFILES = {
 }
 
 
-class CapabilityRegistry(Protocol):
-    @property
-    def available_capability_ids(self) -> tuple[str, ...]: ...
-
-
 def capability_manifest() -> dict[str, Any]:
     counts = {
         level.value: sum(item.level is level for item in CAPABILITIES)
@@ -432,15 +427,12 @@ def capability_manifest() -> dict[str, Any]:
     }
 
 
-def profile_readiness(
-    profile: str, registry: CapabilityRegistry | None = None
-) -> dict[str, Any]:
+def profile_readiness(profile: str) -> dict[str, Any]:
     if profile not in PROFILES:
         raise ValueError(f"Unknown production profile: {profile!r}.")
     by_id = {item.capability_id: item for item in CAPABILITIES}
     required_ids = PROFILES[profile]
     required = tuple(by_id[item_id] for item_id in required_ids)
-    installed = set(registry.available_capability_ids if registry else ())
     built_in_levels = {
         CapabilityLevel.AVAILABLE,
         CapabilityLevel.PROJECTION_AVAILABLE,
@@ -448,7 +440,7 @@ def profile_readiness(
     missing = tuple(
         item.capability_id
         for item in required
-        if item.level not in built_in_levels and item.capability_id not in installed
+        if item.level not in built_in_levels
     )
     return {
         "profile": profile,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import threading
 
-from notewitness.analysis._resumable_analysis_artifacts import ResumableAnalysisError
 from notewitness.analysis.runs.sqlite_job_store import SQLiteJobStore
 
 

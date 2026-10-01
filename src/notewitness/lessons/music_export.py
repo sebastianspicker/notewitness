@@ -12,7 +12,6 @@ from typing import Any, Iterable, Mapping
 from notewitness.lessons.music_export_renderers import (
     MusicExportError,
     csv_bytes as _csv_bytes,
-    merged_midi_notes as _merged_midi_notes,
     midi_bytes as _midi_bytes,
     overlapping_same_pitch_ids as _overlapping_same_pitch_ids,
 )

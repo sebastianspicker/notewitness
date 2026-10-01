@@ -2,14 +2,13 @@
 
 from pathlib import Path
 
-from notewitness.core.evidence import (
+from notewitness.core.evidence.contract import (
     ACCESS_RANK,
     ALIGNMENT_STATES,
     COLLECTIONS,
     CORE_EVENT_TYPES,
     CORE_RELATION_TYPES,
     EVENT_LAYERS,
-    EvidenceGraph as _EvidenceGraph,
     EvidenceGraphError,
     GENERATOR_KINDS,
     MAX_JSON_DEPTH,
@@ -21,6 +20,7 @@ from notewitness.core.evidence import (
     ValidationIssue,
     VISIBILITY_LEVELS,
 )
+from notewitness.core.evidence.graph import EvidenceGraph as _EvidenceGraph
 from notewitness.projects.document import load_payload
 
 

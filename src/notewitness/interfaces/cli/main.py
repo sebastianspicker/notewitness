@@ -16,14 +16,14 @@ from notewitness.interfaces.capabilities import (
 )
 from notewitness.core.evidence.graph import EvidenceGraph, EvidenceGraphError
 from notewitness.core.time import MediaSpan
-from notewitness.core.transcription import (
+from notewitness.core.transcription.options import (
     DiarizationMode,
     DisfluencyPolicy,
     LanguageMode,
     TranscriptExportFormat,
     TranscriptionJobSpec,
-    transcript_export_losses,
 )
+from notewitness.core.transcription.export import transcript_export_losses
 from notewitness.core.audio import MetronomePlan, tuner_reading
 from notewitness.lessons.lesson_notes import LessonNotesProjector
 from notewitness.lessons.network import NetworkAccessDenied, TransportFailure

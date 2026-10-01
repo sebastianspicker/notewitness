@@ -12,10 +12,8 @@ from pathlib import Path
 import stat
 from typing import Any, Mapping
 
-from notewitness.analysis.adapters.analysis_cli import (
-    LocalAnalysisSource,
-    analysis_artifact_identity,
-)
+from notewitness.analysis.adapters.analysis_cli import LocalAnalysisSource
+from notewitness.analysis.adapters.analysis_cli_identity import analysis_artifact_identity
 from notewitness.analysis.adapters.whisper_cli import WhisperCLISettings
 from notewitness.analysis.local_tools import LocalTool, discover_local_tool
 from notewitness.analysis.local_tools.discovery import validated_trusted_path

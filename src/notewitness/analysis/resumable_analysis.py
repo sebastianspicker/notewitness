@@ -21,7 +21,6 @@ from notewitness.analysis._resumable_analysis_artifacts import (
     continuation_after,
     events_exist,
     next_continuation,
-    read_json,
     read_private,
 )
 from notewitness.analysis._resumable_analysis_leases import LeaseRenewer
@@ -44,11 +43,6 @@ from notewitness.projects.store import ProjectStore
 
 
 MAX_RESUMABLE_STAGES = 16
-_StageChunk = StageChunk
-_LeaseRenewer = LeaseRenewer
-_read_private = read_private
-_read_json = read_json
-_events_exist = events_exist
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,7 +259,7 @@ class ResumableAnalysisCoordinator:
         continuation_token: str | None,
     ) -> tuple[AnalysisBatch, bytes]:
         """Keep an owned lease current while a bounded adapter call is in progress."""
-        renewer = _LeaseRenewer(
+        renewer = LeaseRenewer(
             self._store,
             job.spec.job_id,
             self._owner_id,
@@ -281,9 +275,9 @@ class ResumableAnalysisCoordinator:
 
     def _resume_stage(
         self, job: DurableJob, stage: AnalysisStage
-    ) -> tuple[list[_StageChunk], DurableJob]:
+    ) -> tuple[list[StageChunk], DurableJob]:
         """Replay persisted chunks, then execute bounded continuations to completion."""
-        chunks = self._stage_chunks(job, stage)
+        chunks = self._artifacts.stage_chunks(job, stage, self._replay_stage)
         continuation = self._continuation_after(chunks)
         checkpoint_index = 0
         if job.checkpoint_stage is stage:
@@ -310,11 +304,11 @@ class ResumableAnalysisCoordinator:
             try:
                 batch, raw = self._execute_stage_with_lease(job, stage, continuation)
             except AnalysisCLIExecutionError as exc:
-                self._write_failed_raw(job.spec.job_id, stage, len(chunks) + 1, exc.raw_output)
+                self._artifacts.write_failed_raw(job.spec.job_id, stage, len(chunks) + 1, exc.raw_output)
                 raise
             chunk_index = len(chunks) + 1
-            path = self._write_raw(job.spec.job_id, stage, chunk_index, raw, batch)
-            chunk = _StageChunk(stage, chunk_index, batch, path)
+            path = self._artifacts.write_raw(job.spec.job_id, stage, chunk_index, raw, batch)
+            chunk = StageChunk(stage, chunk_index, batch, path)
             chunks.append(chunk)
             next_token = self._next_continuation(batch, continuation, seen_tokens)
             job = self._checkpoint_chunk(job, chunk, next_token)
@@ -336,14 +330,14 @@ class ResumableAnalysisCoordinator:
         index = job.spec.stages.index(job.checkpoint_stage)
         return index if job.continuation_token is not None else index + 1
 
-    def _completed_chunks(self, job: DurableJob) -> list[_StageChunk]:
+    def _completed_chunks(self, job: DurableJob) -> list[StageChunk]:
         if job.checkpoint_stage is None:
             return []
         checkpoint_index = job.spec.stages.index(job.checkpoint_stage)
         end = checkpoint_index + (0 if job.continuation_token is not None else 1)
-        chunks: list[_StageChunk] = []
+        chunks: list[StageChunk] = []
         for stage in job.spec.stages[:end]:
-            stage_chunks = self._stage_chunks(job, stage)
+            stage_chunks = self._artifacts.stage_chunks(job, stage, self._replay_stage)
             if not stage_chunks:
                 raise ResumableAnalysisError("completed stage has no durable raw response.")
             if self._continuation_after(stage_chunks) is not None:
@@ -354,7 +348,7 @@ class ResumableAnalysisCoordinator:
     def _checkpoint_chunk(
         self,
         job: DurableJob,
-        chunk: _StageChunk,
+        chunk: StageChunk,
         continuation_token: str | None,
     ) -> DurableJob:
         return self._store.checkpoint(
@@ -365,7 +359,7 @@ class ResumableAnalysisCoordinator:
                 0 if continuation_token is not None else len(job.spec.spans)
             ),
             continuation_token=continuation_token,
-            last_artifact_id=self._raw_artifact_id(
+            last_artifact_id=self._artifacts.raw_artifact_id(
                 job.spec.job_id, chunk.stage, chunk.index, chunk.path
             ),
             pause=False,
@@ -375,22 +369,22 @@ class ResumableAnalysisCoordinator:
         self,
         job: DurableJob,
         stage: AnalysisStage,
-        chunks: list[_StageChunk],
+        chunks: list[StageChunk],
     ) -> int:
         return self._artifacts.checkpoint_chunk_index(job, stage, chunks)
 
     @staticmethod
-    def _continuation_after(chunks: list[_StageChunk]) -> str | None:
+    def _continuation_after(chunks: list[StageChunk]) -> str | None:
         return continuation_after(chunks)
 
-    def _publish_once(self, job: DurableJob, chunks: list[_StageChunk]) -> None:
+    def _publish_once(self, job: DurableJob, chunks: list[StageChunk]) -> None:
         expected_events = tuple(
-            f"event:analysis-{self._chunk_run_token(job.spec.job_id, chunk)}-{index}"
+            f"event:analysis-{self._artifacts.chunk_run_token(job.spec.job_id, chunk)}-{index}"
             for chunk in chunks
             for index, _ in enumerate(chunk.batch.hypotheses, start=1)
         )
         snapshot = self._project.load()
-        if _events_exist(snapshot.payload, expected_events):
+        if events_exist(snapshot.payload, expected_events):
             return
         first_settings = self._steps[0].adapter.settings
         generator_parameters = {
@@ -420,19 +414,19 @@ class ResumableAnalysisCoordinator:
             )
             for chunk in chunks:
                 step = self._by_stage[chunk.stage]
-                raw = _read_private(chunk.path)
+                raw = read_private(chunk.path)
                 append_analysis_batches(
                     payload,
                     source_id=job.spec.source_id,
                     batches=(chunk.batch,),
                     context=AnalysisEvidenceContext(
-                        run_token=self._chunk_run_token(job.spec.job_id, chunk),
+                        run_token=self._artifacts.chunk_run_token(job.spec.job_id, chunk),
                         generator_id=step.adapter.generator_id,
                         generator_name=step.adapter.name,
                         generator_version=step.adapter.version,
                         model_name=step.adapter.settings.model.source_id,
                         weight_hash_state=f"sha256:{self._model_sha256}",
-                        raw_artifact_id=self._raw_artifact_id(
+                        raw_artifact_id=self._artifacts.raw_artifact_id(
                             job.spec.job_id, chunk.stage, chunk.index, chunk.path
                         ),
                         raw_artifact_sha256=hashlib.sha256(raw).hexdigest(),
@@ -509,45 +503,6 @@ class ResumableAnalysisCoordinator:
                 for step in self._steps
             ],
         }
-
-    def _run_directory(self, job_id: str) -> Path:
-        return self._artifacts.run_directory(job_id)
-
-    def _raw_path(self, job_id: str, stage: AnalysisStage) -> Path:
-        return self._artifacts.raw_path(job_id, stage)
-
-    def _chunk_path(self, job_id: str, stage: AnalysisStage, index: int) -> Path:
-        return self._artifacts.chunk_path(job_id, stage, index)
-
-    def _stage_chunks(self, job: DurableJob, stage: AnalysisStage) -> list[_StageChunk]:
-        return self._artifacts.stage_chunks(job, stage, self._replay_stage)
-
-    def _write_raw(
-        self,
-        job_id: str,
-        stage: AnalysisStage,
-        index: int,
-        raw: bytes,
-        batch: AnalysisBatch,
-    ) -> Path:
-        return self._artifacts.write_raw(job_id, stage, index, raw, batch)
-
-    def _write_failed_raw(
-        self, job_id: str, stage: AnalysisStage, index: int, raw: bytes
-    ) -> None:
-        self._artifacts.write_failed_raw(job_id, stage, index, raw)
-
-    def _raw_artifact_id(
-        self, job_id: str, stage: AnalysisStage, index: int, path: Path
-    ) -> str:
-        return self._artifacts.raw_artifact_id(job_id, stage, index, path)
-
-    def _chunk_run_token(self, job_id: str, chunk: _StageChunk) -> str:
-        return self._artifacts.chunk_run_token(job_id, chunk)
-
-    @staticmethod
-    def _token(job_id: str) -> str:
-        return ResumableAnalysisArtifacts.token(job_id)
 
     def _source_sha256(self, job_id: str) -> str:
         job = self._store.get(job_id)

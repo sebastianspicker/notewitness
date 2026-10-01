@@ -5,7 +5,10 @@ from __future__ import annotations
 import argparse
 
 from notewitness.core.analysis.analysis import AnalysisStage
-from notewitness.core.transcription import DisfluencyPolicy, TranscriptExportFormat
+from notewitness.core.transcription.options import (
+    DisfluencyPolicy,
+    TranscriptExportFormat,
+)
 from notewitness.lessons.music_export import MusicExportFormat
 
 

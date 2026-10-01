@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from notewitness.analysis.adapters.whisper_cli import WhisperCLIResult
-from notewitness.core.transcription import CanonicalTranscriptEvidence
+from notewitness.core.transcription.run import CanonicalTranscriptEvidence
 
 
 MAX_GRAPH_TRANSCRIPT_SEGMENTS = 2_000

@@ -13,13 +13,13 @@ from uuid import uuid4
 
 from notewitness.analysis.adapters.analysis_cli import (
     LocalAnalysisCLIAdapter, LocalAnalysisCLISettings, LocalAnalysisSource,
-    analysis_artifact_identity,
 )
+from notewitness.analysis.adapters.analysis_cli_identity import analysis_artifact_identity
 from notewitness.analysis.analysis_runtime import LocalAnalysisRunRequest, LocalAnalysisRuntime, LocalAnalysisStep
 from notewitness.analysis.resumable_analysis import ResumableAnalysisCoordinator, ResumableAnalysisStep
 from notewitness.analysis.speaker_alignment import align_speech_to_anonymous_speakers
 from notewitness.analysis.runs.sqlite_job_store import SQLiteJobStore
-from notewitness.analysis.local_tools import LocalTool, discover_local_tool
+from notewitness.analysis.local_tools import discover_local_tool
 from notewitness.core.analysis.analysis import AnalysisStage
 from notewitness.core.analysis.jobs import AnalysisJobSpec, DurableJob
 from notewitness.core.time import MediaSpan
