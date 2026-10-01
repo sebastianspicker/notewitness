@@ -14,7 +14,11 @@ from typing import Any, BinaryIO
 from urllib.parse import unquote
 
 from notewitness.lessons._review_contracts import ReviewError
-from notewitness.projects._private_paths import PrivatePathError, private_directory
+from notewitness.projects._private_paths import (
+    PrivateDirectory,
+    PrivatePathError,
+    private_directory,
+)
 from notewitness.projects.media import MAX_INGEST_BYTES, ingest_open_media
 from notewitness.projects.store import ProjectStore
 
@@ -131,19 +135,24 @@ class WorkbenchMediaMixin:
                 descriptor = staging_directory.open_file(
                     staging_name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
                 )
-                _stream_request(self.rfile, descriptor, length)
-                os.fsync(descriptor)
-                _validate_capture_container(descriptor, content_type)
-                imported = ingest_open_media(
-                    self.server.project_root,
-                    descriptor,
-                    staging_name,
-                    create_restricted_rights=True,
-                    publication_hook=publication_hook,
-                )
-                os.close(descriptor)
-                descriptor = None
-                staging_directory.unlink(staging_name)
+                try:
+                    _stream_request(self.rfile, descriptor, length)
+                    os.fsync(descriptor)
+                    _validate_capture_container(descriptor, content_type)
+                    imported = ingest_open_media(
+                        self.server.project_root,
+                        descriptor,
+                        staging_name,
+                        create_restricted_rights=True,
+                        publication_hook=publication_hook,
+                    )
+                    os.close(descriptor)
+                    descriptor = None
+                    staging_directory.unlink(staging_name)
+                except BaseException:
+                    _discard_staging(staging_directory, descriptor, staging_name)
+                    descriptor = None
+                    raise
         except PrivatePathError as exc:
             raise ReviewError("Capture staging directory changed during import.") from exc
         finally:
@@ -179,21 +188,28 @@ class WorkbenchMediaMixin:
                 descriptor = staging_directory.open_file(
                     staging_name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
                 )
-                _stream_request(self.rfile, descriptor, length)
-                os.fsync(descriptor)
-                _validate_import_container(descriptor, suffix)
-                probe_factory = getattr(self.server.processing.executor, "ingest_probe", None)
-                probe = probe_factory() if callable(probe_factory) else None
-                imported = ingest_open_media(
-                    self.server.project_root,
-                    descriptor,
-                    staging_name,
-                    create_restricted_rights=True,
-                    probe=probe,
-                )
-                os.close(descriptor)
-                descriptor = None
-                staging_directory.unlink(staging_name)
+                try:
+                    _stream_request(self.rfile, descriptor, length)
+                    os.fsync(descriptor)
+                    _validate_import_container(descriptor, suffix)
+                    probe_factory = getattr(
+                        self.server.processing.executor, "ingest_probe", None
+                    )
+                    probe = probe_factory() if callable(probe_factory) else None
+                    imported = ingest_open_media(
+                        self.server.project_root,
+                        descriptor,
+                        staging_name,
+                        create_restricted_rights=True,
+                        probe=probe,
+                    )
+                    os.close(descriptor)
+                    descriptor = None
+                    staging_directory.unlink(staging_name)
+                except BaseException:
+                    _discard_staging(staging_directory, descriptor, staging_name)
+                    descriptor = None
+                    raise
         except PrivatePathError as exc:
             raise ReviewError("Import staging directory changed during import.") from exc
         finally:
@@ -211,6 +227,19 @@ class WorkbenchMediaMixin:
                 "source_id": imported.source_id,
             },
         )
+
+
+def _discard_staging(directory: PrivateDirectory, descriptor: int | None, name: str) -> None:
+    """Best-effort removal of a rejected staging file without masking the failure."""
+    if descriptor is not None:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+    try:
+        directory.unlink(name)
+    except (OSError, PrivatePathError):
+        pass
 
 
 def _parse_range(value: str | None, size: int) -> tuple[int, int, bool] | None:

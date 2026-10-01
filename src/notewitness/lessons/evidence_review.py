@@ -67,13 +67,7 @@ def accept_evidence_suggestion(
             raise ReviewError(
                 "Only normalized machine suggestions may be accepted."
             )
-        if any(
-            item.get("review_status") == "human_accepted"
-            and isinstance(item.get("body"), Mapping)
-            and item["body"].get("source_suggestion_id") == event_id
-            for item in payload["events"]
-        ):
-            raise ReviewError("The selected suggestion was already accepted.")
+        _require_evidence_not_decided(payload, event_id)
         body = source.get("body")
         if not isinstance(body, Mapping):
             raise ReviewError("The selected suggestion body is malformed.")
@@ -106,6 +100,53 @@ def accept_evidence_suggestion(
         expected_sha256=expected_sha256,
     )
     return ReviewMutation((accepted_id,), (revision_id,), updated.sha256)
+
+
+def reject_evidence_suggestion(
+    project_root: str,
+    *,
+    event_id: str,
+    author_id: str,
+    reason: str,
+    expected_sha256: str,
+) -> ReviewMutation:
+    """Append a human rejection revision without mutating machine evidence."""
+
+    identifier(event_id, "event_id")
+    identifier(author_id, "author_id")
+    normalized_reason = bounded_text(reason, "reason", MAX_REVIEW_REASON_CHARS)
+    revision_id = f"revision:reject-{uuid4().hex}"
+
+    def append(payload: dict[str, Any]) -> None:
+        actors = index(payload, "actors")
+        events = index(payload, "events")
+        generators = index(payload, "generators")
+        require_human_author(actors, author_id, "Evidence review")
+        source = events.get(event_id)
+        if source is None:
+            raise ReviewError("The selected evidence suggestion does not exist.")
+        if not is_normalized_machine_suggestion(source, generators):
+            raise ReviewError(
+                "Only normalized machine evidence suggestions may be rejected."
+            )
+        _require_evidence_not_decided(payload, event_id)
+        payload["revisions"].append(
+            {
+                "author_id": author_id,
+                "id": revision_id,
+                "operation": "reject",
+                "parent_revision_ids": [],
+                "reason": normalized_reason,
+                "record_id": event_id,
+                "timestamp": now(),
+            }
+        )
+
+    updated = ProjectStore(project_root).mutate(
+        append,
+        expected_sha256=expected_sha256,
+    )
+    return ReviewMutation((), (revision_id,), updated.sha256)
 
 
 def accept_relation_suggestion(
@@ -589,3 +630,24 @@ def _require_relation_not_decided(
         for revision in revisions
     ):
         raise ReviewError("The selected relation suggestion was already reviewed.")
+
+
+def _require_evidence_not_decided(
+    payload: Mapping[str, Any],
+    event_id: str,
+) -> None:
+    events = index(payload, "events")
+    if any(
+        event.get("review_status") == "human_accepted"
+        and isinstance(event.get("body"), Mapping)
+        and event["body"].get("source_suggestion_id") == event_id
+        for event in events.values()
+    ):
+        raise ReviewError("The selected evidence suggestion was already reviewed.")
+    revisions = index(payload, "revisions")
+    if any(
+        revision.get("record_id") == event_id
+        and revision.get("operation") == "reject"
+        for revision in revisions.values()
+    ):
+        raise ReviewError("The selected evidence suggestion was already reviewed.")

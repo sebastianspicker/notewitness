@@ -84,6 +84,7 @@ class WorkbenchRequestHandler(
     def _dispatch_post(self, path: str) -> None:
         handler = {
             "/api/review/accept": self._accept_review,
+            "/api/review/reject": self._reject_review,
             "/api/review/relations/accept": self._accept_relation_review,
             "/api/review/relations/reject": self._reject_relation_review,
             "/api/review/revise": self._revise_annotation,

@@ -40,6 +40,7 @@ class LessonNotesProjector:
             events,
             targets,
             actors,
+            revisions=graph.records("revisions"),
             speaker_roles_by_event=_speaker_roles_by_event(events, relations),
         )
         relation_projection = project_relations(

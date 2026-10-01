@@ -156,7 +156,8 @@ def _coarse_log_route(path: str) -> str:
         "/", "/api/bookmarks", "/api/actors", "/api/captures", "/api/exports/music",
         "/api/exports/transcript", "/api/imports", "/api/jobs", "/api/metronome",
         "/api/practice", "/api/review/accept", "/api/review/relations/accept",
-        "/api/review/relations/reject", "/api/review/revise", "/api/tuner", "/api/workbench",
+        "/api/review/reject", "/api/review/relations/reject", "/api/review/revise",
+        "/api/tuner", "/api/workbench",
     }:
         return path
     return "/:unknown"

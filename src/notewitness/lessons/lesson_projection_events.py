@@ -52,6 +52,7 @@ def project_events(
     targets: Mapping[str, Mapping[str, Any]],
     actors: Mapping[str, Mapping[str, Any]],
     *,
+    revisions: Iterable[Mapping[str, Any]] = (),
     speaker_roles_by_event: Mapping[str, str] | None = None,
 ) -> EventProjection:
     projected_speaker_roles = speaker_roles_by_event or {}
@@ -69,6 +70,12 @@ def project_events(
         if is_accepted_record(event)
         and isinstance((body := event.get("body")), Mapping)
         and isinstance(body.get("source_suggestion_id"), str)
+    }
+    rejected_suggestion_ids = {
+        str(revision["record_id"])
+        for revision in revisions
+        if revision.get("operation") == "reject"
+        and isinstance(revision.get("record_id"), str)
     }
     superseded_annotation_ids = {
         str(body["source_annotation_id"])
@@ -136,7 +143,10 @@ def project_events(
             confidence=confidence_value,
         )
         if not is_accepted_record(event):
-            if event_id not in accepted_suggestion_ids:
+            if (
+                event_id not in accepted_suggestion_ids
+                and event_id not in rejected_suggestion_ids
+            ):
                 transcript_suggestions.append(full_entry)
             continue
         if event_type in _ACTIVITY_KINDS:

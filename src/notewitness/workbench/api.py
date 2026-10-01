@@ -16,6 +16,7 @@ from notewitness.lessons.evidence_review import (
     accept_evidence_suggestion,
     accept_relation_suggestion,
     create_exact_time_bookmark,
+    reject_evidence_suggestion,
     reject_relation_suggestion,
     revise_evidence_annotation,
     set_practice_task_completed,
@@ -81,6 +82,20 @@ class WorkbenchApiMixin:
         result = accept_relation_suggestion(
             str(self.server.project_root),
             relation_id=_required_string(request, "relation_id"),
+            author_id=_required_string(request, "author_id"),
+            reason=_required_string(request, "reason"),
+            expected_sha256=_required_string(request, "project_sha256"),
+        )
+        self._json(HTTPStatus.CREATED, asdict(result))
+
+    def _reject_review(self) -> None:
+        request = self._json_request()
+        expected_fields = {"event_id", "author_id", "reason", "project_sha256"}
+        if set(request) != expected_fields:
+            raise ReviewError("Evidence rejection request fields are invalid.")
+        result = reject_evidence_suggestion(
+            str(self.server.project_root),
+            event_id=_required_string(request, "event_id"),
             author_id=_required_string(request, "author_id"),
             reason=_required_string(request, "reason"),
             expected_sha256=_required_string(request, "project_sha256"),
