@@ -1,4 +1,4 @@
-/** Browser-session behavior for the mock Evidence Ledger. */
+/** Browser-session behavior for the mock lesson workbench. */
 
 const app = document.querySelector("#app");
 const reviewTemplate = document.querySelector('template[data-demo-panel="review"]');
@@ -39,6 +39,7 @@ function showNotice(message, kind = "info") {
   text.textContent = message;
   const dismiss = document.createElement("button");
   dismiss.type = "button";
+  dismiss.className = "text-button";
   dismiss.dataset.demoDismiss = "";
   dismiss.textContent = "Dismiss";
   notice.append(text, dismiss);

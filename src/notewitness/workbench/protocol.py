@@ -17,6 +17,7 @@ LAUNCH_PATH_PREFIX = "/launch/"
 SESSION_COOKIE_NAME = "notewitness_session"
 _JS_TYPE = "text/javascript; charset=utf-8"
 _CSS_TYPE = "text/css; charset=utf-8"
+_FONT_TYPE = "font/woff2"
 ASSETS = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/assets/app.css": ("app.css", _CSS_TYPE),
@@ -53,6 +54,12 @@ ASSETS = {
     "/assets/styles/timeline.css": ("styles/timeline.css", _CSS_TYPE),
     "/assets/styles/panels.css": ("styles/panels.css", _CSS_TYPE),
     "/assets/styles/forms.css": ("styles/forms.css", _CSS_TYPE),
+    "/assets/fonts/newsreader-roman.woff2": ("fonts/newsreader-roman.woff2", _FONT_TYPE),
+    "/assets/fonts/newsreader-italic.woff2": ("fonts/newsreader-italic.woff2", _FONT_TYPE),
+    "/assets/fonts/atkinson-hyperlegible-next.woff2": (
+        "fonts/atkinson-hyperlegible-next.woff2",
+        _FONT_TYPE,
+    ),
 }
 
 

@@ -57,7 +57,7 @@ STYLES = """
     margin: 0;
     background: var(--paper);
     color: var(--ink);
-    font: 14px / 1.5 var(--font);
+    font: 14px / 1.5 var(--sans);
     -webkit-font-smoothing: antialiased;
   }
   .tour-page { max-width: 1120px; margin: 0 auto; padding: 32px 24px 64px; }
@@ -65,14 +65,14 @@ STYLES = """
   .tour-header img { width: 40px; height: 40px; }
   .tour-eyebrow {
     margin: 0;
-    color: var(--mute);
+    color: var(--ink-3);
     font-size: 11px;
     letter-spacing: .14em;
     text-transform: uppercase;
   }
   .tour-title { margin: 2px 0 0; font: 500 1.75rem / 1.15 var(--serif); letter-spacing: -.02em; }
   .tour-lede { max-width: 68ch; margin: 20px 0 8px; color: var(--ink-2); font-size: 15px; }
-  .tour-demo-link { display: inline-block; margin: 4px 0 28px; color: var(--indigo); font-weight: 600; }
+  .tour-demo-link { display: inline-block; margin: 4px 0 28px; color: var(--ink); font-weight: 600; }
   .tour-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -84,8 +84,8 @@ STYLES = """
     display: block;
     width: 100%;
     height: auto;
-    border: 1px solid var(--rule-2);
-    border-radius: var(--r-md);
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--r-2);
     background: var(--paper);
   }
   .tour-shot figcaption { margin-top: 10px; color: var(--ink-2); font-size: 13px; }
@@ -94,10 +94,10 @@ STYLES = """
     margin-top: 40px;
     padding-top: 16px;
     border-top: 1px solid var(--rule);
-    color: var(--mute);
+    color: var(--ink-3);
     font-size: 12px;
   }
-  .tour-foot a { color: var(--indigo); }
+  .tour-foot a { color: var(--ink); }
 """
 
 
@@ -115,10 +115,10 @@ def main() -> int:
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="theme-color" content="#f5f2ea">
     <meta http-equiv="Content-Security-Policy"
       content="default-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; img-src 'self' data:; media-src 'none'; style-src 'self' 'unsafe-inline'">
-    <meta name="description" content="Screenshot tour of the NoteWitness Evidence Ledger rendered from a synthetic lesson.">
+    <meta name="description" content="Screenshot tour of the NoteWitness workbench rendered from a synthetic lesson.">
     <title>NoteWitness · screenshot tour</title>
     <link rel="icon" href="./assets/notewitness-mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./assets/styles/tokens.css">
@@ -135,7 +135,7 @@ def main() -> int:
       </header>
       <p class="tour-lede">
         Captures from the interactive mock-data demo, rendered by the production
-        Evidence Ledger interface over a deterministic synthetic violin lesson.
+        workbench interface over a deterministic synthetic violin lesson.
         They show the review workflow only, and contain no private lesson data.
       </p>
       <a class="tour-demo-link" href="./index.html">Open the interactive demo →</a>

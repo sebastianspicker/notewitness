@@ -5,6 +5,13 @@ identifiers.
 
 ## [Unreleased]
 
+- Redesign the workbench and Pages demo: machine suggestions render
+  pencilled (graphite, dashed, open sigil) and accepted evidence inked (solid,
+  filled sigil); bundled OFL fonts (Newsreader, Atkinson Hyperlegible Next) served from the loopback asset
+  table; serif tabular timecodes in an edition-style margin; a three-step
+  listen/read/decide inspector; dedicated tablet and phone layouts that keep
+  import, processing, and studio tools reachable; and a theme-aware mark.
+  Routes, data contracts, and `data-*` hooks are unchanged.
 - Rewrite the documentation set for a general GitHub audience, plain language,
   and consistent structure.
 - Add a curated screenshot tour to the README and a `tour.html` page to the

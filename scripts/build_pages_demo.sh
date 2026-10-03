@@ -28,6 +28,8 @@ fi
 
 mkdir -p "$site_dir/assets"
 cp -R "$asset_source/styles" "$site_dir/assets/styles"
+mkdir -p "$site_dir/assets/fonts"
+cp "$asset_source"/fonts/*.woff2 "$asset_source"/fonts/OFL-*.txt "$site_dir/assets/fonts/"
 cp "$asset_source/notewitness-mark.svg" "$site_dir/assets/notewitness-mark.svg"
 sed 's#"/assets/styles/#"./styles/#g' "$asset_source/app.css" > "$site_dir/assets/app.css"
 cp "$script_dir/pages_demo_client.js" "$site_dir/assets/pages-demo.js"
@@ -120,7 +122,7 @@ if grep -RIEq '\b(localStorage|sessionStorage|indexedDB|document\.cookie)\b' "$s
   echo "Pages demo client must not persist browser-session state" >&2
   exit 1
 fi
-if grep -RIEq --exclude='notewitness-mark.svg' \
+if grep -RIEq --exclude='notewitness-mark.svg' --exclude='OFL-*.txt' \
   '(/[U]sers/|/[h]ome/|[A-Za-z]:[/\\][U]sers[/\\]|-----BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY-----|\b(github_pat_|gh[pousr]_|(sk|rk)-(proj-)?)|file://|https?://)' \
   "$site_dir"; then
   echo "Pages demo contains a private path, credential shape, or network URL" >&2

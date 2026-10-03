@@ -26,19 +26,27 @@ export function renderWorkbench(state) {
       <div class="notice-region" data-notice-region aria-live="polite">
         ${renderNotice(state.notice)}
       </div>
-      <div class="workbench-layout body">
-        <aside class="tool-rail col col-side col-left" aria-label="Project navigation and source controls">
+      <div class="workbench-layout">
+        <aside class="tool-rail" aria-label="Project navigation and source controls">
           ${renderWorkspaceTabs(state)}
-          ${renderSources(state)}
-          ${renderProcessing(state)}
-          ${renderUtilities(state)}
-          <p class="nav-foot keyboard-hint"><kbd>J/K</kbd> select <span aria-hidden="true">·</span> <kbd>A</kbd> accept <span aria-hidden="true">·</span> <kbd>R</kbd> revise <span aria-hidden="true">·</span> <kbd>X</kbd> reject <span aria-hidden="true">·</span> <kbd>Space</kbd> play</p>
+          <div class="rail-tools">
+            ${renderSources(state)}
+            ${renderProcessing(state)}
+            ${renderUtilities(state)}
+          </div>
+          <dl class="keyboard-hint" aria-label="Keyboard shortcuts">
+            <dt><kbd>J</kbd><kbd>K</kbd></dt><dd>next · previous</dd>
+            <dt><kbd>A</kbd></dt><dd>accept</dd>
+            <dt><kbd>R</kbd></dt><dd>revise</dd>
+            <dt><kbd>X</kbd></dt><dd>reject</dd>
+            <dt><kbd>Space</kbd></dt><dd>play · pause</dd>
+          </dl>
         </aside>
-        <main class="workspace col-main" id="workbench-main" tabindex="-1">
+        <main class="workspace" id="workbench-main" tabindex="-1">
           <div data-timeline-root>${renderTimeline(state)}</div>
           <div data-workspace-panel>${renderPanel(state)}</div>
         </main>
-        <aside class="context-rail col col-side col-right" data-context-inspector aria-label="Evidence inspector">
+        <aside class="context-rail" data-context-inspector aria-label="Evidence inspector">
           ${renderContextInspector(state)}
         </aside>
       </div>
@@ -51,28 +59,37 @@ export function renderWorkbench(state) {
 function renderHeader(state, lesson) {
   const actor = humanActor(state);
   const project = state.data?.project || {};
+  const dark = state.theme === "dark";
   return `
     <header class="app-header">
-      <div class="brand-block brand" aria-label="NoteWitness: local evidence workbench">
-        <img class="brand-mark" src="/assets/notewitness-mark.svg" alt="" aria-hidden="true">
-        <div class="brand-copy">
-          <p class="brand-name">NoteWitness</p>
-          <p class="brand-purpose">Local evidence workbench</p>
-        </div>
-      </div>
-      <div class="project-heading project">
+      <p class="brand">
+        ${renderMark()}
+        <span class="brand-name">Note<i>Witness</i></span>
+        <span class="visually-hidden">: local evidence workbench</span>
+      </p>
+      <div class="project-heading">
         <h1 class="project-title">${escapeHTML(lesson.title, "Untitled lesson")}</h1>
-        <p class="privacy-state">${escapeHTML(project.network_mode, "offline")} · stays on this device${project.saved ? "" : " · local changes pending"}</p>
+        <p class="privacy-state"><span class="privacy-mode">${escapeHTML(project.network_mode, "offline")}</span> · stays on this device${project.saved ? "" : ' · <span class="unsaved">local changes pending</span>'}</p>
       </div>
-      <div class="header-actions header-end">
-        ${humanActors(state).length ? `<label class="reviewer-picker">Reviewing as
+      <div class="header-actions">
+        ${humanActors(state).length ? `<label class="reviewer-picker"><span>Reviewing as</span>
           <select data-author>${renderAuthorOptions(state)}</select></label>`
           : '<button class="secondary-button" data-action="open-reviewer-setup">Set up reviewer</button>'}
-        <button class="linkish" data-action="open-bookmark"
+        <button class="linkish bookmark-action" data-action="open-bookmark"
           ${actor && state.activeSourceId ? "" : "disabled"}>Bookmark</button>
-        <button class="theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle light and dark theme" aria-pressed="${state.theme === "dark"}">Theme</button>
+        <button class="theme-toggle" type="button" data-action="toggle-theme" aria-label="Dark theme" aria-pressed="${dark}" title="Dark theme">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>
+        </button>
       </div>
     </header>`;
+}
+
+function renderMark() {
+  return `<svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <path d="M4.5 23V9l9 14V9M18.5 9 21 23l3-9 3 9 1.5-14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"/>
+    <path class="brand-mark-witness" d="M16 5v22" fill="none" stroke-linecap="round" stroke-width="1.6"/>
+    <circle cx="16" cy="25" r="2.2" fill="currentColor"/>
+  </svg>`;
 }
 
 function renderAuthorOptions(state) {
@@ -94,12 +111,13 @@ function renderWorkspaceTabs(state) {
     ["transcript", "Full transcript", accepted],
     ["lesson", "Lesson notes", null],
   ];
-  return `<nav class="workspace-tabs review-nav" aria-label="Workspace views">
+  return `<nav class="workspace-tabs" aria-label="Workspace views">
+    <p class="side-label rail-label">Contents</p>
     <div class="workspace-tabset" role="tablist" aria-label="Workspace views">
       ${tabs.map(([key, label, count]) => `<button id="tab-${key}" class="workspace-tab"
       role="tab" aria-controls="panel-${key}" aria-selected="${state.activePanel === key}"
       tabindex="${state.activePanel === key ? "0" : "-1"}" data-tab="${key}">
-      ${escapeHTML(label)}${count === null ? "" : ` <span class="n">${count}</span>`}</button>`).join("")}
+      <span class="tab-label">${escapeHTML(label)}</span>${count === null ? "" : `<span class="tab-leader" aria-hidden="true"></span><span class="n">${count}</span>`}</button>`).join("")}
     </div>
   </nav>`;
 }
@@ -109,14 +127,11 @@ function renderSources(state) {
   const activeName = sourceName(state, state.activeSourceId);
   const multi = media.length > 1;
   const count = mediaCount(state);
-  return `<section class="rail-section source-section side-block ${multi ? "" : "is-single-source"}" id="sources-panel">
+  return `<section class="rail-section source-section ${multi ? "" : "is-single-source"}" id="sources-panel">
     <p class="side-label">Source${multi ? ` · ${count}` : ""}</p>
     ${media.length ? `
       <p class="source-title">${escapeHTML(activeName, "No source")}</p>
-      <p class="source-meta">
-        <span>${formatTime(sourceDurationSeconds(state), false)}</span>
-        ${multi ? ` · local` : ` · local project`}
-      </p>
+      <p class="source-meta">${formatTime(sourceDurationSeconds(state), false)} · ${multi ? "local" : "local project"}</p>
       ${multi ? `<label class="field-label" for="source-select">Playback source</label>
       <select id="source-select" class="full-select" data-source-select>
         ${media.map((item, index) => `<option value="${escapeHTML(item.source_id)}"
@@ -125,31 +140,31 @@ function renderSources(state) {
       </select>` : `<select id="source-select" class="full-select is-hidden" data-source-select aria-hidden="true" tabindex="-1">
         <option value="${escapeHTML(state.activeSourceId)}" selected>${escapeHTML(activeName)}</option>
       </select>`}`
-      : `<div class="empty-state"><strong>No playable media</strong><p>Import a lesson recording to begin.</p>
+      : `<div class="empty-state rail-empty"><strong>No recording yet</strong><p>Import a lesson recording to start reviewing.</p>
       <select id="source-select" class="full-select is-hidden" data-source-select aria-hidden="true" tabindex="-1"></select></div>`}
     <label class="file-button ${state.importing ? "is-busy" : ""}">
       <input type="file" accept="audio/*,video/*" data-import-file ${state.importing ? "disabled" : ""}>
       <span>${state.importing ? "Importing locally…" : multi ? "Import another recording" : "Import recording"}</span>
     </label>
-    <p class="privacy-note foot">Stays on this device. Nothing is uploaded.</p>
+    <p class="privacy-note">Imported media stays on this device. Nothing is uploaded.</p>
   </section>`;
 }
 
 function renderUtilities(state) {
   const tunerRunning = Boolean(state.tuner);
   const metroRunning = Boolean(state.metronome);
-  return `<section class="rail-section utilities-section side-block">
+  return `<section class="rail-section utilities-section">
     <p class="side-label">Studio</p>
-    <div class="utility-block utility-compact">
+    <div class="utility-block">
       <div class="utility-heading"><h3>Tuner</h3>
-        <button class="secondary-button" data-action="tuner">${tunerRunning ? "Stop" : "Start"}</button></div>
-      <div class="tuner-reading"><strong data-tuner-note>--</strong><span data-tuner-hz>${tunerRunning ? "Listening…" : "Mic off"}</span></div>
-      <div class="tuner-meter" role="meter" aria-label="Tuning offset" aria-valuemin="-50" aria-valuemax="50" aria-valuenow="0">
+        <button class="text-button" data-action="tuner" aria-pressed="${tunerRunning}">${tunerRunning ? "Stop" : "Start"}</button></div>
+      <div class="tuner-reading"><strong data-tuner-note>--</strong><span data-tuner-hz>${tunerRunning ? "Listening…" : "Microphone off"}</span></div>
+      <div class="tuner-meter" role="meter" aria-label="Tuning offset in cents" aria-valuemin="-50" aria-valuemax="50" aria-valuenow="0">
         <span class="tuner-center" aria-hidden="true"></span><i data-tuner-meter></i></div>
     </div>
-    <div class="utility-block utility-compact">
+    <div class="utility-block">
       <div class="utility-heading"><h3>Metronome</h3>
-        <button class="secondary-button" data-action="metronome">${metroRunning ? "Stop" : "Start"}</button></div>
+        <button class="text-button" data-action="metronome" aria-pressed="${metroRunning}">${metroRunning ? "Stop" : "Start"}</button></div>
       <div class="tempo-control"><button data-action="tempo-down" aria-label="Decrease tempo">−</button>
         <output data-bpm>${escapeHTML(state.tempo)}</output><span>BPM</span>
         <button data-action="tempo-up" aria-label="Increase tempo">+</button></div>
@@ -161,7 +176,7 @@ export function renderNotice(notice) {
   if (!notice?.message) return "";
   const role = notice.kind === "error" ? "alert" : "status";
   return `<div class="notice" data-kind="${escapeHTML(notice.kind || "info")}" role="${role}">
-    <span>${escapeHTML(notice.message)}</span><button data-action="dismiss-notice" aria-label="Dismiss message">Dismiss</button></div>`;
+    <span>${escapeHTML(notice.message)}</span><button class="text-button" data-action="dismiss-notice" aria-label="Dismiss message">Dismiss</button></div>`;
 }
 
 function renderDialog(state) {

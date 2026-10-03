@@ -1,30 +1,152 @@
-/* Evidence Ledger: restrained, source-first archival workbench. */
+/*
+ * Critical Edition tokens.
+ *
+ * The workbench is set like a critical edition of a lesson: machine output is
+ * pencilled in (graphite, dashed, open sigil) and human-accepted evidence is
+ * inked (ink, solid, filled sigil). Rubric red is reserved for "now" and
+ * "attention": the playhead, the current reading, and errors.
+ *
+ * Fonts are bundled (SIL OFL 1.1, licences beside the files) because the
+ * workbench is offline and its CSP only allows same-origin resources.
+ */
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("../fonts/newsreader-roman.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 360 620;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("../fonts/newsreader-italic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 360 620;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  src: url("../fonts/atkinson-hyperlegible-next.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 300 750;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
-  --paper: #faf9f6; --paper-2: #f2f0ea; --paper-3: #e9e6de;
-  --ink: #1a1c20; --ink-2: #4b4f58; --mute: #6c717b; --faint: #7d828d;
-  --rule: #e4e1d9; --rule-2: #d3cfc4; --wash: var(--paper-2);
-  --indigo: #2e4f74; --indigo-deep: #23405f; --indigo-soft: #e9eef4;
-  --ok: #2f6b4f; --suggest: #8a6413; --suggest-soft: #f7f1e3;
-  --danger: #a13c2e; --danger-soft: #f9ebe8; --playhead: #b42318; --focus: var(--indigo);
-  --font: system-ui, "Segoe UI", "Helvetica Neue", sans-serif;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  --fs: 14px; --lh: 1.45; --measure: 68ch;
-  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px;
-  --r-sm: 3px; --r-md: 6px; --nav-w: 184px; --inspector-w: 340px;
-  --header-pad-x: var(--sp-6); --transport-h: 64px;
-  /* Legacy aliases retained for feature-owned renderer markup. */
-  --bg: var(--paper); --surface: var(--paper); --surface-muted: var(--paper-2); --muted: var(--mute);
-  --line: var(--rule); --line-strong: var(--rule-2); --blue: var(--indigo); --blue-dark: var(--indigo-deep); --blue-soft: var(--indigo-soft);
-  --green: var(--ok); --green-soft: #eaf3ec; --amber: var(--suggest); --amber-soft: var(--suggest-soft); --red: var(--danger); --red-soft: var(--danger-soft);
+
+  /* Paper and ink. */
+  --paper: #f5f2ea;
+  --paper-sunk: #ece7db;
+  --paper-raised: #fbfaf6;
+  --ink: #1c1a16;
+  --ink-2: #48443b;
+  --ink-3: #686256;
+  --rule: #ddd6c7;
+  --rule-strong: #b9b1a0;
+  --edge: #8a8373;
+
+  /* Pencil: machine suggestions that are not yet evidence. */
+  --graphite: #4d5158;
+  --pencil-mark: #7c8087;
+  --pencil-wash: #e8e6e0;
+
+  /* Ink-green: accepted, human-established evidence. */
+  --accepted: #2a5a46;
+  --accepted-wash: #dfe8df;
+
+  /* Rubric: now, current, attention. */
+  --rubric: #ad3519;
+  --rubric-wash: #f4e1d8;
+
+  --focus: var(--ink);
+  --selection: #e9d9b8;
+  --scrim: rgb(28 26 22 / 36%);
+
+  /* Type. */
+  --serif: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --sans: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --t-2xs: 11px;
+  --t-xs: 12px;
+  --t-sm: 13px;
+  --t-ui: 14px;
+  --t-body: 15px;
+  --t-read: 18px;
+  --t-h3: 21px;
+  --t-h2: 26px;
+  --t-h1: 31px;
+  --lh-tight: 1.2;
+  --lh-ui: 1.4;
+  --lh-read: 1.45;
+  --measure: 62ch;
+
+  /* Space: 4px base, 24px rhythm. */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+
+  /* Shape, elevation, motion. */
+  --r-1: 2px;
+  --r-2: 4px;
+  --hairline: 1px solid var(--rule);
+  --lift: 0 1px 0 var(--rule), 0 16px 40px -16px rgb(28 26 22 / 32%);
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+
+  /* Layout. */
+  --header-h: 56px;
+  --transport-h: 60px;
+  --rail-w: 216px;
+  --inspector-w: 352px;
+  --margin-w: 76px;
+  --gutter: var(--s-8);
+  --target: 32px;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #171613; --paper-2: #201e19; --paper-3: #2a2822;
-  --ink: #ece9e1; --ink-2: #c7c2b7; --mute: #aaa69c; --faint: #aaa69c;
-  --rule: #2c2a24; --rule-2: #3d3a31; --indigo: #8fb4d9; --indigo-deep: #b7cee5; --indigo-soft: #263544;
-  --ok: #8ac39e; --suggest: #dfb55d; --suggest-soft: #342c1d; --danger: #eb9b8e; --danger-soft: #3a2420;
-  --playhead: #ef7066; --focus: #a9c6e2;
+
+  /* Lamplight: warm near-black paper, bone ink. */
+  --paper: #161510;
+  --paper-sunk: #201e17;
+  --paper-raised: #23211a;
+  --ink: #ede7d9;
+  --ink-2: #c8c0ae;
+  --ink-3: #a19a8b;
+  --rule: #322f26;
+  --rule-strong: #5a5444;
+  --edge: #77705f;
+
+  --graphite: #b2b6be;
+  --pencil-mark: #80848c;
+  --pencil-wash: #24241f;
+
+  --accepted: #93c7ab;
+  --accepted-wash: #1c2a22;
+
+  --rubric: #f08a6c;
+  --rubric-wash: #3b2119;
+
+  --focus: var(--ink);
+  --selection: #4a3c22;
+  --scrim: rgb(0 0 0 / 56%);
+  --lift: 0 1px 0 var(--rule), 0 16px 40px -16px rgb(0 0 0 / 70%);
+}
+
+@media (max-width: 1280px) {
+  :root { --inspector-w: 320px; --rail-w: 200px; --gutter: var(--s-6); }
+}
+
+@media (max-width: 760px) {
+  :root { --margin-w: 64px; --gutter: var(--s-4); --t-read: 17px; --t-h2: 24px; }
 }

@@ -21,23 +21,21 @@ export function renderTimeline(state) {
   const allKinds = list(state.data?.timeline?.lanes).map((lane) => [lane.kind, lane.label]);
   const currentSeconds = Number(state.media?.currentTime || 0);
   return `<section class="timeline-section" aria-labelledby="timeline-heading">
-    <div class="timeline-header score-head">
-      <div>
-        <h2 id="timeline-heading">Timeline</h2>
-      </div>
+    <div class="timeline-header">
+      <h2 id="timeline-heading" class="side-label">Timeline</h2>
       ${renderDualClocks(state, currentSeconds)}
       <div class="timeline-actions">
-        <details class="lane-picker"><summary>Tracks · ${visible.size}</summary>
+        <details class="lane-picker"><summary>Tracks <span class="n">${visible.size}</span></summary>
           <fieldset><legend>Timeline tracks</legend>${allKinds.map(([kind, label]) => `<label>
             <input type="checkbox" data-lane-kind="${escapeHTML(kind)}" ${visible.has(kind) ? "checked" : ""}>
             ${escapeHTML(label)}</label>`).join("")}</fieldset></details>
       </div>
     </div>
     <div class="timeline-scroll" tabindex="0" aria-label="Scrollable source timeline">
-      <div class="timeline-canvas lanes">
-        <div class="time-ruler lane lane-h">
-          <span class="ruler-label lane-name">Track</span>
-          <div class="tick-scale track ticks" data-tick-scale>
+      <div class="timeline-canvas">
+        <div class="time-ruler">
+          <span class="ruler-label"><span class="visually-hidden">Source time</span></span>
+          <div class="tick-scale" data-tick-scale>
             ${ticks.map((tick) => `<span style="left:${Math.min(100, tick / duration * 100)}%">${formatTime(tick, false)}</span>`).join("")}
           </div>
         </div>
@@ -50,13 +48,13 @@ export function renderTimeline(state) {
 
 function renderLane(state, lane, duration) {
   const items = list(lane.items).filter((item) => itemSource(item) === state.activeSourceId);
-  return `<div class="timeline-lane lane" data-lane="${escapeHTML(lane.kind)}">
-    <div class="lane-label lane-name"><kbd>${escapeHTML(lane.keyboard_shortcut, "")}</kbd>
-      <span>${escapeHTML(lane.label)}</span></div>
-    <div class="lane-track track">${items.map((item) => {
+  return `<div class="timeline-lane" data-lane="${escapeHTML(lane.kind)}">
+    <div class="lane-label" title="${escapeHTML(lane.label)}"><span>${escapeHTML(lane.label)}</span>
+      ${lane.keyboard_shortcut ? `<kbd>${escapeHTML(lane.keyboard_shortcut)}</kbd>` : ""}</div>
+    <div class="lane-track">${items.map((item) => {
       const left = Math.max(0, Math.min(100, itemTime(item) / duration * 100));
       const width = Math.max(0.8, Math.min(100 - left, itemDuration(item) / duration * 100));
-      return `<button class="lane-item event" style="left:${left}%;width:${width}%"
+      return `<button class="lane-item" style="left:${left}%;width:${width}%"
         data-seek="${itemTime(item)}" data-source="${escapeHTML(itemSource(item))}"
         data-kind="${escapeHTML(lane.kind)}" data-status="${escapeHTML(item.review_status)}"
         title="${escapeHTML(item.label)}" aria-label="Play at ${formatTime(itemTime(item))}: ${escapeHTML(item.accessibility_label || item.label)}">

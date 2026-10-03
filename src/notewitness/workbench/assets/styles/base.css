@@ -1,13 +1,103 @@
+/* Base: paper, type defaults, focus, and shared utilities. */
+
 *, *::before, *::after { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; background: var(--paper); color: var(--ink); font: var(--fs) / var(--lh) var(--font); font-feature-settings: "kern", "liga"; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-button, input, select, textarea { color: inherit; font: inherit; }
-button { border: 0; background: none; cursor: pointer; }
-button:disabled, select:disabled, input:disabled { cursor: not-allowed; opacity: .48; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-sm); }
-h1, h2, h3, p { overflow-wrap: anywhere; }
-a { color: inherit; }
-.skip-link { position: fixed; z-index: 100; top: -60px; left: var(--sp-3); padding: var(--sp-2) var(--sp-3); background: var(--ink); color: var(--paper); font-size: 13px; font-weight: 600; }
-.skip-link:focus { top: var(--sp-3); }
-.loading-state, .fatal-state { max-width: 36rem; margin: 18vh auto; padding: var(--sp-8); color: var(--ink-2); }
-.fatal-state h1 { margin: 0 0 var(--sp-3); font: 500 1.75rem / 1.2 var(--serif); letter-spacing: -.02em; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 var(--t-ui) / var(--lh-ui) var(--sans);
+  font-kerning: normal;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--selection); color: var(--ink); }
+
+h1, h2, h3, p, blockquote, dd { overflow-wrap: anywhere; }
+h1, h2, h3 { margin: 0; font-weight: inherit; }
+p { margin: 0; }
+a { color: inherit; text-decoration-color: var(--rule-strong); text-underline-offset: .2em; }
+a:hover { text-decoration-color: currentColor; }
+
+button, input, select, textarea { margin: 0; color: inherit; font: inherit; letter-spacing: inherit; }
+button { padding: 0; border: 0; background: none; cursor: pointer; }
+button:disabled, select:disabled, input:disabled, textarea:disabled { cursor: not-allowed; }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-1);
+}
+
+kbd {
+  display: inline-grid;
+  min-width: 1.6em;
+  height: 1.6em;
+  place-items: center;
+  padding: 0 .3em;
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+  font: 600 10.5px / 1 var(--sans);
+}
+
+/* Utilities. */
+.visually-hidden, .is-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: var(--s-3);
+  left: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 650;
+  transform: translateY(-200%);
+}
+.skip-link:focus { transform: none; }
+
+/* Before the workbench renders, and when it cannot. */
+.loading-state, .fatal-state {
+  max-width: 34rem;
+  margin: 20vh auto 0;
+  padding: 0 var(--s-6);
+  color: var(--ink-2);
+}
+.loading-state { font: italic 400 var(--t-read) / var(--lh-read) var(--serif); }
+.fatal-state .kicker { margin-bottom: var(--s-2); color: var(--rubric); }
+.fatal-state h1 {
+  margin-bottom: var(--s-3);
+  color: var(--ink);
+  font: 400 var(--t-h1) / var(--lh-tight) var(--serif);
+  letter-spacing: -.015em;
+}
+.fatal-state p { margin-bottom: var(--s-6); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* Timecodes are set like edition line numbers: serif lining tabular figures. */
+.time-button:not(.source-span-play, .source-start), .entry-end, .tick-scale, .dual-clocks b, [data-clock], .source-span-times,
+.tc, .count-label, .workspace-tab .n, .panel-title .kicker, [data-bpm], [data-record-duration] {
+  font-family: var(--serif);
+  font-variant-numeric: lining-nums tabular-nums;
+}

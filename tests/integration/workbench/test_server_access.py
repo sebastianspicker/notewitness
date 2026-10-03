@@ -71,6 +71,15 @@ class WorkbenchServerAccessTests(WorkbenchServerTestCase):
             bodies[asset] = body
             if asset.endswith("mark.svg"):
                 self.assertEqual("image/svg+xml", asset_headers["Content-Type"])
+        for font in (
+            "/assets/fonts/newsreader-roman.woff2",
+            "/assets/fonts/newsreader-italic.woff2",
+            "/assets/fonts/atkinson-hyperlegible-next.woff2",
+        ):
+            status, font_headers, body = self._request("GET", font)
+            self.assertEqual(200, status, font)
+            self.assertEqual("font/woff2", font_headers["Content-Type"])
+            self.assertEqual(b"wOF2", body[:4])
         client = b"".join(bodies.values())
         self.assertIn(b"actor_id: actorId", bodies["/assets/js/review_actions.mjs"])
         self.assertIn(b"author_id: author.id", bodies["/assets/js/review_actions.mjs"])

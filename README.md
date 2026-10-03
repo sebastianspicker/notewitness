@@ -16,7 +16,7 @@ source span it came from.
 ## Screenshot tour
 
 These captures come from the [interactive mock-data demo](https://sebastianspicker.github.io/notewitness/),
-which runs the production Evidence Ledger interface over a deterministic
+which runs the production workbench interface over a deterministic
 synthetic violin lesson. They show the review workflow only and contain no
 private lesson data. The full gallery lives on the
 [tour page](https://sebastianspicker.github.io/notewitness/tour.html).
