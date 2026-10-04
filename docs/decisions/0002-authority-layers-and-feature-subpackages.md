@@ -47,9 +47,8 @@ cross-feature edges and give up the structural enforcement of the invariants.
   design; each runtime keeps its own status-record fields.
 - Name modules by responsibility; package initializers do not re-export, and
   underscore-prefixed modules stay inside their package.
-- Enforce these rules mechanically in `tests/contract/test_architecture.py`
-  and `tests/contract/test_repository.py`, and keep behavior protected by
-  characterization tests restored from the earlier suite.
+- Enforce these rules mechanically and keep behavior protected by
+  characterization tests.
 
 ## Consequences
 

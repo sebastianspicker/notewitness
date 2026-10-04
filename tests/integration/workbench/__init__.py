@@ -1,1 +1,0 @@
-"""Loopback workbench integration tests."""

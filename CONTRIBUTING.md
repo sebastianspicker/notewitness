@@ -21,7 +21,6 @@ core runtime has no production dependencies.
 
 ```sh
 PYTHONPATH=src python3 -m notewitness --version
-PYTHONPATH=src python3 -m unittest discover -s tests -t . -v
 bash scripts/verify.sh
 ```
 

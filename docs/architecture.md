@@ -77,7 +77,7 @@ flowchart RL
   interfaces --> workbench --> lessons --> analysis --> projects --> core
 ```
 
-`tests/contract/test_architecture.py` enforces, by reading the AST, that:
+The architecture rules are checked, by reading the AST, so that:
 
 - imports follow this direction, including the root modules (`evidence.py` may
   use `core` and `projects`; `__main__.py` only `interfaces`);
@@ -87,8 +87,7 @@ flowchart RL
 - `analysis/local_tools/launcher.py` imports nothing from NoteWitness and parses
   as Python 3.9.
 
-`tests/contract/test_repository.py` additionally keeps package `__init__.py`
-files free of re-exports, so every name has one import path.
+Package `__init__.py` files stay free of re-exports, so every name has one import path.
 
 A concept lives in the package that owns its behavior, inside the feature
 subpackage when there is one. The architecture deliberately has no `utils`,

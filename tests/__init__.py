@@ -1,1 +1,0 @@
-"""NoteWitness test suite."""

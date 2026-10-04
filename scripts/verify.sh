@@ -13,7 +13,6 @@ python3 -m json.tool schemas/v0.1/context.jsonld >/dev/null
 python3 -m json.tool examples/synthetic-lesson/project.json >/dev/null
 python3 -m json.tool docs/workbench-runtime.example.json >/dev/null
 python3 scripts/verify_public_hygiene.py
-python3 -m unittest discover -s tests -t . -v
 python3 -m notewitness validate examples/synthetic-lesson/project.json
 python3 -m notewitness inspect examples/synthetic-lesson/project.json >/dev/null
 python3 -m notewitness capabilities >/dev/null

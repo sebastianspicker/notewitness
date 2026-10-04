@@ -167,10 +167,6 @@ src/notewitness/
   lessons/       Human review, projections, and exports
   workbench/     Loopback server and browser interface
   interfaces/    CLI and provider bridge entry points
-tests/
-  unit/          Focused value-rule and filesystem, process, and network boundary tests
-  integration/   Project, analysis, lesson, and workbench integration tests
-  contract/      CLI, capability, runtime, and architecture contracts
 docs/            Architecture, protocols, operator guidance, and release process
 examples/        Synthetic, non-sensitive project example
 schemas/         Evidence graph schema and JSON-LD context

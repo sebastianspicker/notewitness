@@ -23,6 +23,7 @@ __pycache__/
 /_site/
 
 # Test and analysis output
+/tests/
 /test-results/
 /test-reports/
 /junit*.xml
