@@ -14,7 +14,7 @@ MAX_JSON_REQUEST_BYTES = 1024 * 1024
 MAX_REQUEST_PATH_CHARS = 4_096
 ALLOWED_BIND_HOST = "127.0.0.1"
 LAUNCH_PATH_PREFIX = "/launch/"
-SESSION_COOKIE_NAME = "notewitness_session"
+SESSION_HEADER_NAME = "X-NoteWitness-Session"
 _JS_TYPE = "text/javascript; charset=utf-8"
 _CSS_TYPE = "text/css; charset=utf-8"
 _FONT_TYPE = "font/woff2"

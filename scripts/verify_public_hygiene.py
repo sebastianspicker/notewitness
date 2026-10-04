@@ -193,6 +193,15 @@ def path_violations(path: Path) -> tuple[str, ...]:
     return tuple(problems)
 
 
+def filesystem_violations(path: Path, *, root: Path = ROOT) -> tuple[str, ...]:
+    current = root
+    for component in path.parts:
+        current /= component
+        if current.is_symlink():
+            return ("symbolic link component",)
+    return ()
+
+
 def content_violations(path: Path) -> tuple[str, ...]:
     absolute = ROOT / path
     if path.suffix.casefold() not in TEXT_SUFFIXES or absolute.stat().st_size > 2 * 1024 * 1024:
@@ -222,6 +231,11 @@ def text_violations(
 def main() -> int:
     failures: list[str] = []
     for path in candidate_paths():
+        filesystem_problems = filesystem_violations(path)
+        for problem in filesystem_problems:
+            failures.append(f"{path}: {problem}")
+        if filesystem_problems:
+            continue
         if not (ROOT / path).is_file():
             continue
         for problem in (*path_violations(path), *content_violations(path)):

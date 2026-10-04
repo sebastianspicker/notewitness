@@ -98,7 +98,10 @@ must be calibrated for the exact local SoundEventDetection checkpoint and
 provider revision. For PANNs activity segmentation, the same first four
 parameters come with exact, case-sensitive `speech_label` and `music_label`
 taxonomy names. Simultaneous activation becomes `speech_over_music`, while
-below-threshold frames do not imply silence.
+below-threshold frames do not imply silence. Both maintained PANNs bridges
+process long requested spans in bounded 10-second inference chunks and enforce
+native channel/rate, resampled-sample, tensor-shape, cell, taxonomy, and
+hypothesis budgets.
 
 `continuation_token` is null or a bounded token. It supports an `incomplete`
 result, and a non-null output continuation is valid only when output state is

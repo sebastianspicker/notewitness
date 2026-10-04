@@ -6,7 +6,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
+from notewitness.projects import media as media_module
 from notewitness.projects.media import (
     MAX_INGEST_BYTES,
     MediaIngestError,
@@ -136,6 +138,35 @@ class MediaIngestTests(unittest.TestCase):
             with self.assertRaisesRegex(MediaIngestError, "exceeds"):
                 ingest_media(root, source, create_restricted_rights=True)
 
+            self.assertEqual([], ProjectStore(root).load().payload["sources"])
+            self.assertEqual(
+                ["README.txt"], sorted(item.name for item in (root / "media").iterdir())
+            )
+
+    def test_rejects_source_growth_before_writing_appended_bytes(self) -> None:
+        with TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            root = parent / "study"
+            initialize_project(root)
+            source = parent / "growing.wav"
+            source.write_bytes(b"seed")
+            writes: list[int] = []
+            original_write = media_module._write_all
+
+            def grow_after_first_write(descriptor: int, data: bytes) -> None:
+                original_write(descriptor, data)
+                writes.append(len(data))
+                if len(writes) == 1:
+                    with source.open("ab") as growing:
+                        growing.write(b"untrusted-growth")
+
+            with patch.object(media_module, "_CHUNK_SIZE", 4), patch.object(
+                media_module, "_write_all", side_effect=grow_after_first_write
+            ):
+                with self.assertRaisesRegex(MediaIngestError, "grew"):
+                    ingest_media(root, source, create_restricted_rights=True)
+
+            self.assertEqual([4], writes)
             self.assertEqual([], ProjectStore(root).load().payload["sources"])
             self.assertEqual(
                 ["README.txt"], sorted(item.name for item in (root / "media").iterdir())

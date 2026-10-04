@@ -29,8 +29,9 @@ ALLOWED_RUNTIME_IMPORTS = {
     "lessons/network.py": NETWORK_CAPABLE_MODULES,
     "analysis/local_tools/runner.py": {"subprocess"},
     "analysis/local_tools/process.py": {"subprocess"},
+    "projects/private_fs.py": {"ctypes"},
     "workbench/api.py": {"http", "urllib"},
-    "workbench/http.py": {"http", "urllib"},
+    "workbench/http.py": {"http", "socket", "urllib"},
     "workbench/media.py": {"http", "urllib"},
     "workbench/protocol.py": {"http", "urllib"},
 }

@@ -26,9 +26,12 @@ A useful report identifies:
 
 ## Current security boundary
 
-The workbench binds to `127.0.0.1` and requires a per-process session cookie for
-private API, job, media, and mutation routes. A single-use launch URL establishes
-the session, and Host, Origin, and CSRF checks remain separate request controls.
+The workbench binds to `127.0.0.1` and requires a per-process session header for
+private API, job, and mutation routes. A single-use launch URL delivers the
+secret into the tab's origin-and-port-scoped session storage; media playback uses
+separate source-bound capabilities. Host, Origin, and CSRF checks remain separate
+request controls, and unauthenticated connection concurrency and header-read time
+are bounded.
 This limits access by local processes that do not know the token, but it does not
 protect against a malicious process already running with the same user and
 filesystem authority. Project actor IDs are evidence attribution, not

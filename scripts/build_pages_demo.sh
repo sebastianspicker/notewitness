@@ -5,6 +5,42 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(dirname -- "$script_dir")
 asset_source="$repo_dir/src/notewitness/workbench/assets"
 
+require_no_link_components() {
+  candidate=$1
+  case "$candidate" in
+    "$repo_dir"|"$repo_dir"/*) ;;
+    *) echo "Pages source must stay inside the checkout: $candidate" >&2; exit 1 ;;
+  esac
+  current=$candidate
+  while test "$current" != "$repo_dir"; do
+    if test -L "$current"; then
+      echo "Pages source must not contain symbolic links: $candidate" >&2
+      exit 1
+    fi
+    current=$(dirname -- "$current")
+  done
+}
+
+require_regular_source() {
+  require_no_link_components "$1"
+  if test ! -f "$1"; then
+    echo "Pages source must be a regular file: $1" >&2
+    exit 1
+  fi
+}
+
+require_link_free_tree() {
+  require_no_link_components "$1"
+  if test ! -d "$1"; then
+    echo "Pages source tree is missing: $1" >&2
+    exit 1
+  fi
+  if find "$1" -type l -print -quit | grep -q .; then
+    echo "Pages source tree must not contain symbolic links: $1" >&2
+    exit 1
+  fi
+}
+
 if test "$#" -ne 1; then
   echo "usage: scripts/build_pages_demo.sh OUTPUT_DIRECTORY" >&2
   exit 2
@@ -25,6 +61,18 @@ if test -d "$site_dir" && test -n "$(find "$site_dir" -mindepth 1 -print -quit)"
   echo "Pages output directory must be empty: $site_dir" >&2
   exit 2
 fi
+
+require_link_free_tree "$repo_dir/src"
+require_link_free_tree "$repo_dir/docs/screenshots"
+for build_source in \
+  "$script_dir/build_demo_state.py" \
+  "$script_dir/render_pages_demo.mjs" \
+  "$script_dir/assemble_pages_demo.py" \
+  "$script_dir/assemble_pages_tour.py" \
+  "$script_dir/pages_demo_client.js"; do
+  require_regular_source "$build_source"
+done
+require_regular_source "$repo_dir/examples/synthetic-lesson/project.json"
 
 mkdir -p "$site_dir/assets"
 cp -R "$asset_source/styles" "$site_dir/assets/styles"
@@ -49,6 +97,11 @@ PYTHONPATH="$repo_dir/src" python3 "$script_dir/build_demo_state.py" \
 
 python3 "$script_dir/assemble_pages_tour.py" > "$site_dir/tour.html"
 touch "$site_dir/.nojekyll"
+
+if find "$site_dir" -type l -print -quit | grep -q .; then
+  echo "Pages output must not contain symbolic links" >&2
+  exit 1
+fi
 
 source_revision=${GITHUB_SHA:-$(git -C "$repo_dir" rev-parse HEAD)}
 case "$source_revision" in

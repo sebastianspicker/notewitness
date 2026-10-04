@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import ctypes
 import errno
 import os
 from pathlib import Path
 import stat
+import sys
 from typing import Iterator
 
 
@@ -17,14 +19,24 @@ class PrivatePathError(RuntimeError):
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
 
-def open_private_directory(path: str | Path) -> "PrivateDirectory":
+def open_private_directory(
+    path: str | Path, *, require_trusted_ancestors: bool = False
+) -> "PrivateDirectory":
     """Pin an existing private directory and retain its no-follow descriptor."""
     absolute = trusted_absolute_path(Path(path))
-    descriptor = _open_existing_private_directory(absolute)
+    descriptor = _open_existing_private_directory(
+        absolute, require_trusted_ancestors=require_trusted_ancestors
+    )
     try:
         metadata = os.fstat(descriptor)
         _require_private_directory(metadata, absolute)
-        return PrivateDirectory(absolute, descriptor, metadata.st_dev, metadata.st_ino)
+        return PrivateDirectory(
+            absolute,
+            descriptor,
+            metadata.st_dev,
+            metadata.st_ino,
+            require_trusted_ancestors=require_trusted_ancestors,
+        )
     except BaseException:
         os.close(descriptor)
         raise
@@ -33,10 +45,19 @@ def open_private_directory(path: str | Path) -> "PrivateDirectory":
 class PrivateDirectory:
     """A directory FD whose pathname must continue to identify the same directory."""
 
-    def __init__(self, path: Path, descriptor: int, device: int, inode: int) -> None:
+    def __init__(
+        self,
+        path: Path,
+        descriptor: int,
+        device: int,
+        inode: int,
+        *,
+        require_trusted_ancestors: bool = False,
+    ) -> None:
         self.path = path
         self._descriptor = descriptor
         self._identity = (device, inode)
+        self._require_trusted_ancestors = require_trusted_ancestors
 
     def __enter__(self) -> "PrivateDirectory":
         return self
@@ -66,7 +87,10 @@ class PrivateDirectory:
         _require_private_directory(metadata, self.path)
         if (metadata.st_dev, metadata.st_ino) != self._identity:
             raise PrivatePathError("private directory identity changed")
-        current = _open_existing_private_directory(self.path)
+        current = _open_existing_private_directory(
+            self.path,
+            require_trusted_ancestors=self._require_trusted_ancestors,
+        )
         try:
             current_metadata = os.fstat(current)
             _require_private_directory(current_metadata, self.path)
@@ -104,8 +128,12 @@ class PrivateDirectory:
 
 
 @contextmanager
-def private_directory(path: str | Path) -> Iterator[PrivateDirectory]:
-    capability = open_private_directory(path)
+def private_directory(
+    path: str | Path, *, require_trusted_ancestors: bool = False
+) -> Iterator[PrivateDirectory]:
+    capability = open_private_directory(
+        path, require_trusted_ancestors=require_trusted_ancestors
+    )
     try:
         yield capability
     finally:
@@ -142,7 +170,9 @@ def trusted_absolute_path(path: str | Path) -> Path:
     return absolute
 
 
-def open_directory_no_follow(path: Path) -> int:
+def open_directory_no_follow(
+    path: Path, *, require_trusted_ancestors: bool = False
+) -> int:
     """Walk an absolute path from ``/`` without following any symlink component.
 
     Returns the final directory descriptor; walk failures propagate as ``OSError``
@@ -153,9 +183,22 @@ def open_directory_no_follow(path: Path) -> int:
     descriptor = os.open(os.path.sep, _DIRECTORY_FLAGS)
     try:
         for component in path.parts[1:]:
+            parent_metadata = os.fstat(descriptor)
+            if require_trusted_ancestors:
+                _require_no_extended_acl(descriptor, component)
             child = os.open(component, _DIRECTORY_FLAGS, dir_fd=descriptor)
+            try:
+                if require_trusted_ancestors:
+                    _require_trusted_ancestor(
+                        parent_metadata, os.fstat(child), component
+                    )
+            except BaseException:
+                os.close(child)
+                raise
             os.close(descriptor)
             descriptor = child
+        if require_trusted_ancestors:
+            _require_no_extended_acl(descriptor, path.name)
         return descriptor
     except BaseException:
         os.close(descriptor)
@@ -173,15 +216,88 @@ def content_stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
     )
 
 
-def _open_existing_private_directory(path: Path) -> int:
+def _open_existing_private_directory(
+    path: Path, *, require_trusted_ancestors: bool = False
+) -> int:
     if not path.is_absolute() or path == Path(os.path.sep):
         raise PrivatePathError("private directory must be an existing non-root directory")
     try:
-        return open_directory_no_follow(path)
+        return open_directory_no_follow(
+            path, require_trusted_ancestors=require_trusted_ancestors
+        )
+    except PrivatePathError:
+        raise
     except OSError as exc:
         if exc.errno in {errno.ELOOP, errno.ENOENT, errno.ENOTDIR}:
             raise PrivatePathError("private directory must be existing and contain no symlinks") from exc
         raise
+
+
+def _require_trusted_ancestor(
+    parent: os.stat_result, child: os.stat_result, component: str
+) -> None:
+    trusted_owners = {0, os.getuid()}
+    if parent.st_uid not in trusted_owners:
+        raise PrivatePathError(f"private path has an untrusted ancestor before {component}")
+    peer_writable = stat.S_IMODE(parent.st_mode) & 0o022
+    if not peer_writable:
+        return
+    if not parent.st_mode & stat.S_ISVTX or child.st_uid not in trusted_owners:
+        raise PrivatePathError(f"private path has a replaceable ancestor before {component}")
+
+
+def _require_no_extended_acl(descriptor: int, component: str) -> None:
+    if _directory_has_extended_acl(descriptor):
+        raise PrivatePathError(
+            f"private path has an ACL-controlled ancestor at {component}"
+        )
+
+
+def _directory_has_extended_acl(descriptor: int) -> bool:
+    if sys.platform != "darwin":
+        return False
+    library = ctypes.CDLL(None, use_errno=True)
+    get_acl = library.acl_get_fd_np
+    get_acl.argtypes = (ctypes.c_int, ctypes.c_int)
+    get_acl.restype = ctypes.c_void_p
+    get_entry = library.acl_get_entry
+    get_entry.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_void_p))
+    get_entry.restype = ctypes.c_int
+    get_tag = library.acl_get_tag_type
+    get_tag.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_int))
+    get_tag.restype = ctypes.c_int
+    free_acl = library.acl_free
+    free_acl.argtypes = (ctypes.c_void_p,)
+    free_acl.restype = ctypes.c_int
+    acl = get_acl(descriptor, 0x00000100)
+    if not acl:
+        error = ctypes.get_errno()
+        if error == errno.ENOENT:
+            return False
+        raise PrivatePathError(f"private path ACL could not be inspected: errno {error}")
+    try:
+        entry = ctypes.c_void_p()
+        entry_id = 0
+        while True:
+            result = get_entry(acl, entry_id, ctypes.byref(entry))
+            if result < 0:
+                error = ctypes.get_errno()
+                if error == errno.EINVAL:
+                    return False
+                raise PrivatePathError(
+                    f"private path ACL could not be inspected: errno {error}"
+                )
+            tag = ctypes.c_int()
+            if get_tag(entry, ctypes.byref(tag)) != 0:
+                error = ctypes.get_errno()
+                raise PrivatePathError(
+                    f"private path ACL could not be inspected: errno {error}"
+                )
+            if tag.value == 1:
+                return True
+            entry_id = -1
+    finally:
+        free_acl(acl)
 
 
 def _require_private_directory(metadata: os.stat_result, label: Path) -> None:

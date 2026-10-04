@@ -48,6 +48,11 @@ class WorkbenchApiMixin:
     def _workbench_snapshot(self, *, send_body: bool) -> None:
         try:
             payload = project_workbench(str(self.server.project_root))
+            for media in payload["media"]:
+                source_id = str(media["source_id"])
+                encoded_source_id = str(media["url"]).removeprefix("/api/media/")
+                capability = self.server.media_capability(source_id)
+                media["url"] = f"/api/media/{capability}/{encoded_source_id}"
             payload["csrf_token"] = self.server.csrf_token
             self._json(HTTPStatus.OK, payload, send_body=send_body)
         except (RequestError, ReviewError, ProjectStoreError, ValueError):

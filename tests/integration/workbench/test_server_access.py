@@ -4,7 +4,9 @@ from contextlib import redirect_stderr
 from http.client import HTTPConnection
 import io
 import json
+import threading
 import time
+from unittest.mock import MagicMock
 
 from notewitness.projects.store import ProjectStore
 
@@ -114,6 +116,7 @@ class WorkbenchServerAccessTests(WorkbenchServerTestCase):
         status, headers, raw = self._request("GET", snapshot["media"][0]["url"], headers={"Range": "bytes=0-8"})
         self.assertEqual(206, status)
         self.assertEqual("bytes 0-8/24", headers["Content-Range"])
+        self.assertEqual("close", headers["Connection"])
         self.assertEqual(b"synthetic", raw)
         media_path = self.project / self.imported.relative_path
         media_path.write_bytes(b"tampered playback media!")
@@ -133,7 +136,9 @@ class WorkbenchServerAccessTests(WorkbenchServerTestCase):
         snapshot = json.loads(self._request("GET", "/api/workbench")[2])
         self.assertNotIn("session", snapshot)
         self.assertNotIn("launch", snapshot)
-        self.assertEqual(401, self._request("GET", snapshot["media"][0]["url"], authenticated=False)[0])
+        self.assertEqual(200, self._request("GET", snapshot["media"][0]["url"], authenticated=False)[0])
+        raw_media_url = f"/api/media/{self.imported.source_id.replace(':', '%3A')}"
+        self.assertEqual(401, self._request("GET", raw_media_url, authenticated=False)[0])
         before = ProjectStore(self.project).load().sha256
         status, _, _ = self._request(
             "POST", "/api/bookmarks", body=json.dumps({
@@ -146,12 +151,56 @@ class WorkbenchServerAccessTests(WorkbenchServerTestCase):
         )
         self.assertEqual(401, status)
         self.assertEqual(before, ProjectStore(self.project).load().sha256)
-        self.assertEqual(401, self._request("GET", "/api/jobs", headers={"Cookie": "notewitness_session=invalid"}, authenticated=False)[0])
+        self.assertEqual(401, self._request("GET", "/api/jobs", headers={"X-NoteWitness-Session": "invalid"}, authenticated=False)[0])
+        self.assertEqual(401, self._request(
+            "GET", "/api/jobs", headers={"Cookie": f"notewitness_session={self.session_token}"},
+            authenticated=False,
+        )[0])
+        media_url = snapshot["media"][0]["url"]
+        capability, encoded_source = media_url.removeprefix("/api/media/").split("/", 1)
+        self.assertEqual(401, self._request(
+            "GET", f"/api/media/{capability}/source%3Aother", authenticated=False,
+        )[0])
+        self.assertEqual(401, self._request(
+            "GET", f"/api/media/{self.session_token}/{encoded_source}", authenticated=False,
+        )[0])
         logged = io.StringIO()
         with redirect_stderr(logged):
             self.assertEqual(401, self._request("GET", self.launch_path, authenticated=False)[0])
         self.assertNotIn(self.launch_path.rsplit("/", 1)[-1], logged.getvalue())
         self.assertIn("GET /launch/:token 401", logged.getvalue())
+
+    def test_incomplete_request_headers_have_an_absolute_deadline(self) -> None:
+        self.server.request_header_deadline_seconds = 0.05
+        connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=1)
+        connection.connect()
+        assert connection.sock is not None
+        connection.sock.sendall(b"GET /api/workbench HTTP/1.1\r\nHost: 127.0.0.1")
+        self.assertEqual(b"", connection.sock.recv(1))
+        connection.close()
+        self.assertEqual(200, self._request("GET", "/api/workbench")[0])
+
+    def test_duplicate_session_headers_and_over_capacity_connections_fail_closed(self) -> None:
+        connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=2)
+        connection.putrequest("GET", "/api/workbench")
+        connection.putheader("X-NoteWitness-Session", self.session_token)
+        connection.putheader("X-NoteWitness-Session", self.session_token)
+        connection.endheaders()
+        response = connection.getresponse()
+        self.assertEqual(401, response.status)
+        response.read()
+        connection.close()
+
+        original_slots = self.server._request_slots
+        self.server._request_slots = threading.BoundedSemaphore(1)
+        self.server._request_slots.acquire()
+        request = MagicMock()
+        try:
+            self.server.process_request(request, ("127.0.0.1", 1))
+        finally:
+            self.server._request_slots.release()
+            self.server._request_slots = original_slots
+        request.close.assert_called_once_with()
 
     def test_import_job_status_and_privacy_safe_request_logging(self) -> None:
         snapshot = json.loads(self._request("GET", "/api/workbench")[2])

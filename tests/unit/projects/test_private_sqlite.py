@@ -120,6 +120,17 @@ class PrivateSQLiteFailureTranslationTests(unittest.TestCase):
                 _database(parent / "jobs.sqlite")
             self.assertFailure(PrivateSQLiteFailure.PARENT_NOT_PRIVATE, caught.exception)
 
+    def test_peer_writable_ancestor_is_rejected(self) -> None:
+        with TemporaryDirectory() as temporary:
+            shared = Path(temporary) / "shared"
+            shared.mkdir(mode=0o700)
+            parent = shared / "private"
+            parent.mkdir(mode=0o700)
+            shared.chmod(0o777)
+            with self.assertRaises(_TranslatedError) as caught:
+                _database(parent / "jobs.sqlite")
+            self.assertFailure(PrivateSQLiteFailure.PARENT_NOT_PRIVATE, caught.exception)
+
     def test_parent_identity_changed(self) -> None:
         with TemporaryDirectory() as temporary:
             root = _private_root(temporary)

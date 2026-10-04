@@ -17,6 +17,7 @@ from notewitness.projects.private_fs import (
     PrivatePathError,
     private_directory,
     require_private_regular,
+    trusted_absolute_path,
 )
 
 
@@ -72,13 +73,15 @@ class PrivateSQLiteDatabase:
         leading_pragmas: tuple[str, ...] = (),
         defer_close_failure_to_active_exception: bool = False,
     ) -> None:
-        self.path = path
+        self.path = trusted_absolute_path(path)
         self._errors = errors
         self._busy_timeout_ms = validated_busy_timeout_ms(busy_timeout_ms)
         self._leading_pragmas = leading_pragmas
         self._defer_close_failure = defer_close_failure_to_active_exception
         try:
-            with private_directory(self.path.parent) as parent:
+            with private_directory(
+                self.path.parent, require_trusted_ancestors=True
+            ) as parent:
                 self._parent_identity = parent.identity
         except PrivatePathError as exc:
             raise errors(PrivateSQLiteFailure.PARENT_NOT_PRIVATE) from exc
@@ -86,7 +89,9 @@ class PrivateSQLiteDatabase:
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
         try:
-            with private_directory(self.path.parent) as parent:
+            with private_directory(
+                self.path.parent, require_trusted_ancestors=True
+            ) as parent:
                 if parent.identity != self._parent_identity:
                     raise PrivatePathError("database parent identity changed")
                 self._prepare_path(parent)

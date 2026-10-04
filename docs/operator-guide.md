@@ -195,12 +195,13 @@ then records the checkpoint without rerunning the model.
 
 ### Workbench access
 
-Private API, job, media, and mutation routes require a per-process session
-cookie. The server opens a single-use launch URL to establish that cookie. With
-`--no-open-browser`, the command prints the single-use URL to the protected
-terminal. Host, Origin, and CSRF checks remain separate controls. The token does
-not protect against a malicious process already running with the same user and
-filesystem authority.
+Private API, job, and mutation routes require a per-process session header. The
+server opens a single-use launch URL that stores the secret only in that tab's
+origin-and-port-scoped session storage. Media playback receives separate,
+source-bound capability URLs. With `--no-open-browser`, the command prints the
+single-use URL to the protected terminal. Host, Origin, and CSRF checks remain
+separate controls. The token does not protect against a malicious process already
+running with the same user and filesystem authority.
 
 If a project has no reviewer, the GUI creates one project-local restricted actor
 before enabling review mutations. You still select the reviewer and the
@@ -263,7 +264,8 @@ are never overwritten.
 The `Music transcript` panel creates new, owner-private CSV or MIDI exports only
 after explicit rights authorization and acknowledgement of projection losses.
 CSV retains source spans, review state, track IDs, frequency, amplitude,
-velocity, and pitch-bend metadata when available. MIDI retains separate named
+velocity, and pitch-bend metadata when available, and refuses textual fields
+that spreadsheet software could interpret as formulas. MIDI retains separate named
 tracks and explicit velocities; before export it reports timing quantization,
 evidence provenance, provider amplitude, fractional pitch, pitch-bend omission,
 and overlapping-same-pitch merging. MIDI is limited to one selected recording so

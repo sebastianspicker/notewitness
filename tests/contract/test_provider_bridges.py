@@ -249,6 +249,77 @@ class ProviderBridgeTests(unittest.TestCase):
         self.assertEqual("provider bridge failed: local PANNs checkpoint could not run\n", result.stderr)
         self.assertNotIn("provider-detail", result.stderr)
 
+    def test_panns_chunks_long_spans_and_rejects_shape_before_conversion(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            fake = directory / "fake"
+            _write_fake_panns(fake, "[[.1, .8, .1]]")
+            output = _run(
+                directory,
+                "panns_instrument_bridge.py",
+                _request(
+                    directory,
+                    "instrument_detection",
+                    parameters=_panns_parameters(),
+                    duration_us=30_100_000,
+                ),
+                fake,
+            )
+            self.assertEqual("ready", output["state"])
+            self.assertEqual("4", (directory / "librosa-call-count.txt").read_text())
+            self.assertEqual(
+                5.05,
+                json.loads((directory / "librosa-call.json").read_text())["duration"],
+            )
+
+            (fake / "panns_inference.py").write_text(
+                "from pathlib import Path\n"
+                "labels = ['Speech', 'piano', 'violin']\n"
+                "class Bomb:\n"
+                "    shape = (1000000, 3)\n"
+                "    def tolist(self):\n"
+                "        Path('tolist-called').write_text('unsafe')\n"
+                "        return []\n"
+                "class SoundEventDetection:\n"
+                "    def __init__(self, checkpoint_path, device): pass\n"
+                "    def inference(self, audio): return [Bomb()]\n"
+            )
+            rejected = _run_raw(
+                directory,
+                "panns_instrument_bridge.py",
+                _request(
+                    directory,
+                    "instrument_detection",
+                    parameters=_panns_parameters(),
+                ),
+                fake,
+            )
+            self.assertEqual(2, rejected.returncode)
+            self.assertIn("shape budget", rejected.stderr)
+            self.assertFalse((directory / "tolist-called").exists())
+            decode_calls = (directory / "librosa-call-count.txt").read_text()
+            (fake / "soundfile.py").write_text(
+                "class Info:\n"
+                "    channels = 64\n"
+                "    samplerate = 192000\n"
+                "def info(path): return Info()\n"
+            )
+            native_rejected = _run_raw(
+                directory,
+                "panns_instrument_bridge.py",
+                _request(
+                    directory,
+                    "instrument_detection",
+                    parameters=_panns_parameters(),
+                ),
+                fake,
+            )
+            self.assertEqual(2, native_rejected.returncode)
+            self.assertIn("native decode budget", native_rejected.stderr)
+            self.assertEqual(
+                decode_calls, (directory / "librosa-call-count.txt").read_text()
+            )
+
     def test_mt3_malformed_utf8_is_a_bounded_bridge_failure(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)
@@ -329,10 +400,19 @@ def _write_fake_panns(
         "        return [['samples']]\n"
         "class Core:\n"
         "    def load(self, path, sr, mono, offset, duration):\n"
+        "        count_path = Path('librosa-call-count.txt')\n"
+        "        count = int(count_path.read_text()) if count_path.exists() else 0\n"
+        "        count_path.write_text(str(count + 1))\n"
         "        Path('librosa-call.json').write_text(json.dumps({\n"
         "            'sr': sr, 'mono': mono, 'offset': offset, 'duration': duration}))\n"
         "        return Audio(), sr\n"
         "core = Core()\n"
+    )
+    (fake / "soundfile.py").write_text(
+        "class Info:\n"
+        "    channels = 2\n"
+        "    samplerate = 48000\n"
+        "def info(path): return Info()\n"
     )
     body = f"        return [{inference}]\n" if expression else f"        {inference}\n"
     (fake / "panns_inference.py").write_text(

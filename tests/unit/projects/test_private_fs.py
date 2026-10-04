@@ -3,12 +3,18 @@ from __future__ import annotations
 import errno
 import os
 from pathlib import Path
+import subprocess
+import sys
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from notewitness.projects.private_fs import (
+    PrivatePathError,
+    _directory_has_extended_acl,
     content_stat_identity,
     open_directory_no_follow,
+    open_private_directory,
     trusted_absolute_path,
 )
 
@@ -87,6 +93,84 @@ class OpenDirectoryNoFollowTests(unittest.TestCase):
     def test_relative_path_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             open_directory_no_follow(Path("relative"))
+
+
+class TrustedAncestorTests(unittest.TestCase):
+    def test_rejects_peer_writable_nonsticky_ancestor(self) -> None:
+        with TemporaryDirectory() as temporary:
+            shared = trusted_absolute_path(Path(temporary) / "shared")
+            shared.mkdir(mode=0o700)
+            private = shared / "private"
+            private.mkdir(mode=0o700)
+            shared.chmod(0o777)
+
+            with self.assertRaisesRegex(PrivatePathError, "replaceable ancestor"):
+                open_private_directory(private, require_trusted_ancestors=True)
+
+    def test_accepts_trusted_child_below_sticky_ancestor(self) -> None:
+        with TemporaryDirectory() as temporary:
+            shared = trusted_absolute_path(Path(temporary) / "shared")
+            shared.mkdir(mode=0o700)
+            private = shared / "private"
+            private.mkdir(mode=0o700)
+            shared.chmod(0o1777)
+
+            capability = open_private_directory(
+                private, require_trusted_ancestors=True
+            )
+            capability.close()
+
+    def test_rechecks_ancestor_permissions(self) -> None:
+        with TemporaryDirectory() as temporary:
+            shared = trusted_absolute_path(Path(temporary) / "shared")
+            shared.mkdir(mode=0o700)
+            private = shared / "private"
+            private.mkdir(mode=0o700)
+            capability = open_private_directory(
+                private, require_trusted_ancestors=True
+            )
+            try:
+                shared.chmod(0o777)
+                with self.assertRaisesRegex(PrivatePathError, "replaceable ancestor"):
+                    capability.require_current()
+            finally:
+                capability.close()
+
+    def test_rejects_extended_acl_authority(self) -> None:
+        with TemporaryDirectory() as temporary, patch(
+            "notewitness.projects.private_fs._directory_has_extended_acl",
+            return_value=True,
+        ):
+            private = trusted_absolute_path(Path(temporary))
+            with self.assertRaisesRegex(PrivatePathError, "ACL-controlled"):
+                open_private_directory(private, require_trusted_ancestors=True)
+
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin extended ACL test")
+    def test_detects_native_allow_acl_but_ignores_deny_only_home_acl(self) -> None:
+        home_descriptor = os.open(Path.home(), os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            self.assertFalse(_directory_has_extended_acl(home_descriptor))
+        finally:
+            os.close(home_descriptor)
+
+        with TemporaryDirectory() as temporary:
+            directory = Path(temporary) / "acl"
+            directory.mkdir()
+            subprocess.run(
+                [
+                    "chmod",
+                    "+a",
+                    "everyone allow add_subdirectory,delete_child",
+                    os.fspath(directory),
+                ],
+                check=True,
+                capture_output=True,
+            )
+            descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                self.assertTrue(_directory_has_extended_acl(descriptor))
+            finally:
+                os.close(descriptor)
 
 
 class ContentStatIdentityTests(unittest.TestCase):

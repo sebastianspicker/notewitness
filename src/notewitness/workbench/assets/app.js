@@ -9,7 +9,19 @@ import { createProcessing } from "/assets/js/processing.mjs";
 
 const state = createWorkbenchState();
 document.documentElement.dataset.theme = state.theme;
-const c = { state, app: document.querySelector("#app") };
+const SESSION_STORAGE_KEY = "notewitness.session";
+const launched = new URLSearchParams(window.location.hash.slice(1)).getAll("session");
+let sessionToken = launched.length === 1 ? launched[0] : "";
+try {
+  if (sessionToken) sessionStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
+  else sessionToken = sessionStorage.getItem(SESSION_STORAGE_KEY) || "";
+} catch (_error) {
+  // The launch still works in-memory when storage is unavailable; reload will require relaunch.
+}
+if (window.location.hash) {
+  history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+}
+const c = { state, app: document.querySelector("#app"), sessionToken: () => sessionToken };
 Object.assign(c, createApi(c), createRendering(c), createPlayback(c));
 Object.assign(c, createLoading(c), createProcessing(c));
 Object.assign(c, createActions(c));

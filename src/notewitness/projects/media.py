@@ -333,7 +333,9 @@ def _stream_copy(
             dir_fd=media_descriptor,
         )
         os.fchmod(destination_descriptor, _FILE_MODE)
-        digest, byte_count = _copy_and_hash(source_descriptor, destination_descriptor)
+        digest, byte_count = _copy_and_hash(
+            source_descriptor, destination_descriptor, source_info.st_size
+        )
         final_source_info = os.fstat(source_descriptor)
         if not _same_source_snapshot(source_info, final_source_info):
             raise MediaIngestError("source file changed while it was being copied")
@@ -370,10 +372,14 @@ def _require_ingest_capacity(source_info: os.stat_result, media_descriptor: int)
         raise MediaIngestError("project storage has insufficient space for media ingest")
 
 
-def _copy_and_hash(source_descriptor: int, destination_descriptor: int) -> tuple[str, int]:
+def _copy_and_hash(
+    source_descriptor: int, destination_descriptor: int, maximum_bytes: int
+) -> tuple[str, int]:
     digest = hashlib.sha256()
     byte_count = 0
     while chunk := os.read(source_descriptor, _CHUNK_SIZE):
+        if byte_count + len(chunk) > maximum_bytes:
+            raise MediaIngestError("source file grew while it was being copied")
         digest.update(chunk)
         byte_count += len(chunk)
         _write_all(destination_descriptor, chunk)

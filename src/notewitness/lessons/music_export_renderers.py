@@ -59,25 +59,32 @@ def csv_bytes(notes: tuple[_SymbolicNote, ...]) -> bytes:
     for note in notes:
         writer.writerow(
             (
-                note.event_id,
-                note.target_id,
-                note.source_id,
-                note.stream_id,
+                _spreadsheet_safe_text(note.event_id),
+                _spreadsheet_safe_text(note.target_id),
+                _spreadsheet_safe_text(note.source_id),
+                _spreadsheet_safe_text(note.stream_id),
                 note.start_us,
                 note.duration_us,
                 _pitch_text(note.midi_pitch),
                 _optional_number_text(note.frequency_hz),
                 _optional_number_text(note.amplitude),
                 "" if note.velocity is None else note.velocity,
-                note.pitch_bend_unit or "",
+                _spreadsheet_safe_text(note.pitch_bend_unit or ""),
                 json.dumps(note.pitch_bend_values, separators=(",", ":"))
                 if note.pitch_bend_values
                 else "",
-                note.instrument_track_id or "",
-                note.review_status,
+                _spreadsheet_safe_text(note.instrument_track_id or ""),
+                _spreadsheet_safe_text(note.review_status),
             )
         )
     return output.getvalue().encode("utf-8")
+
+
+def _spreadsheet_safe_text(value: str) -> str:
+    candidate = value.lstrip()
+    if candidate.startswith(("=", "+", "-", "@", "＝", "＋", "－", "＠")):
+        raise MusicExportError("CSV text fields must not contain spreadsheet formulas.")
+    return value
 
 
 def _pitch_text(pitch: float) -> str:

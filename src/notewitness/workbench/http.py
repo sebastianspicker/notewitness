@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import hmac
 import secrets
+import socket
 import sqlite3
 import sys
 import threading
@@ -27,7 +29,7 @@ from .protocol import (
     ALLOWED_BIND_HOST,
     ASSETS,
     LAUNCH_PATH_PREFIX,
-    SESSION_COOKIE_NAME,
+    SESSION_HEADER_NAME,
     WorkbenchProtocolMixin,
     WorkbenchServerError,
     coarse_log_route,
@@ -64,13 +66,38 @@ class WorkbenchRequestHandler(
 
     protocol_version = "HTTP/1.1"
 
+    def setup(self) -> None:
+        super().setup()
+        self.connection.settimeout(self.server.request_io_timeout_seconds)
+        self._header_deadline_lock = threading.Lock()
+        self._header_deadline_generation = 0
+        self._header_deadline: threading.Timer | None = None
+        self._request_headers_expired = False
+
+    def handle_one_request(self) -> None:
+        self._arm_header_deadline()
+        try:
+            super().handle_one_request()
+        finally:
+            self._cancel_header_deadline()
+
+    def finish(self) -> None:
+        self._cancel_header_deadline()
+        super().finish()
+
     def do_GET(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
+        if not self._request_headers_complete():
+            return
         self._dispatch_get(send_body=True)
 
     def do_HEAD(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
+        if not self._request_headers_complete():
+            return
         self._dispatch_get(send_body=False)
 
     def do_POST(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
+        if not self._request_headers_complete():
+            return
         if not self._request_is_trusted(require_origin=True, require_session=True):
             return
         path = self._request_path()
@@ -131,6 +158,9 @@ class WorkbenchRequestHandler(
             return
         if self._dispatch_public_get(path, send_body=send_body):
             return
+        if path.startswith("/api/media/"):
+            self._dispatch_media_get(path, send_body=send_body)
+            return
         if not self._session_is_authenticated():
             self._json_error(HTTPStatus.UNAUTHORIZED, "authentication_required", send_body=send_body)
             return
@@ -152,18 +182,32 @@ class WorkbenchRequestHandler(
         if handler is not None:
             handler(send_body=send_body)
             return True
-        prefix = "/api/media/"
-        if path.startswith(prefix):
-            encoded_source_id = path[len(prefix):]
-            if not encoded_source_id or "/" in encoded_source_id:
-                self._json_error(HTTPStatus.NOT_FOUND, "media_not_found")
-                return True
-            try:
-                self._media(unquote(encoded_source_id, errors="strict"), send_body=send_body)
-            except (UnicodeError, RequestError, ReviewError, ProjectStoreError, OSError):
-                self._json_error(HTTPStatus.NOT_FOUND, "media_not_found")
-            return True
         return False
+
+    def _dispatch_media_get(self, path: str, *, send_body: bool) -> None:
+        components = path.removeprefix("/api/media/").split("/")
+        if len(components) not in {1, 2} or not all(components):
+            self._json_error(HTTPStatus.NOT_FOUND, "media_not_found", send_body=send_body)
+            return
+        try:
+            source_id = unquote(components[-1], errors="strict")
+        except (UnicodeError, ValueError):
+            self._json_error(HTTPStatus.NOT_FOUND, "media_not_found", send_body=send_body)
+            return
+        authenticated = (
+            self._session_is_authenticated()
+            if len(components) == 1
+            else self.server.media_capability_is_authenticated(source_id, components[0])
+        )
+        if not authenticated:
+            self._json_error(
+                HTTPStatus.UNAUTHORIZED, "authentication_required", send_body=send_body
+            )
+            return
+        try:
+            self._media(source_id, send_body=send_body)
+        except (RequestError, ReviewError, ProjectStoreError, OSError):
+            self._json_error(HTTPStatus.NOT_FOUND, "media_not_found", send_body=send_body)
 
     def _request_is_trusted(self, *, require_origin: bool, require_session: bool) -> bool:
         if self.headers.get("Host") not in self.server.allowed_hosts:
@@ -184,12 +228,13 @@ class WorkbenchRequestHandler(
         return True
 
     def _session_is_authenticated(self) -> bool:
-        tokens: list[str] = []
-        for component in self.headers.get("Cookie", "").split(";"):
-            name, separator, value = component.strip().partition("=")
-            if separator and name == SESSION_COOKIE_NAME:
-                tokens.append(value)
-        return len(tokens) == 1 and self.server.session_is_authenticated(tokens[0])
+        tokens = self.headers.get_all(SESSION_HEADER_NAME, [])
+        return (
+            len(tokens) == 1
+            and len(tokens[0]) <= 128
+            and tokens[0].isascii()
+            and self.server.session_is_authenticated(tokens[0])
+        )
 
     def _launch(self, path: str, *, send_body: bool) -> None:
         token = path.removeprefix(LAUNCH_PATH_PREFIX)
@@ -201,10 +246,51 @@ class WorkbenchRequestHandler(
             return
         self.send_response(HTTPStatus.SEE_OTHER)
         self._security_headers()
-        self.send_header("Location", "/")
-        self.send_header("Set-Cookie", self.server.session_cookie)
+        self.send_header("Location", f"/#session={self.server.session_token}")
+        self.send_header("Connection", "close")
         self.send_header("Content-Length", "0")
         self.end_headers()
+
+    def _request_headers_complete(self) -> bool:
+        self._cancel_header_deadline()
+        self.close_connection = True
+        return not self._request_headers_expired
+
+    def _arm_header_deadline(self) -> None:
+        with self._header_deadline_lock:
+            self._header_deadline_generation += 1
+            generation = self._header_deadline_generation
+            timer = threading.Timer(
+                self.server.request_header_deadline_seconds,
+                self._expire_incomplete_request,
+                args=(generation,),
+            )
+            timer.daemon = True
+            self._header_deadline = timer
+            timer.start()
+
+    def _cancel_header_deadline(self) -> None:
+        lock = getattr(self, "_header_deadline_lock", None)
+        if lock is None:
+            return
+        with lock:
+            self._header_deadline_generation += 1
+            timer = self._header_deadline
+            self._header_deadline = None
+        if timer is not None:
+            timer.cancel()
+
+    def _expire_incomplete_request(self, generation: int) -> None:
+        with self._header_deadline_lock:
+            if generation != self._header_deadline_generation:
+                return
+            self._header_deadline = None
+            self._request_headers_expired = True
+            self.close_connection = True
+        try:
+            self.connection.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
 
     def _asset(self, path: str, *, send_body: bool) -> None:
         filename, content_type = ASSETS[path]
@@ -221,6 +307,9 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
 
     daemon_threads = True
     allow_reuse_address = False
+    maximum_concurrent_requests = 32
+    request_io_timeout_seconds = 30.0
+    request_header_deadline_seconds = 10.0
 
     def __init__(
         self,
@@ -238,6 +327,10 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
         self._launch_token: str | None = secrets.token_urlsafe(32)
         self._launch_token_lock = threading.Lock()
         self._session_token = secrets.token_urlsafe(32)
+        self._media_capability_key = secrets.token_bytes(32)
+        self._request_slots = threading.BoundedSemaphore(
+            self.maximum_concurrent_requests
+        )
         self.media_verification_lock = threading.Lock()
         self.media_verifications: dict[str, tuple[tuple[int, ...], str]] = {}
         self.assets_root = Path(__file__).with_name("assets")
@@ -257,6 +350,22 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
             super().server_close()
             raise
         self._processing_closed = False
+
+    def process_request(self, request: socket.socket, client_address: object) -> None:
+        if not self._request_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request: socket.socket, client_address: object) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
 
     def server_close(self) -> None:
         if not self._processing_closed:
@@ -288,8 +397,20 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
         return secrets.compare_digest(token, self._session_token)
 
     @property
-    def session_cookie(self) -> str:
-        return f"{SESSION_COOKIE_NAME}={self._session_token}; HttpOnly; SameSite=Strict; Path=/"
+    def session_token(self) -> str:
+        return self._session_token
+
+    def media_capability(self, source_id: str) -> str:
+        return hmac.digest(
+            self._media_capability_key, source_id.encode("utf-8"), "sha256"
+        ).hex()
+
+    def media_capability_is_authenticated(self, source_id: str, token: str) -> bool:
+        return (
+            len(token) == 64
+            and token.isascii()
+            and secrets.compare_digest(token, self.media_capability(source_id))
+        )
 
     @property
     def allowed_hosts(self) -> frozenset[str]:

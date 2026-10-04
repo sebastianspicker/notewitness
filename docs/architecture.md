@@ -155,9 +155,10 @@ Project-scoped runtime writes use the pinned private-directory capability in
 unlinking are directory-FD-relative and revalidate the original device and
 inode. Python's `sqlite3` API cannot open relative to a directory FD, so
 `projects/private_sqlite.py` pins and revalidates the parent directory around
-the pathname-based SQLite lifecycle for both job stores. Replacement is
-rejected, but this cannot eliminate every race with a malicious process running
-as the same user.
+the pathname-based SQLite lifecycle for both job stores. It also requires
+trusted root/current-user ancestry, allowing a sticky shared directory only
+when its next component is trusted-owned. Replacement is rejected, but this
+cannot eliminate every race with a malicious process running as the same user.
 
 Files are trusted under four distinct models, and each keeps its own checks:
 
@@ -165,7 +166,7 @@ Files are trusted under four distinct models, and each keeps its own checks:
 |---|---|---|
 | Owner-private project state | Owned by the user, no group or other access, no symlink in any path component | `projects/private_fs.py`, `projects/store.py`, `projects/private_sqlite.py` |
 | Operator artifacts (executables, the runtime configuration's directory) | Owned by the user or root, not group- or world-writable | `analysis/local_tools/discovery.py` |
-| Source media being ingested | Any mode, but a regular file reached without symlinks; identity rechecked while copying | `projects/media.py` |
+| Source media being ingested | Any mode, but a regular file reached without symlinks; identity and captured byte budget rechecked while copying | `projects/media.py` |
 | Portable documents (`validate`, `inspect`) | Ordinary bounded read | `projects/document.py` |
 
 The portable graph-loading path deliberately does not assert the private
@@ -202,9 +203,12 @@ boundary.
 
 ## The workbench trust boundary
 
-The server binds only to `127.0.0.1`. A single-use launch token establishes an
-`HttpOnly`, host-only, `SameSite=Strict` session cookie. Private reads require
-the session; mutations additionally validate Host, Origin, and CSRF data.
+The server binds only to `127.0.0.1`. A single-use launch token delivers a
+per-process bearer into origin-and-port-scoped browser session storage. Private
+API reads send it in `X-NoteWitness-Session`; media URLs carry independent,
+source-bound capabilities. Mutations additionally validate Host, Origin, and
+CSRF data. The accepted-connection boundary caps concurrent handlers and applies
+finite header and socket-idle deadlines.
 Malformed requests fail with the workbench's own request errors; review and
 evidence rules fail with the `lessons` review errors. Project actor IDs provide
 evidence attribution, not authentication or authorization. The process serves

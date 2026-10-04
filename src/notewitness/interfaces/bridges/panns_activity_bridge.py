@@ -11,21 +11,23 @@ try:
     from ._protocol import BridgeError, bounded_span, confidence, fail, main_request, response
     from .panns_instrument_bridge import (
         _frame_score,
+        _bounded_plain_sequence,
         _nonnegative_int,
         _plain_sequence,
         _positive_int,
         _require_panns_timing,
-        load_sound_event_frames,
+        sound_event_frame_chunks,
     )
 except ImportError:  # direct execution before package installation
     from _protocol import BridgeError, bounded_span, confidence, fail, main_request, response
     from panns_instrument_bridge import (
         _frame_score,
+        _bounded_plain_sequence,
         _nonnegative_int,
         _plain_sequence,
         _positive_int,
         _require_panns_timing,
-        load_sound_event_frames,
+        sound_event_frame_chunks,
     )
 
 
@@ -61,27 +63,27 @@ def run(argv: list[str]) -> None:
     music_label = _label(parameters["music_label"], "music_label")
     if speech_label == music_label:
         raise BridgeError("speech_label and music_label must be distinct")
-    framewise, labels = load_sound_event_frames(request)
-    indices = {label: index for index, label in enumerate(labels)}
-    if speech_label not in indices or music_label not in indices:
-        raise BridgeError("activity labels are absent from the local PANNs checkpoint taxonomy")
-    events = _activity_events(
-        request,
-        framewise,
-        labels,
-        indices[speech_label],
-        indices[music_label],
-        window_us,
-        hop_us,
-        threshold,
-        gap_us,
-    )
+    with sound_event_frame_chunks(request) as (labels, frame_chunks):
+        indices = {label: index for index, label in enumerate(labels)}
+        if speech_label not in indices or music_label not in indices:
+            raise BridgeError("activity labels are absent from the local PANNs checkpoint taxonomy")
+        events = _activity_events(
+            request,
+            frame_chunks,
+            labels,
+            indices[speech_label],
+            indices[music_label],
+            window_us,
+            hop_us,
+            threshold,
+            gap_us,
+        )
     response(events)
 
 
 def _activity_events(
     request: dict[str, Any],
-    framewise: Any,
+    frame_chunks: Any,
     labels: list[str],
     speech_index: int,
     music_index: int,
@@ -90,46 +92,42 @@ def _activity_events(
     threshold: float,
     gap_us: int,
 ) -> list[dict[str, Any]]:
-    frames = _plain_sequence(framewise)
-    if frames is None:
-        raise BridgeError("PANNs framewise_output must be a sequence")
-    requested = request["spans"][0]
-    anchor = requested["start_us"]
-    limit = anchor + requested["duration_us"]
     current: tuple[str, int, int, float] | None = None
     segments: list[tuple[str, int, int, float]] = []
-    for frame_index, row in enumerate(frames):
-        row = _plain_sequence(row)
-        if row is None or len(row) != len(labels):
-            raise BridgeError("PANNs framewise output has an invalid label axis")
-        scores = [_frame_score(score) for score in row]
-        kind = _activity_kind(
-            scores[speech_index] >= threshold,
-            scores[music_index] >= threshold,
-        )
-        raw_start = anchor + frame_index * hop_us
-        start = max(raw_start, anchor)
-        end = min(raw_start + window_us, limit)
-        if start >= end:
-            continue
-        if kind is None:
-            if current is not None and start > current[2] + gap_us:
-                segments.append(current)
-                current = None
-            continue
-        score = _activity_score(
-            kind,
-            scores[speech_index],
-            scores[music_index],
-        )
-        if current is not None and kind == current[0] and start <= current[2] + gap_us:
-            current = (kind, current[1], max(current[2], end), max(current[3], score))
-            continue
-        if current is not None:
-            segments.append(current)
-        current = (kind, start, end, score)
+    for anchor, chunk_duration_us, frames in frame_chunks:
+        limit = anchor + chunk_duration_us
+        for frame_index, row in enumerate(frames):
+            row = _bounded_plain_sequence(row, len(labels))
+            if row is None or len(row) != len(labels):
+                raise BridgeError("PANNs framewise output has an invalid label axis")
+            scores = [_frame_score(score) for score in row]
+            kind = _activity_kind(
+                scores[speech_index] >= threshold,
+                scores[music_index] >= threshold,
+            )
+            raw_start = anchor + frame_index * hop_us
+            start = max(raw_start, anchor)
+            end = min(raw_start + window_us, limit)
+            if start >= end:
+                continue
+            if kind is None:
+                if current is not None and start > current[2] + gap_us:
+                    _append_segment(segments, current)
+                    current = None
+                continue
+            score = _activity_score(
+                kind,
+                scores[speech_index],
+                scores[music_index],
+            )
+            if current is not None and kind == current[0] and start <= current[2] + gap_us:
+                current = (kind, current[1], max(current[2], end), max(current[3], score))
+                continue
+            if current is not None:
+                _append_segment(segments, current)
+            current = (kind, start, end, score)
     if current is not None:
-        segments.append(current)
+        _append_segment(segments, current)
     return [
         {
             "hypothesis_id": f"panns:activity:{index:06d}",
@@ -140,6 +138,15 @@ def _activity_events(
         }
         for index, (kind, start, end, score) in enumerate(segments)
     ]
+
+
+def _append_segment(
+    segments: list[tuple[str, int, int, float]],
+    segment: tuple[str, int, int, float],
+) -> None:
+    if len(segments) >= 50_000:
+        raise BridgeError("PANNs output exceeds the maximum hypothesis count")
+    segments.append(segment)
 
 
 def _activity_kind(speech: bool, music: bool) -> str | None:

@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
@@ -96,6 +97,46 @@ class PagesDemoContractTests(unittest.TestCase):
         self.assertIn("needs: build", workflow)
         self.assertIn("pages: write", workflow)
         self.assertIn("id-token: write", workflow)
+
+    def test_standalone_builder_rejects_source_and_generator_links(self) -> None:
+        cases = ("source_tree", "generator")
+        for case in cases:
+            with self.subTest(case=case), TemporaryDirectory() as temporary:
+                root = Path(temporary) / "repo"
+                scripts = root / "scripts"
+                scripts.mkdir(parents=True)
+                shutil.copy2(ROOT / "scripts/build_pages_demo.sh", scripts)
+                (root / "src").mkdir()
+                (root / "docs/screenshots").mkdir(parents=True)
+                (root / "examples/synthetic-lesson").mkdir(parents=True)
+                (root / "examples/synthetic-lesson/project.json").write_text("{}")
+                external = Path(temporary) / "external"
+                external.write_text("outside checkout", encoding="utf-8")
+                for name in (
+                    "build_demo_state.py",
+                    "render_pages_demo.mjs",
+                    "assemble_pages_demo.py",
+                    "assemble_pages_tour.py",
+                    "pages_demo_client.js",
+                ):
+                    (scripts / name).write_text("", encoding="utf-8")
+                if case == "source_tree":
+                    (root / "src/linked.css").symlink_to(external)
+                else:
+                    (scripts / "build_demo_state.py").unlink()
+                    (scripts / "build_demo_state.py").symlink_to(external)
+
+                site = Path(temporary) / "site"
+                result = subprocess.run(
+                    ["bash", str(scripts / "build_pages_demo.sh"), str(site)],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("symbolic links", result.stderr)
+                self.assertFalse(site.exists())
 
 
 if __name__ == "__main__":

@@ -39,12 +39,15 @@ class WorkbenchServerTestCase(unittest.TestCase):
             target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
         )
         self.thread.start()
-        self.session_cookie = ""
+        self.session_token = ""
         self.launch_path = urlsplit(self.server.launch_url).path
         status, headers, _ = self._request("GET", self.launch_path, authenticated=False)
         self.assertEqual(303, status)
-        self.assertEqual("/", headers["Location"])
-        self.session_cookie = headers["Set-Cookie"].split(";", 1)[0]
+        location = urlsplit(headers["Location"])
+        self.assertEqual("/", location.path)
+        self.assertTrue(location.fragment.startswith("session="))
+        self.assertNotIn("Set-Cookie", headers)
+        self.session_token = location.fragment.removeprefix("session=")
 
     def tearDown(self) -> None:
         self.server.shutdown()
@@ -62,8 +65,8 @@ class WorkbenchServerTestCase(unittest.TestCase):
         authenticated: bool = True,
     ) -> tuple[int, "MappingHeaders", bytes]:
         request_headers = dict(headers or {})
-        if authenticated and self.session_cookie:
-            request_headers.setdefault("Cookie", self.session_cookie)
+        if authenticated and self.session_token:
+            request_headers.setdefault("X-NoteWitness-Session", self.session_token)
         connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
         connection.request(method, path, body=body, headers=request_headers)
         response: HTTPResponse = connection.getresponse()

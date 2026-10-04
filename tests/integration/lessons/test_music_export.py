@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -10,7 +11,7 @@ from notewitness.lessons.music_export import (
     SymbolicNote,
     SymbolicMusicExportService,
 )
-from notewitness.lessons.music_export_renderers import merged_midi_notes
+from notewitness.lessons.music_export_renderers import csv_bytes, merged_midi_notes
 from notewitness.projects.initialize import initialize_project
 from notewitness.projects.store import ProjectStore
 
@@ -57,6 +58,29 @@ class MusicExportTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(Exception, "Refusing to replace"):
                 service.export(export_format="csv", filename="notes.csv", rights_authorized=True, loss_preview_acknowledged=True)
+
+    def test_csv_rejects_spreadsheet_formula_text_without_publishing(self) -> None:
+        for value in ("=1+1", "+1", "-1", "@SUM(A1)", " \t=1", "＝1"):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                MusicExportError, "spreadsheet formulas"
+            ):
+                csv_bytes((replace(_symbolic_note("event:safe", 0, 1_000, 64), instrument_track_id=value),))
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / "project"
+            initialize_project(root)
+            _append_note(root, "event:formula", 0, 1_000, 60.0, "=1+1")
+            destination = root / "exports" / "notes.csv"
+
+            with self.assertRaisesRegex(MusicExportError, "spreadsheet formulas"):
+                SymbolicMusicExportService.for_project(root).export(
+                    export_format="csv",
+                    filename="notes.csv",
+                    rights_authorized=True,
+                    loss_preview_acknowledged=True,
+                )
+
+            self.assertFalse(destination.exists())
 
     def test_midi_is_parseable_and_separates_tracks(self) -> None:
         with TemporaryDirectory() as temporary:

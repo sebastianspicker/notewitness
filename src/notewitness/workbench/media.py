@@ -79,6 +79,8 @@ class WorkbenchMediaMixin:
                 self._security_headers()
                 self.send_header("Content-Range", f"bytes */{size}")
                 self.send_header("Content-Length", "0")
+                if self.close_connection:
+                    self.send_header("Connection", "close")
                 self.end_headers()
                 return
             start, end, partial = selected
@@ -91,6 +93,8 @@ class WorkbenchMediaMixin:
             self.send_header("Content-Length", str(length))
             if partial:
                 self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            if self.close_connection:
+                self.send_header("Connection", "close")
             self.end_headers()
             if send_body:
                 os.lseek(descriptor, start, os.SEEK_SET)

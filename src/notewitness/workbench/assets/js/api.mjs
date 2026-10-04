@@ -42,7 +42,9 @@ export function createApi(c) {
   }
 
   async function request(path, options = {}) {
-    const response = await fetch(localApiPath(path), { credentials: "same-origin", ...options });
+    const headers = new Headers(options.headers || {});
+    headers.set("X-NoteWitness-Session", c.sessionToken());
+    const response = await fetch(localApiPath(path), { ...options, credentials: "omit", headers });
     if (response.ok) {
       if (response.status === 204) return null;
       return response.json().catch(() => null);

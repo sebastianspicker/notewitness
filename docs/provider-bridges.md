@@ -107,9 +107,13 @@ allowlist from the pinned checkpoint's taxonomy. The allowlist is required
 because PANNs uses the broader AudioSet taxonomy, and non-instrument classes
 must not silently become instrument evidence.
 
-The bridge loads only the requested source span as mono 32 kHz audio, adds the
-single batch axis expected by `panns_inference.SoundEventDetection`, and uses
-the provider's framewise output. It suppresses provider stdout and stderr while
+The bridge validates native channel/rate metadata, then loads the requested
+source span as bounded 10-second mono 32 kHz
+chunks, adds the single batch axis expected by
+`panns_inference.SoundEventDetection`, and uses the provider's framewise output.
+It bounds decoded samples, frame/class dimensions, cells, and accumulated
+hypotheses before converting provider arrays or constructing the response. It
+suppresses provider stdout and stderr while
 the third-party module loads and runs, so status prints cannot corrupt the
 bridge's single-JSON-document protocol or leak private paths. It never uses the
 clip-level `AudioTagging` API. It turns each allowed active frame into a 10 ms

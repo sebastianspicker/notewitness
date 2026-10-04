@@ -5,6 +5,11 @@ identifiers.
 
 ## [Unreleased]
 
+- Harden local boundaries found by the repository security scan: port-scoped
+  workbench header sessions and source-bound media capabilities, bounded
+  pre-authentication HTTP handlers, captured media-copy budgets, trusted SQLite
+  ancestry, formula-safe CSV refusal, symlink-free Pages inputs, and chunked,
+  shape-bounded PANNs inference.
 - Redesign the workbench and Pages demo: machine suggestions render
   pencilled (graphite, dashed, open sigil) and accepted evidence inked (solid,
   filled sigil); bundled OFL fonts (Newsreader, Atkinson Hyperlegible Next) served from the loopback asset
