@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import stat
+import sys
 from typing import Literal
 
 from notewitness.analysis.local_tools.contracts import (
@@ -66,7 +67,14 @@ def discover_local_tool(name: str, explicit_path: str | Path | None = None) -> L
 
 def _validated_executable(path: Path) -> Path:
     try:
-        resolved = validated_trusted_path(path, kind="file")
+        resolved = validated_trusted_path(
+            path, kind="file", allow_package_manager_parents=True
+        )
+        # The runner trusts the executable's own directory as a strict leaf, so
+        # refuse here, naming it, rather than failing later without a path.
+        validated_trusted_path(
+            resolved.parent, kind="directory", allow_package_manager_parents=True
+        )
         metadata = resolved.stat()
     except (OSError, ValueError) as exc:
         raise LocalToolUnavailable(str(exc)) from exc
@@ -75,12 +83,19 @@ def _validated_executable(path: Path) -> Path:
     return resolved
 
 
-def validated_trusted_path(path: Path, *, kind: Literal["file", "directory"]) -> Path:
+def validated_trusted_path(
+    path: Path,
+    *,
+    kind: Literal["file", "directory"],
+    allow_package_manager_parents: bool = False,
+) -> Path:
     """Return a canonical path whose components cannot be replaced by peers.
 
     Root-owned system paths and current-user paths are accepted for ordinary
     local runs.  Privilege transitions accept only effective-user-owned paths:
     a user-controlled path must not be trusted by an elevated process.
+    ``allow_package_manager_parents`` is for operator executables and their
+    directories only; see ``_admin_group_write_permitted``.
     """
 
     if not path.is_absolute():
@@ -88,7 +103,7 @@ def validated_trusted_path(path: Path, *, kind: Literal["file", "directory"]) ->
     try:
         resolved = path.resolve(strict=True)
     except OSError as exc:
-        raise ValueError("Trusted path is unavailable.") from exc
+        raise ValueError(f"Trusted path is unavailable: {path}") from exc
     components = (
         Path(resolved.anchor),
         *(
@@ -100,27 +115,34 @@ def validated_trusted_path(path: Path, *, kind: Literal["file", "directory"]) ->
         try:
             metadata = component.lstat()
         except OSError as exc:
-            raise ValueError("Trusted path is unavailable.") from exc
+            raise ValueError(f"Trusted path is unavailable: {component}") from exc
         is_leaf = index == len(components) - 1
         if stat.S_ISLNK(metadata.st_mode):
-            raise ValueError("Trusted paths must not contain symlinks.")
+            raise ValueError(f"Trusted paths must not contain symlinks: {component}")
         if not is_leaf and not stat.S_ISDIR(metadata.st_mode):
-            raise ValueError("Trusted path component is not a directory.")
-        if stat.S_IMODE(metadata.st_mode) & 0o022:
+            raise ValueError(f"Trusted path component is not a directory: {component}")
+        if stat.S_IMODE(metadata.st_mode) & 0o022 and not (
+            allow_package_manager_parents
+            and not is_leaf
+            and _admin_group_write_permitted(component, metadata)
+        ):
             raise ValueError(
-                "Trusted path components must not be group or world writable."
+                "Trusted path components must not be group or world writable: "
+                f"{component}"
             )
         if not _trusted_owner(metadata.st_uid):
-            raise ValueError("Trusted path components must have a trusted owner.")
+            raise ValueError(
+                f"Trusted path components must have a trusted owner: {component}"
+            )
     leaf = components[-1]
     try:
         metadata = leaf.stat()
     except OSError as exc:
-        raise ValueError("Trusted path is unavailable.") from exc
+        raise ValueError(f"Trusted path is unavailable: {leaf}") from exc
     if kind == "file" and not stat.S_ISREG(metadata.st_mode):
-        raise ValueError("Trusted path is not a regular file.")
+        raise ValueError(f"Trusted path is not a regular file: {leaf}")
     if kind == "directory" and not stat.S_ISDIR(metadata.st_mode):
-        raise ValueError("Trusted path is not a directory.")
+        raise ValueError(f"Trusted path is not a directory: {leaf}")
     return resolved
 
 
@@ -138,6 +160,37 @@ def validated_private_current_user_directory(path: Path) -> Path:
             "by the current user."
         )
     return resolved
+
+
+_MACOS_ADMIN_GID = 80
+_PACKAGE_MANAGER_PREFIXES = (Path("/opt/homebrew"), Path("/usr/local"))
+
+
+def _admin_group_write_permitted(component: Path, metadata: os.stat_result) -> bool:
+    """Accept Homebrew's admin-group-writable directories, and nothing broader.
+
+    Homebrew makes directories under its prefix writable by the macOS ``admin``
+    group.  Accepting that lets other admin-group accounts replace a tool
+    between the identity check and exec without their sudo password; the
+    operator accepts that to use Homebrew tools.  Only non-leaf directories at
+    or below the Homebrew prefixes qualify; world write access, other groups or
+    owners, root processes and privilege transitions stay refused.  The
+    standalone child launcher (``launcher.py``) repeats this rule and must stay
+    identical.
+    """
+
+    return (
+        sys.platform == "darwin"
+        and os.getuid() != 0
+        and not stat.S_IMODE(metadata.st_mode) & 0o002
+        and metadata.st_gid == _MACOS_ADMIN_GID
+        and metadata.st_uid in {os.getuid(), 0}
+        and os.geteuid() == os.getuid()
+        and any(
+            component == prefix or prefix in component.parents
+            for prefix in _PACKAGE_MANAGER_PREFIXES
+        )
+    )
 
 
 def _trusted_owner(owner_uid: int) -> bool:

@@ -74,9 +74,11 @@ def validated_search_paths(paths: Sequence[str | Path]) -> tuple[Path, ...]:
         if not path.is_absolute():
             raise ValueError("Executable search paths must be absolute directories.")
         try:
-            resolved = validated_trusted_path(path, kind="directory")
+            resolved = validated_trusted_path(
+                path, kind="directory", allow_package_manager_parents=True
+            )
         except (OSError, ValueError) as exc:
-            raise ValueError("Executable search path is unavailable.") from exc
+            raise ValueError(f"Executable search path is unavailable: {exc}") from exc
         validated.append(resolved)
     return tuple(validated)
 
@@ -90,10 +92,10 @@ def bounded_environment(
 ) -> dict[str, str]:
     try:
         trusted_tool_directory = validated_trusted_path(
-            tool_directory, kind="directory"
+            tool_directory, kind="directory", allow_package_manager_parents=True
         )
     except (OSError, ValueError) as exc:
-        raise LocalToolError("Local tool directory is unavailable.") from exc
+        raise LocalToolError(f"Local tool directory is unavailable: {exc}") from exc
     environment = {
         key: value
         for key in _SAFE_ENVIRONMENT_KEYS

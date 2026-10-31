@@ -44,6 +44,25 @@ node --check scripts/pages_demo_client.js
 python3 -m py_compile scripts/assemble_pages_demo.py
 python3 -m py_compile scripts/assemble_pages_tour.py
 python3 -m py_compile scripts/build_demo_state.py
+python3 -m py_compile scripts/make_sample_project.py
 pages_site_dir=$(mktemp -d "${TMPDIR:-/tmp}/notewitness-pages.XXXXXX")
-trap 'rm -rf "$pages_site_dir"' EXIT
+sample_dir=$(mktemp -d "${TMPDIR:-/tmp}/notewitness-sample.XXXXXX")
+trap 'rm -rf "$pages_site_dir" "$sample_dir"' EXIT
 bash scripts/build_pages_demo.sh "$pages_site_dir"
+sample_dir=$(cd -- "$sample_dir" && pwd -P)
+python3 scripts/make_sample_project.py "$sample_dir/project" >/dev/null
+python3 -m notewitness validate "$sample_dir/project/project.json"
+python3 - "$sample_dir/project/project.json" <<'PY'
+import sys
+
+from notewitness.evidence import EvidenceGraph
+from notewitness.lessons.lesson_notes import LessonNotesProjector
+
+graph = EvidenceGraph.load(sys.argv[1])
+graph.require_valid()
+notes = LessonNotesProjector.project(graph)
+suggestions = len(notes.transcript_suggestions)
+media = sum(1 for source in graph.payload["sources"] if source["kind"] == "media")
+assert suggestions >= 4, suggestions
+assert media >= 1, media
+PY

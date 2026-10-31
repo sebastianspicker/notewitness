@@ -11,7 +11,8 @@ and exports stay separate records, so every conclusion remains traceable to the
 source span it came from.
 
 > **Status: unreleased alpha.** File formats, the command-line interface, and
-> workbench routes can change before a stable release.
+> workbench routes can change before a stable release. Testers: read the
+> [known issues](ALPHA_KNOWN_ISSUES.md) first.
 
 ## Screenshot tour
 
@@ -129,6 +130,21 @@ PYTHONPATH=src python3 -m notewitness inspect \
   examples/synthetic-lesson/project.json
 ```
 
+### Try the review queue with generated audio
+
+The synthetic example has no media and no pending suggestions. To get a private
+project with a short generated WAV and four machine suggestions awaiting
+review, create it outside the checkout (the destination must not exist yet):
+
+```sh
+PYTHONPATH=src python3 scripts/make_sample_project.py /path/to/private/sample
+PYTHONPATH=src python3 -m notewitness workbench /path/to/private/sample
+```
+
+In the workbench, accept, reject, or revise each suggestion in the review
+queue and play the audio to see the suggestions anchored to their time spans.
+The suggestions are synthetic placeholders, not transcriptions of the tones.
+
 ## Local processing
 
 Automatic transcription and analysis require explicit executable, model,
@@ -185,14 +201,12 @@ rationale; it is not an implementation or release contract.
 ## Development and verification
 
 Keep media, participant data, credentials, model artifacts, private runtime
-configuration, and project directories outside the checkout. Add focused tests
-for changed behavior and update public contracts in the same change.
+configuration, and project directories outside the checkout. Update public
+contracts in the same change as the behavior they describe.
 
-Run the Python suite while editing:
-
-```sh
-PYTHONPATH=src python3 -m unittest discover -s tests -t . -v
-```
+The unit and integration test suite is maintained outside this repository and
+is not published; the `tests/` directory is ignored. Describe how you checked a
+change in its pull request.
 
 Run the complete local gate before submitting a change:
 
@@ -200,8 +214,8 @@ Run the complete local gate before submitting a change:
 bash scripts/verify.sh
 ```
 
-The gate checks public-file hygiene, JSON, Python tests, CLI behavior,
-JavaScript syntax, and the mock-data demo build. CI runs it on Python 3.11 and
+The gate checks public-file hygiene, JSON, CLI behavior, JavaScript syntax,
+and the mock-data demo build. CI runs it on Python 3.11 and
 3.14, then installs the package on macOS and checks all three entry points.
 
 ## Security and privacy

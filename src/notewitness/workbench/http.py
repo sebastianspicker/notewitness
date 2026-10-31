@@ -385,10 +385,24 @@ class LocalWorkbenchServer(ThreadingHTTPServer):
             raise WorkbenchServerError("workbench launch URL has already been used.")
         return f"{self.origin}{LAUNCH_PATH_PREFIX}{token}"
 
+    def issue_launch_url(self) -> str:
+        """Mint a fresh single-use launch URL, invalidating any unused one.
+
+        Only the operator's terminal calls this; the session token is unchanged.
+        """
+        token = secrets.token_urlsafe(32)
+        with self._launch_token_lock:
+            self._launch_token = token
+        return f"{self.origin}{LAUNCH_PATH_PREFIX}{token}"
+
     def consume_launch_token(self, token: str) -> bool:
         with self._launch_token_lock:
             expected = self._launch_token
-            if expected is None or not secrets.compare_digest(token, expected):
+            if (
+                expected is None
+                or not token.isascii()
+                or not secrets.compare_digest(token, expected)
+            ):
                 return False
             self._launch_token = None
             return True

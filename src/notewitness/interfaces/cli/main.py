@@ -14,6 +14,7 @@ from notewitness.interfaces.capabilities import (
     capability_manifest,
     profile_readiness,
 )
+from notewitness.analysis.local_tools.contracts import LocalToolError
 from notewitness.core.evidence.graph import EvidenceGraph, EvidenceGraphError
 from notewitness.core.time import MediaSpan
 from notewitness.core.transcription.options import (
@@ -267,6 +268,7 @@ def _handle_workbench(args: argparse.Namespace) -> int:
             runtime_config_path=args.runtime_config,
         )
     except (
+        LocalToolError,
         OSError,
         ProjectStoreError,
         ValueError,

@@ -164,7 +164,7 @@ Files are trusted under four distinct models, and each keeps its own checks:
 | Model | Rule | Home |
 |---|---|---|
 | Owner-private project state | Owned by the user, no group or other access, no symlink in any path component | `projects/private_fs.py`, `projects/store.py`, `projects/private_sqlite.py` |
-| Operator artifacts (executables, the runtime configuration's directory) | Owned by the user or root, not group- or world-writable | `analysis/local_tools/discovery.py` |
+| Operator artifacts (executables, the runtime configuration's directory) | Owned by the user or root, not group- or world-writable. One exception on macOS, for executables and their search paths only: an ancestor directory at or below `/opt/homebrew` or `/usr/local` may be writable by the `admin` group (gid 80, Homebrew's layout) when it is not world-writable, its owner is the user or root, and the process is neither root nor running with a changed effective user. The artifact and its containing directory stay strict. This lets other admin-group accounts race the identity check before exec | `analysis/local_tools/discovery.py`, repeated in the child `analysis/local_tools/launcher.py` |
 | Source media being ingested | Any mode, but a regular file reached without symlinks; identity and captured byte budget rechecked while copying | `projects/media.py` |
 | Portable documents (`validate`, `inspect`) | Ordinary bounded read | `projects/document.py` |
 

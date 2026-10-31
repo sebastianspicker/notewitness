@@ -43,6 +43,16 @@ PYTHONPATH=src python3 -m notewitness transcribe-local \
   --format html --authorize-local-export --acknowledge-export-losses
 ```
 
+Tool paths must be owned by you or root and must not be writable by other
+users. On macOS, tools installed by Homebrew (under `/opt/homebrew` or
+`/usr/local`) are accepted although Homebrew makes some parent directories
+writable by the `admin` group: other administrator accounts on the Mac could
+replace such a tool between NoteWitness's identity check and its launch. The
+tool file and the directory that directly contains it must still not be
+writable by group or others, and the exception never applies when NoteWitness
+runs as root. If a tool is refused, the error names the path that failed the
+check, and `runtime-doctor` lists the reason under `tool_discovery_issues`.
+
 `ingest-media` prints JSON containing the assigned `source_id`. Use that exact
 value in place of `SOURCE_ID_FROM_INGEST` in every later command.
 

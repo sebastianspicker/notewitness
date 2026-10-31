@@ -450,7 +450,7 @@ def read_private_configuration(path: Path) -> Mapping[str, Any]:
         parent = validated_trusted_path(path.parent, kind="directory")
     except ValueError as exc:
         raise WorkbenchRuntimeConfigurationError(
-            "runtime_config_must_be_owner_private"
+            f"runtime_config_directory_untrusted: {exc}"
         ) from exc
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:

@@ -139,11 +139,35 @@ def _trusted_canonical_file(path: Path) -> bool:
             return False
         if stat.S_ISLNK(metadata.st_mode) or metadata.st_uid not in allowed_owners:
             return False
-        if stat.S_IMODE(metadata.st_mode) & 0o022:
+        is_leaf = index == len(components) - 1
+        if stat.S_IMODE(metadata.st_mode) & 0o022 and not (
+            not is_leaf and _admin_group_write_permitted(component, metadata)
+        ):
             return False
-        if index < len(components) - 1 and not stat.S_ISDIR(metadata.st_mode):
+        if not is_leaf and not stat.S_ISDIR(metadata.st_mode):
             return False
     return True
+
+
+_MACOS_ADMIN_GID = 80
+_PACKAGE_MANAGER_PREFIXES = (Path("/opt/homebrew"), Path("/usr/local"))
+
+
+def _admin_group_write_permitted(component: Path, metadata: os.stat_result) -> bool:
+    """Mirror ``discovery._admin_group_write_permitted``; keep the two identical."""
+
+    return (
+        sys.platform == "darwin"
+        and os.getuid() != 0
+        and not stat.S_IMODE(metadata.st_mode) & 0o002
+        and metadata.st_gid == _MACOS_ADMIN_GID
+        and metadata.st_uid in {os.getuid(), 0}
+        and os.geteuid() == os.getuid()
+        and any(
+            component == prefix or prefix in component.parents
+            for prefix in _PACKAGE_MANAGER_PREFIXES
+        )
+    )
 
 
 def _stat_identity(metadata: os.stat_result) -> tuple[int, ...]:

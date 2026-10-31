@@ -72,9 +72,10 @@ def _runtime_doctor(args: argparse.Namespace) -> int:
     """Probe local prerequisites without running an analysis engine."""
 
     host_platform = platform.system()
-    ffprobe = _discover_tool("ffprobe", args.ffprobe_path)
-    ffmpeg = _discover_tool("ffmpeg", args.ffmpeg_path)
-    whisper = _discover_tool("whisper", args.whisper_path)
+    discovery_issues: dict[str, str] = {}
+    ffprobe = _discover_tool("ffprobe", args.ffprobe_path, discovery_issues)
+    ffmpeg = _discover_tool("ffmpeg", args.ffmpeg_path, discovery_issues)
+    whisper = _discover_tool("whisper", args.whisper_path, discovery_issues)
     checks: dict[str, bool] = {
         "ffprobe_probe_passed": _probe_tool(ffprobe, ("-version",)),
         "ffmpeg_probe_passed": _probe_tool(ffmpeg, ("-version",)),
@@ -112,14 +113,18 @@ def _runtime_doctor(args: argparse.Namespace) -> int:
             "instrument_detection", "note_detection", "score_alignment",
         ], "model_configuration_issue": model_issue, "network_used": False,
         "prerequisites_ready_for_transcription_attempt": ready,
+        "tool_discovery_issues": discovery_issues,
     })
     return 0 if ready else 6
 
 
-def _discover_tool(name: str, explicit_path: str | None) -> LocalTool | None:
+def _discover_tool(
+    name: str, explicit_path: str | None, issues: dict[str, str]
+) -> LocalTool | None:
     try:
         return discover_local_tool(name, explicit_path)
-    except (LocalToolError, ValueError):
+    except (LocalToolError, ValueError) as exc:
+        issues[name] = str(exc)
         return None
 
 
