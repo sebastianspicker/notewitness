@@ -413,6 +413,30 @@ def _bounded_private_file(metadata: os.stat_result, maximum: int) -> bool:
     )
 
 
+def append_or_require_equal(
+    records: list[dict[str, Any]],
+    additions: Iterable[Mapping[str, Any]],
+    *,
+    error_type: type[Exception],
+    collection: str,
+) -> None:
+    """Append records by ID; an existing ID must hold exactly one equal record."""
+
+    by_id: dict[object, dict[str, Any] | None] = {}
+    for item in records:
+        # ``None`` marks an ID that is already ambiguous in the project.
+        by_id[item.get("id")] = None if item.get("id") in by_id else item
+    for addition in additions:
+        record = dict(addition)
+        if record["id"] not in by_id:
+            records.append(record)
+            by_id[record["id"]] = record
+        elif by_id[record["id"]] != record:
+            raise error_type(
+                f"Existing {collection} record {record['id']!r} has different provenance."
+            )
+
+
 def completed_artifact_sha256s(
     run_directory: Path, relative_paths: Iterable[str]
 ) -> dict[str, str]:
@@ -462,7 +486,7 @@ def read_publication(path: Path) -> RunPublication:
 def _decode_publication(raw: bytes) -> dict[str, Any]:
     try:
         payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, ValueError) as exc:
         raise RunIntegrationError("Run publication contains invalid JSON.") from exc
     if not isinstance(payload, dict):
         raise RunIntegrationError("Run publication has an invalid schema.")

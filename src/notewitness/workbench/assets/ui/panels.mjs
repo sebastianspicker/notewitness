@@ -1,24 +1,29 @@
 import {
   encodeId,
   escapeHTML,
-  formatTime,
   humanActor,
   itemDuration,
   itemSource,
   itemTime,
   list,
+} from "/assets/ui/value_utils.mjs";
+import {
+  formatTime,
+} from "/assets/ui/timeline_utils.mjs";
+import {
   relationLabel,
   relationText,
   renderActorAttributionOptionsHTML,
   renderConfidence,
   renderPairs,
-  reviewItems,
-  selectedReviewItem,
   statusLabel,
   statusTone,
+} from "/assets/ui/render_utils.mjs";
+import {
+  reviewItems,
+  selectedReviewItem,
   transcriptItems,
-  anchor,
-} from "/assets/ui/utils.mjs";
+} from "/assets/ui/filter_utils.mjs";
 
 export function renderPanel(state) {
   if (state.activePanel === "transcript") return renderTranscriptPanel(state);
@@ -161,9 +166,8 @@ function renderRelationSuggestions(state, suggestions) {
   return `<section class="lesson-section">${renderSectionHead("Human review required", "Pedagogical suggestions")}
     <p class="supporting section-note">Local rule-based links that repeat transcript evidence. They do not summarise or assess.</p>
     <ol class="moment-list">${items.map((item) => {
-      const point = anchor(item);
       const relationId = encodeId(item.relation_id);
-      return `<li class="is-suggested">${renderTimeMargin(point)}
+      return `<li class="is-suggested">${renderTimeMargin(item)}
         <div class="entry-body"><p class="moment-type"><span class="tag suggested">${renderSigil("suggested")}Suggested</span> ${escapeHTML(relationLabel(item.relation_type))}</p>
           <p class="moment-text">${escapeHTML(relationText(item.label, item.relation_type))}</p>
           <p class="supporting">Accept the linked transcript evidence first; relation text cannot be edited.</p>
@@ -176,8 +180,7 @@ function renderMoments(moments) {
   const items = list(moments);
   return `<section class="lesson-section">${renderSectionHead("Teaching sequence", "Key moments")}
     <ol class="moment-list">${items.slice(0, 12).map((item) => {
-      const point = anchor(item);
-      return `<li>${renderTimeMargin(point)}
+      return `<li>${renderTimeMargin(item)}
         <div class="entry-body"><p class="moment-type">${escapeHTML(relationLabel(item.relation_type, "moment"))}</p><p class="moment-text">${escapeHTML(relationText(item.label, item.relation_type))}</p></div></li>`;
     }).join("") || '<li class="empty-state"><strong>No key moments yet</strong><p>Reviewed relations between evidence will appear here in teaching order.</p></li>'}</ol></section>`;
 }

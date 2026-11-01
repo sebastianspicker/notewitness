@@ -33,6 +33,7 @@ from notewitness.analysis.suite.adapter import (
     LocalAnalysisCLIAdapter,
     LocalAnalysisCLISettings,
     LocalAnalysisSource,
+    analysis_generator_id,
 )
 from notewitness.analysis.suite.checkpoints import ResumableAnalysisError
 from notewitness.analysis.suite.coordinator import (
@@ -78,23 +79,6 @@ class ResumableAnalysisRun:
 
     job: DurableJob
     output: dict[str, Any]
-
-
-def analysis_generator_id(
-    stage: AnalysisStage,
-    tool_sha256: str,
-    model_sha256: str,
-    parameters_sha256: str,
-) -> str:
-    """Derive the generator ID for one stage from its provenance digests.
-
-    Callers compute ``parameters_sha256`` with their own established encoding.
-    """
-
-    return (
-        f"generator:analysis-{stage.value}-{tool_sha256[:8]}-"
-        f"{model_sha256[:8]}-{parameters_sha256[:8]}"
-    )
 
 
 def stage_parameters(
@@ -164,10 +148,7 @@ def analysis_steps(
                     stage=stage,
                     version=adapter_version,
                     generator_id=analysis_generator_id(
-                        stage,
-                        tool.identity.sha256,
-                        model.sha256,
-                        _json_sha256(parameters),
+                        stage, tool, adapter_version, settings, parameters
                     ),
                     settings=settings,
                 ),

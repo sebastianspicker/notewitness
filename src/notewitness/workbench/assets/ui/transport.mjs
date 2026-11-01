@@ -1,12 +1,14 @@
 import {
   escapeHTML,
-  formatTime,
-  hasMusicalTime,
   humanActor,
   isMultiSource,
-  musicalTimeAt,
   sourceName,
-} from "/assets/ui/utils.mjs";
+} from "/assets/ui/value_utils.mjs";
+import {
+  formatTime,
+  hasMusicalTime,
+  musicalTimeAt,
+} from "/assets/ui/timeline_utils.mjs";
 
 export function renderTransport(state) {
   const recording = state.recorder?.state === "recording";

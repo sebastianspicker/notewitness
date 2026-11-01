@@ -82,7 +82,5 @@ class LocalToolResult:
     return_code: int
     stdout: str
     stderr: str
-    stdout_truncated: bool
-    stderr_truncated: bool
     duration_ms: int
     network_isolated: bool

@@ -1,13 +1,14 @@
 import {
+  ACTIVE_JOB_STATES,
   escapeHTML,
   list,
   modalityLabel,
-} from "/assets/ui/utils.mjs";
+} from "/assets/ui/value_utils.mjs";
 
 export function renderProcessing(state) {
   const runtime = state.processing?.runtime || {};
   const jobs = list(state.processing?.jobs);
-  const activeJob = jobs.find((job) => ["queued", "running", "cancelling"].includes(job.state));
+  const activeJob = jobs.find((job) => ACTIVE_JOB_STATES.includes(job.state));
   const modalities = runtime.modalities || {};
   const speechReady = modalities.speech_transcription === true || runtime.transcription_ready === true;
   const activityReady = modalities.activity_segmentation === true;
@@ -66,7 +67,7 @@ function renderEngineStatus(label, ready) {
 function renderJobs(jobs) {
   if (!jobs.length) return '<p class="supporting jobs-empty">No processing runs yet.</p>';
   return `<ol class="job-list">${jobs.slice(0, 5).map((job) => {
-    const running = ["queued", "running", "cancelling"].includes(job.state);
+    const running = ACTIVE_JOB_STATES.includes(job.state);
     const resumable = Boolean(job.retryable)
       && ["failed", "interrupted", "cancelled"].includes(job.state);
     return `<li data-job-card="${escapeHTML(job.job_id)}">

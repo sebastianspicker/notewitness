@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from notewitness.core.evidence.contract import ValidationIssue
+from notewitness.core.evidence.contract import (
+    ValidationIssue,
+    is_human_evidence_author,
+)
 from notewitness.core.evidence.validation_common import record_path
 
 
@@ -44,7 +47,7 @@ def _human_review_operations(
         if (
             isinstance(record_id, str)
             and isinstance(author_id, str)
-            and author_id in actors
+            and is_human_evidence_author(actors.get(author_id))
             and isinstance(operation, str)
             and operation in {"adjudicate", "reject"}
         ):

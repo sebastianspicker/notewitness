@@ -17,6 +17,7 @@ from notewitness.lessons.review_rules import (
     index,
     is_normalized_machine_suggestion,
     now,
+    require_evidence_not_decided,
     require_human_author,
 )
 from notewitness.core.evidence.graph import ACCESS_RANK, EvidenceGraph
@@ -67,7 +68,7 @@ def accept_evidence_suggestion(
             raise ReviewError(
                 "Only normalized machine suggestions may be accepted."
             )
-        _require_evidence_not_decided(payload, event_id)
+        require_evidence_not_decided(payload, event_id)
         body = source.get("body")
         if not isinstance(body, Mapping):
             raise ReviewError("The selected suggestion body is malformed.")
@@ -129,7 +130,7 @@ def reject_evidence_suggestion(
             raise ReviewError(
                 "Only normalized machine evidence suggestions may be rejected."
             )
-        _require_evidence_not_decided(payload, event_id)
+        require_evidence_not_decided(payload, event_id)
         payload["revisions"].append(
             {
                 "author_id": author_id,
@@ -630,24 +631,3 @@ def _require_relation_not_decided(
         for revision in revisions
     ):
         raise ReviewError("The selected relation suggestion was already reviewed.")
-
-
-def _require_evidence_not_decided(
-    payload: Mapping[str, Any],
-    event_id: str,
-) -> None:
-    events = index(payload, "events")
-    if any(
-        event.get("review_status") == "human_accepted"
-        and isinstance(event.get("body"), Mapping)
-        and event["body"].get("source_suggestion_id") == event_id
-        for event in events.values()
-    ):
-        raise ReviewError("The selected evidence suggestion was already reviewed.")
-    revisions = index(payload, "revisions")
-    if any(
-        revision.get("record_id") == event_id
-        and revision.get("operation") == "reject"
-        for revision in revisions.values()
-    ):
-        raise ReviewError("The selected evidence suggestion was already reviewed.")

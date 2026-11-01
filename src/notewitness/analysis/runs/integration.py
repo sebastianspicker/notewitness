@@ -11,7 +11,6 @@ import copy
 from dataclasses import dataclass
 import hashlib
 import json
-import os
 from pathlib import Path, PurePosixPath
 import stat
 from typing import Any, Iterable, Mapping
@@ -178,9 +177,12 @@ def _collection_presence(
     records: tuple[Mapping[str, Any], ...],
     collection: str,
 ) -> tuple[bool, ...]:
+    by_id: dict[object, list[dict[str, Any]]] = {}
+    for item in current:
+        by_id.setdefault(item.get("id"), []).append(item)
     presence: list[bool] = []
     for record in records:
-        matches = [item for item in current if item.get("id") == record["id"]]
+        matches = by_id.get(record["id"], [])
         if len(matches) > 1 or (matches and matches[0] != record):
             raise RunIntegrationError(
                 f"Existing {collection} record {record['id']!r} conflicts "
@@ -374,7 +376,7 @@ def _read_json_artifact(path: Path, maximum: int, label: str) -> dict[str, Any]:
     raw = read_private_file(path, maximum)
     try:
         payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise RunIntegrationError(f"{label} contains invalid JSON.") from exc
     if not isinstance(payload, dict):
         raise RunIntegrationError(f"{label} must be a JSON object.")

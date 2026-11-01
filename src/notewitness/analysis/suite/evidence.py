@@ -7,6 +7,7 @@ import json
 import re
 from typing import Any, Iterable, Mapping
 
+from notewitness.analysis.runs.publication import append_or_require_equal
 from notewitness.core.analysis.analysis import (
     ActivityHypothesis,
     AnalysisBatch,
@@ -272,16 +273,18 @@ def _commit_projected_evidence(
         "weight_hash_state": plan.context.weight_hash_state,
         "parameters": dict(plan.context.parameters),
     }
-    _append_or_require_equal(payload, "generators", generator)
+    append_or_require_equal(
+        _collection(payload, "generators"),
+        (generator,),
+        error_type=AnalysisEvidenceError,
+        collection="generators",
+    )
     if plan.actor_id is not None:
-        _append_or_require_equal(
-            payload,
-            "actors",
-            {
-                "id": plan.actor_id,
-                "role": "unknown",
-                "visibility": "restricted",
-            },
+        append_or_require_equal(
+            _collection(payload, "actors"),
+            ({"id": plan.actor_id, "role": "unknown", "visibility": "restricted"},),
+            error_type=AnalysisEvidenceError,
+            collection="actors",
         )
     _collection(payload, "targets").extend(targets)
     _collection(payload, "events").extend(events)
@@ -556,20 +559,4 @@ def _require_new_ids(
     if len(planned) != len(set(planned)) or existing.intersection(planned):
         raise AnalysisEvidenceError(
             f"Analysis projection would collide with existing {collection} IDs."
-        )
-
-
-def _append_or_require_equal(
-    payload: dict[str, Any],
-    collection: str,
-    record: dict[str, Any],
-) -> None:
-    records = _collection(payload, collection)
-    existing = [item for item in records if item.get("id") == record["id"]]
-    if not existing:
-        records.append(record)
-        return
-    if len(existing) != 1 or existing[0] != record:
-        raise AnalysisEvidenceError(
-            f"Existing {collection} record {record['id']!r} has different provenance."
         )

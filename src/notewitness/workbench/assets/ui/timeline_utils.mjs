@@ -3,10 +3,11 @@ import { itemDuration, itemSource, itemTime, list } from "/assets/ui/value_utils
 export function formatTime(seconds, precision = true) {
   const numeric = Number(seconds);
   const safe = Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-  const wholeSeconds = Math.floor(safe % 60);
-  const milliseconds = Math.floor((safe % 1) * 1000);
+  const total = Math.round(safe * 1000);
+  const hours = Math.floor(total / 3600000);
+  const minutes = Math.floor((total % 3600000) / 60000);
+  const wholeSeconds = Math.floor((total % 60000) / 1000);
+  const milliseconds = total % 1000;
   const prefix = hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}`
     : String(minutes).padStart(2, "0");
   return precision

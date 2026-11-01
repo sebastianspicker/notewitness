@@ -1,5 +1,5 @@
 import { estimatePitch } from "/assets/pitch_estimator.mjs";
-import { list } from "/assets/workbench_ui.mjs";
+import { list } from "/assets/ui/value_utils.mjs";
 
 export function createAudioActions(c) {
   async function togglePlayback() { if (!c.state.media) return; if (c.state.media.paused) await c.state.media.play().catch((error) => c.setNotice(error.message, "error")); else c.state.media.pause(); }
@@ -7,7 +7,9 @@ export function createAudioActions(c) {
   async function toggleTuner() {
     if (c.state.tuner) { c.state.tuner.stop(); c.state.tuner = null; c.renderPreservingPlayback(); return; }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const context = new AudioContext(); const analyser = context.createAnalyser(); analyser.fftSize = 4096; context.createMediaStreamSource(stream).connect(analyser);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (c.state.tuner) { stream.getTracks().forEach((track) => track.stop()); return; } // a concurrent start already won
+      const context = new AudioContext(); const analyser = context.createAnalyser(); analyser.fftSize = 4096; context.createMediaStreamSource(stream).connect(analyser);
       const samples = new Float32Array(analyser.fftSize); const tuner = { frame: 0, inFlight: false, lastAnalysis: 0, errorShown: false };
       const poll = () => { const now = performance.now(); if (now - tuner.lastAnalysis >= 150 && !tuner.inFlight) { tuner.lastAnalysis = now; analyser.getFloatTimeDomainData(samples); const estimate = estimatePitch(samples, context.sampleRate); if (estimate) sendTuner(estimate.frequencyHz, tuner); } tuner.frame = requestAnimationFrame(poll); };
       tuner.frame = requestAnimationFrame(poll); tuner.stop = () => { cancelAnimationFrame(tuner.frame); stream.getTracks().forEach((track) => track.stop()); context.close(); }; c.state.tuner = tuner; c.renderPreservingPlayback();

@@ -1,14 +1,16 @@
 import {
   escapeHTML,
-  formatTime,
   humanActor,
   humanActors,
   isMultiSource,
   list,
   mediaCount,
-  sourceDurationSeconds,
   sourceName,
-} from "/assets/ui/utils.mjs";
+} from "/assets/ui/value_utils.mjs";
+import {
+  formatTime,
+  sourceDurationSeconds,
+} from "/assets/ui/timeline_utils.mjs";
 import { renderProcessing } from "/assets/ui/processing.mjs";
 import { renderTimeline } from "/assets/ui/timeline.mjs";
 import { renderPanel } from "/assets/ui/panels.mjs";

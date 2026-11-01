@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
-from notewitness.lessons.actors import is_human_evidence_author
+from notewitness.core.evidence.contract import is_human_evidence_author
 
 
 MAX_BOOKMARK_LABEL_CHARS = 1_000
@@ -100,3 +100,52 @@ def is_normalized_machine_suggestion(
         and generator is not None
         and generator.get("kind") == "machine"
     )
+
+
+def reviewed_record_ids(
+    revisions: Iterable[Mapping[str, Any]], *operations: str
+) -> set[str]:
+    """Return IDs of records that carry a revision with one of the operations."""
+
+    return {
+        str(revision["record_id"])
+        for revision in revisions
+        if revision.get("operation") in operations
+        and isinstance(revision.get("record_id"), str)
+    }
+
+
+def latest_event_ids(events: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
+    """Map each revised accepted event ID to the ID of its latest revision."""
+
+    successor: dict[str, str] = {}
+    for event_id, event in events.items():
+        body = event.get("body")
+        if (
+            event.get("layer") == "accepted_annotation"
+            and event.get("review_status") in {"human_created", "human_accepted"}
+            and isinstance(body, Mapping)
+            and isinstance(body.get("source_annotation_id"), str)
+        ):
+            successor[body["source_annotation_id"]] = str(event_id)
+    latest: dict[str, str] = {}
+    for old_id in successor:
+        current, seen = old_id, {old_id}
+        while current in successor and successor[current] not in seen:
+            current = successor[current]
+            seen.add(current)
+        latest[old_id] = current
+    return latest
+
+
+def require_evidence_not_decided(payload: Mapping[str, Any], event_id: str) -> None:
+    events = index(payload, "events")
+    if any(
+        event.get("review_status") == "human_accepted"
+        and isinstance(event.get("body"), Mapping)
+        and event["body"].get("source_suggestion_id") == event_id
+        for event in events.values()
+    ):
+        raise ReviewError("The selected evidence suggestion was already reviewed.")
+    if event_id in reviewed_record_ids(index(payload, "revisions").values(), "reject"):
+        raise ReviewError("The selected evidence suggestion was already reviewed.")

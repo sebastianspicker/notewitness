@@ -16,7 +16,7 @@ from notewitness.projects.private_fs import is_owner_private
 
 
 MAX_RESUMABLE_CHUNKS_PER_STAGE = 64
-_PUBLISHABLE_STATES = frozenset(
+PUBLISHABLE_STATES = frozenset(
     {
         AnalysisState.READY,
         AnalysisState.UNKNOWN,
@@ -198,7 +198,7 @@ def next_continuation(
             raise ResumableAnalysisError("analysis continuation did not make progress.")
         seen.add(token)
         return token
-    if batch.result.state not in _PUBLISHABLE_STATES:
+    if batch.result.state not in PUBLISHABLE_STATES:
         raise ResumableAnalysisError(f"analysis stage ended in {batch.result.state.value}.")
     return None
 
@@ -222,7 +222,7 @@ def read_private(path: Path) -> bytes:
 def read_json(path: Path) -> dict[str, object]:
     try:
         value = json.loads(read_private(path))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+    except (json.JSONDecodeError, RecursionError, UnicodeDecodeError) as exc:
         raise ResumableAnalysisError("durable analysis manifest is invalid.") from exc
     if not isinstance(value, dict):
         raise ResumableAnalysisError("durable analysis manifest is invalid.")

@@ -9,7 +9,7 @@ import json
 import sys
 from pathlib import Path
 
-from notewitness.lessons.actors import is_human_evidence_author
+from notewitness.core.evidence.contract import is_human_evidence_author
 from notewitness.lessons.lesson_notes import LessonNotesProjector
 from notewitness.evidence import EvidenceGraph
 from notewitness.workbench.timeline import TimelineViewModel

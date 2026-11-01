@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from typing import Any
 
+from notewitness.analysis.runs.publication import append_or_require_equal
 from notewitness.analysis.transcription.whisper_cli import WhisperCLIResult
 from notewitness.core.transcription.run import CanonicalTranscriptEvidence
 
@@ -42,12 +45,7 @@ def append_machine_transcript(
     if not isinstance(rights_id, str):
         raise TranscriptEvidenceError("Transcript source has no valid rights record.")
 
-    generator_id = (
-        f"generator:whisper-{result.model.sha256[:10]}-"
-        f"{result.runtime_fingerprint_sha256[:10]}"
-    )
     generator = {
-        "id": generator_id,
         "kind": "machine",
         "name": "Local OpenAI Whisper CLI",
         "version": result.launcher.sha256[:16],
@@ -62,18 +60,24 @@ def append_machine_transcript(
             "runtime_fingerprint_sha256": result.runtime_fingerprint_sha256,
         },
     }
-    _append_or_require_equal(payload, "generators", generator)
+    # The ID hashes the whole record, so one ID always means identical contents.
+    generator_id = (
+        f"generator:whisper-{result.model.sha256[:10]}-"
+        f"{hashlib.sha256(json.dumps(generator, sort_keys=True).encode()).hexdigest()[:10]}"
+    )
+    generator = {"id": generator_id, **generator}
+    append_or_require_equal(
+        _collection(payload, "generators"), (generator,),
+        error_type=TranscriptEvidenceError, collection="generators",
+    )
 
     actor_id: str | None = None
     if document.segments:
         actor_id = "actor:unknown"
-        _append_or_require_unknown_actor(
-            payload,
-            {
-                "id": actor_id,
-                "role": "unknown",
-                "visibility": "restricted",
-            },
+        append_or_require_equal(
+            _collection(payload, "actors"),
+            ({"id": actor_id, "role": "unknown", "visibility": "restricted"},),
+            error_type=TranscriptEvidenceError, collection="actors",
         )
 
     run_token = result.document.document_id.rpartition(":")[2]
@@ -164,29 +168,3 @@ def _record(payload: dict[str, Any], collection: str, record_id: str) -> dict[st
             f"Project requires exactly one {collection} record {record_id!r}."
         )
     return matches[0]
-
-
-def _append_or_require_equal(
-    payload: dict[str, Any], collection: str, record: dict[str, Any]
-) -> None:
-    records = _collection(payload, collection)
-    existing = [item for item in records if item.get("id") == record["id"]]
-    if not existing:
-        records.append(record)
-        return
-    if len(existing) != 1 or existing[0] != record:
-        raise TranscriptEvidenceError(
-            f"Existing {collection} record {record['id']!r} has different provenance."
-        )
-
-
-def _append_or_require_unknown_actor(
-    payload: dict[str, Any], record: dict[str, Any]
-) -> None:
-    actors = _collection(payload, "actors")
-    existing = [item for item in actors if item.get("id") == record["id"]]
-    if not existing:
-        actors.append(record)
-        return
-    if len(existing) != 1 or existing[0] != record:
-        raise TranscriptEvidenceError("actor:unknown has incompatible project meaning.")

@@ -20,6 +20,9 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
       - name: Run verification with a private temporary directory
         run: |
           verify_tmp_dir=$(mktemp -d "$HOME/notewitness-verify.XXXXXX")
@@ -57,7 +60,7 @@ jobs:
           from pathlib import Path
           from notewitness.workbench import server
           root = Path(server.__file__).with_name("assets")
-          for name in ("index.html", "app.css", "app.js", "workbench_ui.mjs", "pitch_estimator.mjs", "notewitness-mark.svg"):
+          for name in ("index.html", "app.css", "app.js", "ui/shell.mjs", "pitch_estimator.mjs", "notewitness-mark.svg"):
               if not root.joinpath(name).is_file():
                   raise SystemExit(f"missing installed GUI asset: {name}")
           PY

@@ -58,6 +58,9 @@ ALIGNMENT_STATES = frozenset(
 ACCESS_RANK = {"restricted": 0, "project": 1, "public": 2}
 VISIBILITY_LEVELS = frozenset(ACCESS_RANK)
 GENERATOR_KINDS = frozenset({"human", "machine", "import"})
+INELIGIBLE_HUMAN_EVIDENCE_ROLES = frozenset(
+    {"", "analysis", "machine", "system", "unattributed", "unknown"}
+)
 EVENT_LAYERS = frozenset(
     {
         "raw_model_output",
@@ -135,3 +138,15 @@ class EvidenceGraphError(ValueError):
     def __init__(self, issues: Iterable[ValidationIssue]) -> None:
         self.issues = tuple(issues)
         super().__init__("; ".join(str(issue) for issue in self.issues))
+
+
+def is_human_evidence_author(actor: Mapping[str, object] | None) -> bool:
+    """Return whether an explicit project actor may author human evidence."""
+
+    if actor is None:
+        return False
+    role = actor.get("role")
+    return (
+        isinstance(role, str)
+        and role.strip().casefold() not in INELIGIBLE_HUMAN_EVIDENCE_ROLES
+    )

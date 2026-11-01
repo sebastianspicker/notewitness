@@ -178,9 +178,10 @@ class WhisperCLIAdapter:
         if expected_raw.exists() or expected_raw.is_symlink():
             raise WhisperCLIError("Whisper raw output path already exists.")
 
-        _media_identity, media_stat = _stable_artifact_identity(
-            media, "Whisper media source"
-        )
+        # The runtime verifies the media checksum; here only the stat identity is bound.
+        media_stat = media.lstat()
+        if not stat.S_ISREG(media_stat.st_mode):
+            raise WhisperCLIError("Whisper media source is not a regular file.")
         model_before, model_stat = _stable_artifact_identity(
             self.settings.model_checkpoint, "Whisper model checkpoint"
         )
@@ -402,6 +403,9 @@ def _normalize_segment(raw_segment: Any, index: int, context: _NormalizationCont
     words, word_index = _normalize_words(raw_segment.get("words", []), context, word_index, total_words)
     if words:
         start, end = min(start, words[0].start_us), max(end, words[-1].end_us)
+    end = _clamp_end(end, context.duration_us)
+    if start >= 0 and end == start:
+        return None  # zero-length after rounding; inverted timings still fail validation
     segment = TranscriptSegment(
         segment_id=f"segment:{context.run_token}:{index + 1}", source_id=context.source_id,
         stream_id=context.stream_id, start_us=start, end_us=end, text=text,
@@ -426,6 +430,14 @@ def _normalize_words(raw_words: Any, context: _NormalizationContext, word_index:
     return words, word_index
 
 
+# Whisper rounds times, so a final end can pass the probed duration slightly.
+_END_TOLERANCE_US = 100_000
+
+
+def _clamp_end(end_us: int, duration_us: int) -> int:
+    return duration_us if duration_us < end_us <= duration_us + _END_TOLERANCE_US else end_us
+
+
 def _normalize_word(raw_word: Any, context: _NormalizationContext, index: int, previous_start: int | None) -> tuple[TranscriptWord | None, int | None]:
     if not isinstance(raw_word, dict):
         raise WhisperCLIError("Whisper words must be JSON objects.")
@@ -435,7 +447,9 @@ def _normalize_word(raw_word: Any, context: _NormalizationContext, index: int, p
     start = _seconds_to_microseconds(raw_word.get("start"), "word start")
     if previous_start is not None and start < previous_start:
         raise WhisperCLIError("Whisper words must use nondecreasing start times.")
-    end = _seconds_to_microseconds(raw_word.get("end"), "word end")
+    end = _clamp_end(_seconds_to_microseconds(raw_word.get("end"), "word end"), context.duration_us)
+    if start >= 0 and end == start:
+        return None, start
     return TranscriptWord(word_id=f"word:{context.run_token}:{index}", source_id=context.source_id, stream_id=context.stream_id, start_us=start, end_us=end, text=text, language=context.language, confidence=_probability(raw_word.get("probability"), "word probability")), start
 
 

@@ -2,7 +2,7 @@
 
 This guide walks through the local NoteWitness workflow: create a private
 project, ingest media, run approved local tools, review the results, and export
-what the recorded rights allow. Every model-generated result stays a machine
+them after you authorize the export and acknowledge its loss preview. Every model-generated result stays a machine
 hypothesis until a person accepts it.
 
 ## Limits at a glance

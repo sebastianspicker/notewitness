@@ -181,14 +181,16 @@ if grep -RIEq --exclude='notewitness-mark.svg' --exclude='OFL-*.txt' \
   echo "Pages demo contains a private path, credential shape, or network URL" >&2
   exit 1
 fi
-if find "$site_dir" -type f \( \
-  -iname '*.aac' -o -iname '*.aif' -o -iname '*.aiff' -o -iname '*.caf' \
-  -o -iname '*.db' -o -iname '*.flac' -o -iname '*.key' -o -iname '*.m4a' \
-  -o -iname '*.mid' -o -iname '*.midi' -o -iname '*.mov' -o -iname '*.mp3' \
-  -o -iname '*.mp4' -o -iname '*.ogg' -o -iname '*.opus' -o -iname '*.p12' \
-  -o -iname '*.pem' -o -iname '*.pfx' -o -iname '*.sqlite' -o -iname '*.sqlite3' \
-  -o -iname '*.wav' -o -iname '*.webm' \
-  \) -print -quit | grep -q .; then
+# -I keeps files in the built site off sys.path; the checker is loaded from script_dir.
+if ! (cd "$site_dir" && find . -type f -print0 \
+  | python3 -I -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+from verify_public_hygiene import path_violations
+bad = [p for p in sys.stdin.buffer.read().decode().split("\0") if p and path_violations(Path(p))]
+print("\n".join(bad))
+sys.exit(1 if bad else 0)' "$script_dir"); then
   echo "Pages demo contains a private or media artifact" >&2
   exit 1
 fi

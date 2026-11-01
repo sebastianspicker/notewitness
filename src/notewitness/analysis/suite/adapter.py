@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from notewitness.core.analysis.analysis import (
     AnalysisBatch,
@@ -187,17 +188,6 @@ class LocalAnalysisCLIAdapter:
         self.name = tool.name
         self._runner = BoundedLocalToolRunner(tool)
 
-    def analyze(
-        self,
-        request: AnalysisRequest,
-        *,
-        cancellation_requested: Callable[[], bool] | None = None,
-    ) -> AnalysisBatch:
-        return self.execute(
-            request,
-            cancellation_requested=cancellation_requested,
-        ).batch
-
     def require_executable_identity(self) -> None:
         """Require the exact executable approved when the adapter was built."""
 
@@ -271,15 +261,23 @@ class LocalAnalysisCLIAdapter:
             network_isolated=result.network_isolated,
         )
 
+    def require_source_identities(self) -> None:
+        """Re-hash the configured media, model and score against their identities."""
+
+        _require_configured_source_identities(self)
+
     def replay(self, request: AnalysisRequest, raw_output: bytes) -> AnalysisBatch:
-        """Validate retained exact output without invoking the local executable."""
+        """Validate retained exact output without invoking the local executable.
+
+        Replay reads no configured input, so callers verify source identities
+        once per run with ``require_source_identities`` instead of per chunk.
+        """
 
         _validate_request_identity(request, self)
         if not isinstance(raw_output, bytes) or len(raw_output) > MAX_JSON_BYTES:
             raise AnalysisCLIError(
                 "Retained analysis output exceeds the bounded contract."
             )
-        _require_configured_source_identities(self)
         try:
             raw = raw_output.decode("utf-8")
         except UnicodeDecodeError as exc:
@@ -287,6 +285,64 @@ class LocalAnalysisCLIAdapter:
                 "Retained analysis output must be UTF-8 JSON."
             ) from exc
         return _protocol.parse_batch(raw, request, self)
+
+
+def analysis_generator_parameters(
+    stage: AnalysisStage,
+    tool: LocalTool,
+    settings: LocalAnalysisCLISettings,
+    parameters: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return one stage's generator parameters from per-stage facts only.
+
+    Job-wide fingerprints belong in the job identity manifest; anything here
+    is covered by ``analysis_generator_id``.
+    """
+
+    result: dict[str, Any] = {
+        "adapter_license": settings.adapter_license,
+        "effective_stage_parameters": dict(parameters),
+        "executable_sha256": tool.identity.sha256,
+        "model_license": settings.model_license,
+        "network_requirement": "none",
+    }
+    if stage is AnalysisStage.SCORE_ALIGNMENT:
+        result["score_license"] = settings.score_license
+        # A user-chosen score_id is not tied to bytes; the digest is.
+        if settings.score is not None:
+            result["score_sha256"] = settings.score.sha256
+            result["score_size_bytes"] = settings.score.size_bytes
+    return result
+
+
+def analysis_generator_id(
+    stage: AnalysisStage,
+    tool: LocalTool,
+    version: str,
+    settings: LocalAnalysisCLISettings,
+    parameters: Mapping[str, Any],
+) -> str:
+    """Derive a generator ID that hashes every field of its generator record.
+
+    Two records with the same ID therefore always have identical contents.
+    """
+
+    record = {
+        "model": settings.model.source_id,
+        "name": tool.name,
+        "parameters": analysis_generator_parameters(stage, tool, settings, parameters),
+        "version": version,
+        "weight_hash_state": f"sha256:{settings.model.sha256}",
+    }
+    digest = hashlib.sha256(
+        json.dumps(
+            record, allow_nan=False, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+    ).hexdigest()
+    return (
+        f"generator:analysis-{stage.value}-{tool.identity.sha256[:8]}-"
+        f"{settings.model.sha256[:8]}-{digest[:8]}"
+    )
 
 
 def _validate_request(

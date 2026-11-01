@@ -31,7 +31,7 @@ flowchart LR
   Source[Local recording and source span] --> Hypothesis[Machine suggestion]
   Hypothesis --> Review[Human accepts, revises or rejects]
   Review --> Record[Separate review decision]
-  Record --> Export[Rights-checked evidence export]
+  Record --> Export[Evidence export after operator authorization and loss preview]
 ```
 
 ## Screenshot tour
@@ -45,7 +45,7 @@ private lesson data. The full gallery lives on the
 | | |
 |---|---|
 | ![Review queue with machine suggestions awaiting a human decision](docs/screenshots/review-queue.png)<br>**Review queue.** Suggestions wait until a named person accepts, revises, or rejects them, with the source span, generator, confidence, and rights record in view. | ![Accepted decision feedback and session log](docs/screenshots/review-decision.png)<br>**Decision feedback.** Accepting appends a decision, advances the queue, and logs the outcome. Original machine output is never overwritten. |
-| ![Full transcript with speech, notes, pitch, and music on one timeline](docs/screenshots/transcript.png)<br>**Full transcript.** Speech, notes, pitch, music, and overlap stay on one chronological evidence record. | ![Lesson notes projection with practice tasks and exports](docs/screenshots/lesson-notes.png)<br>**Lesson notes.** An evidence-backed projection of the teaching sequence, practice tasks, and rights-gated exports. |
+| ![Full transcript with speech, notes, pitch, and music on one timeline](docs/screenshots/transcript.png)<br>**Full transcript.** Speech, notes, pitch, music, and overlap stay on one chronological evidence record. | ![Lesson notes projection with practice tasks and exports](docs/screenshots/lesson-notes.png)<br>**Lesson notes.** An evidence-backed projection of the teaching sequence, practice tasks, and exports. |
 | ![Review queue in the dark theme](docs/screenshots/dark-theme.png)<br>**Dark theme.** The same source-first layout in a low-light palette. | ![Phone-sized review queue layout](docs/screenshots/mobile-review.png)<br>**Narrow layout.** The review flow stays usable on a phone-sized viewport. |
 
 ## What it does
@@ -59,8 +59,9 @@ private lesson data. The full gallery lives on the
   revision records.
 - Provides a session-authenticated loopback workbench for playback, review,
   bookmarks, lesson projections, capture, tuner, and metronome controls.
-- Exports reviewed transcript and music evidence with explicit rights and
-  projection-loss checks.
+- Exports reviewed transcript and music evidence after the operator explicitly
+  authorizes the export and acknowledges the projection-loss preview. Export does
+  not interpret rights records.
 - Supports an optional, separately authorized OpenAI text-only suggestion
   path. It never uploads media automatically.
 

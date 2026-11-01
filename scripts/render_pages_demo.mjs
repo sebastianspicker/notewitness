@@ -92,7 +92,9 @@ function withEmptyQueue(snapshot) {
 let snapshotInput = "";
 for await (const chunk of process.stdin) snapshotInput += chunk;
 const snapshot = JSON.parse(snapshotInput);
-const { renderContextInspector, renderPanel, renderWorkbench } = await import("/assets/workbench_ui.mjs");
+const { renderContextInspector } = await import("/assets/ui/context.mjs");
+const { renderPanel } = await import("/assets/ui/panels.mjs");
+const { renderWorkbench } = await import("/assets/ui/shell.mjs");
 const initial = demoState(snapshot);
 const panels = ["review", "transcript", "lesson"].map((name) => {
   return { name, markup: renderPanel(demoState(snapshot, name)) };

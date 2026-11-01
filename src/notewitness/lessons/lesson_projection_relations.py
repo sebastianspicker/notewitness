@@ -11,6 +11,7 @@ from notewitness.lessons.lesson_projection_events import (
     is_accepted_record,
     unique_anchors,
 )
+from notewitness.lessons.review_rules import latest_event_ids, reviewed_record_ids
 from notewitness.core.lesson.model import (
     EvidenceExcerpt,
     EvidenceTopic,
@@ -40,12 +41,8 @@ def project_relations(
     revisions: Iterable[Mapping[str, Any]] = (),
 ) -> RelationProjection:
     relation_records = tuple(relations)
-    reviewed_suggestion_ids = {
-        str(revision["record_id"])
-        for revision in revisions
-        if revision.get("operation") in {"supersede", "reject"}
-        and isinstance(revision.get("record_id"), str)
-    }
+    reviewed_suggestion_ids = reviewed_record_ids(revisions, "supersede", "reject")
+    latest = latest_event_ids(events)
     accepted_relations = tuple(
         relation for relation in relation_records if is_accepted_record(relation)
     )
@@ -58,7 +55,7 @@ def project_relations(
     moments = tuple(
         sorted(
             (
-                relation_moment(relation, events, targets, anchors_by_event)
+                relation_moment(relation, events, targets, anchors_by_event, latest)
                 for relation in accepted_relations
             ),
             key=moment_sort_key,
@@ -69,17 +66,17 @@ def project_relations(
         suggestions=tuple(
             sorted(
                 (
-                    relation_moment(relation, events, targets, anchors_by_event)
+                    relation_moment(relation, events, targets, anchors_by_event, latest)
                     for relation in other_relations
                 ),
                 key=moment_sort_key,
             )
         ),
         feedback=feedback_excerpts(
-            accepted_relations, events, actors, anchors_by_event
+            accepted_relations, events, actors, anchors_by_event, latest
         ),
         practice_tasks=practice_tasks(
-            accepted_relations, events, anchors_by_event
+            accepted_relations, events, anchors_by_event, latest
         ),
         topics=score_topics(targets.values()),
         revised_relation_ids=tuple(
@@ -95,6 +92,7 @@ def relation_moment(
     events: Mapping[str, Mapping[str, Any]],
     targets: Mapping[str, Mapping[str, Any]],
     anchors_by_event: Mapping[str, tuple[EvidenceAnchor, ...]],
+    latest: Mapping[str, str],
 ) -> PedagogicalMoment:
     event_ids: list[str] = []
     target_ids: list[str] = []
@@ -104,6 +102,8 @@ def relation_moment(
         if not isinstance(argument, Mapping):
             continue
         ref_id = str(argument.get("ref_id", ""))
+        if argument.get("ref_kind") == "event":
+            ref_id = latest.get(ref_id, ref_id)
         if argument.get("ref_kind") == "event" and ref_id in events:
             event_ids.append(ref_id)
             labels.append(text_body(events[ref_id]) or ref_id)
@@ -138,7 +138,10 @@ def moment_sort_key(moment: PedagogicalMoment) -> tuple[int, str]:
 
 
 def event_ids_for_role(
-    relations: Iterable[Mapping[str, Any]], relation_type: str, role: str
+    relations: Iterable[Mapping[str, Any]],
+    relation_type: str,
+    role: str,
+    latest: Mapping[str, str],
 ) -> tuple[str, ...]:
     ids: list[str] = []
     for relation in relations:
@@ -150,7 +153,7 @@ def event_ids_for_role(
                 and argument.get("ref_kind") == "event"
                 and argument.get("role") == role
             ):
-                ids.append(str(argument["ref_id"]))
+                ids.append(latest.get(str(argument["ref_id"]), str(argument["ref_id"])))
     return tuple(dict.fromkeys(ids))
 
 
@@ -159,8 +162,9 @@ def feedback_excerpts(
     events: Mapping[str, Mapping[str, Any]],
     actors: Mapping[str, Mapping[str, Any]],
     anchors_by_event: Mapping[str, tuple[EvidenceAnchor, ...]],
+    latest: Mapping[str, str],
 ) -> tuple[EvidenceExcerpt, ...]:
-    feedback_ids = event_ids_for_role(relations, "feedback_on", "feedback")
+    feedback_ids = event_ids_for_role(relations, "feedback_on", "feedback", latest)
     excerpts = []
     for event_id in feedback_ids:
         event = events[event_id]
@@ -189,20 +193,26 @@ def practice_tasks(
     relations: Iterable[Mapping[str, Any]],
     events: Mapping[str, Mapping[str, Any]],
     anchors_by_event: Mapping[str, tuple[EvidenceAnchor, ...]],
+    latest: Mapping[str, str],
 ) -> tuple[PracticeTask, ...]:
     tasks: list[PracticeTask] = []
     completion_state = _practice_completion_state(events.values())
     for relation in relations:
         if relation.get("type") != "local:assigned_for_practice":
             continue
-        assignment_ids = event_ids_for_role((relation,), relation["type"], "assignment")
-        for event_id in assignment_ids:
+        # The task ID stays on the assigned event so completion survives revisions;
+        # text and anchors come from its latest revision.
+        assignment_ids = event_ids_for_role(
+            (relation,), relation["type"], "assignment", {}
+        )
+        for assigned_id in assignment_ids:
+            event_id = latest.get(assigned_id, assigned_id)
             event = events[event_id]
             if not is_accepted_record(event):
                 continue
             tasks.append(
                 PracticeTask(
-                    task_id=f"practice:{relation['id']}:{event_id}",
+                    task_id=f"practice:{relation['id']}:{assigned_id}",
                     text=text_body(event) or event_id,
                     source_event_ids=(event_id,),
                     source_relation_ids=(str(relation["id"]),),
@@ -226,7 +236,7 @@ def practice_tasks(
                         )
                     ),
                     completed=completion_state.get(
-                        f"practice:{relation['id']}:{event_id}",
+                        f"practice:{relation['id']}:{assigned_id}",
                         False,
                     ),
                 )

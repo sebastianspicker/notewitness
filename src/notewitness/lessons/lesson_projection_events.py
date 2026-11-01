@@ -16,6 +16,7 @@ from notewitness.core.lesson.model import (
     TranscriptTurn,
 )
 from notewitness.core.time import EvidenceAnchor, MediaSpan
+from notewitness.lessons.review_rules import reviewed_record_ids
 
 
 _ACTIVITY_KINDS = {
@@ -71,12 +72,7 @@ def project_events(
         and isinstance((body := event.get("body")), Mapping)
         and isinstance(body.get("source_suggestion_id"), str)
     }
-    rejected_suggestion_ids = {
-        str(revision["record_id"])
-        for revision in revisions
-        if revision.get("operation") == "reject"
-        and isinstance(revision.get("record_id"), str)
-    }
+    rejected_suggestion_ids = reviewed_record_ids(revisions, "reject")
     superseded_annotation_ids = {
         str(body["source_annotation_id"])
         for event in events.values()

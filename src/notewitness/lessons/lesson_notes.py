@@ -22,6 +22,7 @@ from notewitness.core.lesson.model import (
 from notewitness.core.evidence.graph import EvidenceGraph
 from notewitness.lessons.lesson_projection_events import project_events
 from notewitness.lessons.lesson_projection_relations import project_relations
+from notewitness.lessons.review_rules import reviewed_record_ids
 
 
 class LessonNotesProjector:
@@ -41,7 +42,13 @@ class LessonNotesProjector:
             targets,
             actors,
             revisions=graph.records("revisions"),
-            speaker_roles_by_event=_speaker_roles_by_event(events, relations),
+            speaker_roles_by_event=_speaker_roles_by_event(
+                events,
+                relations,
+                reviewed_record_ids(
+                    graph.records("revisions"), "supersede", "reject"
+                ),
+            ),
         )
         relation_projection = project_relations(
             relations,
@@ -196,8 +203,9 @@ class LessonNotesProjector:
 def _speaker_roles_by_event(
     events: Mapping[str, Mapping[str, Any]],
     relations: Iterable[Mapping[str, Any]],
+    reviewed_relation_ids: set[str],
 ) -> dict[str, str]:
-    candidates = _speaker_role_candidates(events, relations)
+    candidates = _speaker_role_candidates(events, relations, reviewed_relation_ids)
     clusters = _selected_speaker_clusters(candidates)
     _inherit_speaker_clusters(events, clusters)
     return _formatted_speaker_roles(clusters)
@@ -206,10 +214,13 @@ def _speaker_roles_by_event(
 def _speaker_role_candidates(
     events: Mapping[str, Mapping[str, Any]],
     relations: Iterable[Mapping[str, Any]],
+    reviewed_relation_ids: set[str],
 ) -> dict[str, list[tuple[str, str, int, str]]]:
     event_positions = {event_id: index for index, event_id in enumerate(events)}
     candidates: dict[str, list[tuple[str, str, int, str]]] = {}
     for relation in relations:
+        if relation.get("id") in reviewed_relation_ids:
+            continue
         candidate = _speaker_role_candidate(events, event_positions, relation)
         if candidate is None:
             continue

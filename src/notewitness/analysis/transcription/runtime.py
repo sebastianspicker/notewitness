@@ -33,7 +33,11 @@ from notewitness.analysis.runs.workspace import (
     write_queued_status,
     write_status,
 )
-from notewitness.analysis.transcription.evidence import append_machine_transcript
+from notewitness.analysis.transcription.evidence import (
+    MAX_GRAPH_TRANSCRIPT_SEGMENTS,
+    TranscriptEvidenceError,
+    append_machine_transcript,
+)
 from notewitness.analysis.transcription.whisper_cli import (
     WhisperCLIAdapter,
     WhisperCLIResult,
@@ -197,6 +201,7 @@ class LocalTranscriptionRuntime:
 
         started_at = now()
         manifest_written = False
+        export_path: Path | None = None
         try:
             raw_artifact_id = f"artifact:raw-{run_token}"
             normalized_artifact_id = f"artifact:transcript-{run_token}"
@@ -246,6 +251,17 @@ class LocalTranscriptionRuntime:
             write_new_private_json(manifest_path, manifest.as_dict())
             manifest_written = True
 
+            if len(asr_result.document.segments) > MAX_GRAPH_TRANSCRIPT_SEGMENTS:
+                # The graph projection below will refuse it; write the requested export first.
+                export_path = _publish_export(
+                    store=store,
+                    request=request,
+                    document=asr_result.document,
+                    manifest=manifest,
+                    canonical=canonical,
+                    run_token=run_token,
+                    run_directory=run_directory,
+                )
             projected = copy.deepcopy(snapshot.payload)
             projected_records = append_machine_transcript(
                 projected,
@@ -316,7 +332,23 @@ class LocalTranscriptionRuntime:
                 language=asr_result.document.language,
             )
         except Exception as exc:
-            if manifest_written:
+            if (
+                manifest_written
+                and isinstance(exc, TranscriptEvidenceError)
+                and len(asr_result.document.segments) > MAX_GRAPH_TRANSCRIPT_SEGMENTS
+            ):
+                _write_integration_failure_status(
+                    run_directory, run_id, request.source_id, exc
+                )
+                message = (
+                    "Local transcription completed and is kept as a private "
+                    f"artifact at {normalized_path}. It has "
+                    f"{len(asr_result.document.segments)} segments and the project "
+                    f"graph accepts at most {MAX_GRAPH_TRANSCRIPT_SEGMENTS}, so it "
+                    "was not added to the project."
+                    + (f" The requested export is at {export_path}." if export_path else "")
+                )
+            elif manifest_written:
                 _write_integration_failure_status(
                     run_directory, run_id, request.source_id, exc
                 )

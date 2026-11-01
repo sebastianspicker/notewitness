@@ -11,6 +11,7 @@ from pathlib import Path
 import secrets
 import stat
 from typing import Any, BinaryIO
+import unicodedata
 from urllib.parse import unquote
 
 from notewitness.lessons.capture import capture_publication_hook
@@ -116,8 +117,16 @@ class WorkbenchMediaMixin:
         suffix = _CAPTURE_SUFFIXES.get(content_type)
         if suffix is None:
             raise RequestError("Capture media type is unsupported.")
-        capture_name = self.headers.get("X-Capture-Name", "Browser recording")
-        if not capture_name.strip() or len(capture_name) > 255:
+        encoded_capture_name = self.headers.get("X-Capture-Name", "Browser recording")
+        try:
+            capture_name = unquote(encoded_capture_name, errors="strict")
+        except (UnicodeError, ValueError) as exc:
+            raise RequestError("Capture name is invalid.") from exc
+        if (
+            not capture_name.strip()
+            or len(capture_name) > 255
+            or any(unicodedata.category(character) == "Cc" for character in capture_name)
+        ):
             raise RequestError("Capture name must be bounded non-empty text.")
         author_id = required_header(self.headers, "X-Capture-Author", 256)
         started_at = required_header(self.headers, "X-Capture-Started-At", 64)

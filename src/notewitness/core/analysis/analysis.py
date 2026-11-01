@@ -134,80 +134,6 @@ class ActivityHypothesis:
 
 
 @dataclass(frozen=True, slots=True)
-class MediaProbeHypothesis:
-    hypothesis_id: str
-    span: MediaSpan
-    state: AnalysisState
-    media_type: str | None
-    channel_count: int | None
-    sample_rate_hz: int | None
-    generator_id: str
-
-    def __post_init__(self) -> None:
-        _validate_hypothesis_identity(self.hypothesis_id, self.generator_id)
-        if self.state is AnalysisState.READY and not self.media_type:
-            raise ValueError("Ready media probes require a media type.")
-
-
-@dataclass(frozen=True, slots=True)
-class DerivedFeatureHypothesis:
-    hypothesis_id: str
-    span: MediaSpan
-    state: AnalysisState
-    feature_kind: str | None
-    artifact_id: str | None
-    generator_id: str
-
-    def __post_init__(self) -> None:
-        _validate_hypothesis_identity(self.hypothesis_id, self.generator_id)
-        if self.state is AnalysisState.READY and (
-            not self.feature_kind or not self.artifact_id
-        ):
-            raise ValueError("Ready derived features require kind and artifact IDs.")
-
-
-@dataclass(frozen=True, slots=True)
-class WordHypothesis:
-    hypothesis_id: str
-    span: MediaSpan
-    state: AnalysisState
-    text: str | None
-    language: str | None
-    anonymous_speaker_cluster: str | None
-    confidence: float | None
-    generator_id: str
-    alternatives: tuple[str, ...] = ()
-
-    def __post_init__(self) -> None:
-        _validate_hypothesis_identity(self.hypothesis_id, self.generator_id)
-        _validate_confidence(self.confidence)
-        if self.state is AnalysisState.READY and not self.text:
-            raise ValueError("Ready word hypotheses require text.")
-
-
-@dataclass(frozen=True, slots=True)
-class SpeechSegmentHypothesis:
-    """Timed ASR segment retaining ordered word links and segment confidence."""
-
-    hypothesis_id: str
-    span: MediaSpan
-    state: AnalysisState
-    text: str | None
-    language: str | None
-    word_hypothesis_ids: tuple[str, ...]
-    confidence: float | None
-    generator_id: str
-
-    def __post_init__(self) -> None:
-        _validate_hypothesis_identity(self.hypothesis_id, self.generator_id)
-        _validate_confidence(self.confidence)
-        if self.state is AnalysisState.READY and not self.text:
-            raise ValueError("Ready speech segments require text.")
-        if len(self.word_hypothesis_ids) != len(set(self.word_hypothesis_ids)):
-            raise ValueError("Speech-segment word IDs must be unique.")
-
-
-@dataclass(frozen=True, slots=True)
 class SpeakerSegmentHypothesis:
     """Project-local diarization; a cluster is not a persistent identity."""
 
@@ -299,26 +225,6 @@ class InstrumentHypothesis:
 
 
 @dataclass(frozen=True, slots=True)
-class RhythmHarmonyHypothesis:
-    hypothesis_id: str
-    span: MediaSpan
-    state: AnalysisState
-    feature_kind: str | None
-    value: Mapping[str, Any] | None
-    confidence: float | None
-    generator_id: str
-
-    def __post_init__(self) -> None:
-        _validate_hypothesis_identity(self.hypothesis_id, self.generator_id)
-        _validate_confidence(self.confidence)
-        if self.state is AnalysisState.READY and (
-            self.feature_kind not in {"onset", "beat", "downbeat", "chord"}
-            or self.value is None
-        ):
-            raise ValueError("Ready rhythm/harmony evidence requires a typed value.")
-
-
-@dataclass(frozen=True, slots=True)
 class ScoreAlignmentHypothesis:
     hypothesis_id: str
     span: MediaSpan
@@ -339,38 +245,13 @@ class ScoreAlignmentHypothesis:
             raise ValueError("Aligned hypotheses require a score and score position.")
 
 
-@dataclass(frozen=True, slots=True)
-class PedagogicalRelationHypothesis:
-    hypothesis_id: str
-    span: MediaSpan
-    state: AnalysisState
-    relation_type: str | None
-    argument_hypothesis_ids: tuple[str, ...]
-    confidence: float | None
-    generator_id: str
-
-    def __post_init__(self) -> None:
-        _validate_hypothesis_identity(self.hypothesis_id, self.generator_id)
-        _validate_confidence(self.confidence)
-        if self.state is AnalysisState.READY and (
-            not self.relation_type or len(self.argument_hypothesis_ids) < 2
-        ):
-            raise ValueError("Ready relation suggestions require type and arguments.")
-
-
 AnalysisHypothesis = (
-    MediaProbeHypothesis
-    | DerivedFeatureHypothesis
-    | ActivityHypothesis
-    | WordHypothesis
-    | SpeechSegmentHypothesis
+    ActivityHypothesis
     | SpeakerSegmentHypothesis
     | NoteHypothesis
     | PitchPointHypothesis
     | InstrumentHypothesis
-    | RhythmHarmonyHypothesis
     | ScoreAlignmentHypothesis
-    | PedagogicalRelationHypothesis
 )
 
 
@@ -386,24 +267,17 @@ class AnalysisBatch:
                 "Analysis result hypothesis IDs must match the typed batch in order."
             )
         expected_types: dict[AnalysisStage, type[Any] | tuple[type[Any], ...]] = {
-            AnalysisStage.MEDIA_PROBE: MediaProbeHypothesis,
-            AnalysisStage.DERIVED_FEATURES: DerivedFeatureHypothesis,
             AnalysisStage.ACTIVITY_SEGMENTATION: ActivityHypothesis,
-            AnalysisStage.SPEECH_RECOGNITION: (
-                WordHypothesis,
-                SpeechSegmentHypothesis,
-            ),
             AnalysisStage.ANONYMOUS_DIARIZATION: SpeakerSegmentHypothesis,
             AnalysisStage.NOTE_TRANSCRIPTION: NoteHypothesis,
             AnalysisStage.CONTINUOUS_PITCH: PitchPointHypothesis,
             AnalysisStage.INSTRUMENT_DETECTION: InstrumentHypothesis,
             AnalysisStage.INSTRUMENT_DIARIZATION: InstrumentHypothesis,
-            AnalysisStage.ONSET_BEAT_CHORD: RhythmHarmonyHypothesis,
             AnalysisStage.SCORE_ALIGNMENT: ScoreAlignmentHypothesis,
-            AnalysisStage.PEDAGOGICAL_RELATIONS: PedagogicalRelationHypothesis,
         }
-        expected_type = expected_types.get(self.result.stage)
-        if expected_type is not None and any(
+        # Stages without a hypothesis type accept no hypotheses at all.
+        expected_type = expected_types.get(self.result.stage, ())
+        if any(
             not isinstance(item, expected_type) for item in self.hypotheses
         ):
             raise ValueError(

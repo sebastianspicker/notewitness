@@ -29,13 +29,6 @@ from .jobs import WorkbenchProcessingError
 
 
 MAX_RUNTIME_CONFIG_BYTES = 64 * 1024
-_DEFAULT_ANALYSIS_STAGES = (
-    AnalysisStage.ACTIVITY_SEGMENTATION,
-    AnalysisStage.ANONYMOUS_DIARIZATION,
-    AnalysisStage.NOTE_TRANSCRIPTION,
-    AnalysisStage.CONTINUOUS_PITCH,
-    AnalysisStage.INSTRUMENT_DETECTION,
-)
 
 
 class WorkbenchRuntimeConfigurationError(WorkbenchProcessingError):
@@ -144,80 +137,7 @@ def transcription_profile(payload: Mapping[str, Any]) -> TranscriptionProfile:
     )
 
 
-def analysis_profile(
-    payload: Mapping[str, Any], project_root: Path, *, version: int
-) -> AnalysisProfile:
-    if version == 2:
-        return _analysis_profile_v2(payload, project_root)
-    return _analysis_profile_v1(payload, project_root)
-
-
-def _analysis_profile_v1(
-    payload: Mapping[str, Any], project_root: Path
-) -> AnalysisProfile:
-    required = {
-        "adapter_license",
-        "adapter_version",
-        "analysis_path",
-        "ffprobe_path",
-        "model_license",
-        "model_path",
-    }
-    allowed = required | {
-        "detect_overlap",
-        "diarization_mode",
-        "exact_speaker_count",
-        "score_id",
-        "score_license",
-        "score_path",
-        "stages",
-        "timeout_seconds",
-    }
-    exact_keys(payload, allowed, required)
-    tool = discover_local_tool(
-        "analysis-suite", _path(payload, "analysis_path")
-    )
-    ffprobe = discover_local_tool("ffprobe", _path(payload, "ffprobe_path"))
-    model_path = _path(payload, "model_path")
-    model_sha, model_size = analysis_artifact_identity(model_path)
-    model = LocalAnalysisSource(
-        f"model:analysis-{model_sha[:32]}",
-        model_path,
-        model_sha,
-        model_size,
-    )
-    stages = _analysis_stages(payload.get("stages"))
-    score, score_license = _analysis_score(payload)
-    if AnalysisStage.SCORE_ALIGNMENT in stages and score is None:
-        raise WorkbenchRuntimeConfigurationError("score_alignment_requires_score")
-    mode, exact, detect_overlap = _diarization_options(payload)
-    providers = tuple(
-        AnalysisProviderProfile(
-            stage=stage,
-            tool=tool,
-            model=model,
-            adapter_version=_bounded_text(payload, "adapter_version"),
-            adapter_license=_bounded_text(payload, "adapter_license"),
-            model_license=_bounded_text(payload, "model_license"),
-            timeout_seconds=_integer(payload, "timeout_seconds", 3_600),
-            parameters={},
-        )
-        for stage in stages
-    )
-    return AnalysisProfile(
-        ffprobe,
-        providers,
-        mode,
-        exact,
-        detect_overlap,
-        score,
-        score_license,
-    )
-
-
-def _analysis_profile_v2(
-    payload: Mapping[str, Any], project_root: Path
-) -> AnalysisProfile:
+def analysis_profile(payload: Mapping[str, Any]) -> AnalysisProfile:
     required = {"ffprobe_path", "providers"}
     allowed = required | {
         "detect_overlap",
@@ -259,21 +179,6 @@ def _analysis_profile_v2(
         score,
         score_license,
     )
-
-
-def _analysis_stages(value: object) -> tuple[AnalysisStage, ...]:
-    if value is None:
-        stages = _DEFAULT_ANALYSIS_STAGES
-    elif not isinstance(value, list) or not value:
-        raise WorkbenchRuntimeConfigurationError("analysis_stages_invalid")
-    else:
-        try:
-            stages = tuple(AnalysisStage(item) for item in value)
-        except (TypeError, ValueError) as exc:
-            raise WorkbenchRuntimeConfigurationError("analysis_stages_invalid") from exc
-    if len(stages) != len(set(stages)):
-        raise WorkbenchRuntimeConfigurationError("analysis_stages_repeated")
-    return stages
 
 
 def _analysis_provider_profile(

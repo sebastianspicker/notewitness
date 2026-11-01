@@ -1,12 +1,15 @@
 const FALLBACK = "N/A";
 
+export const ACTIVE_JOB_STATES = ["queued", "running", "cancelling"];
+
 export const list = (value) => Array.isArray(value) ? value : [];
 
+const ENTITIES = new Map([
+  ["&", "&amp;"], ["<", "&lt;"], [">", "&gt;"], ['"', "&quot;"], ["'", "&#39;"],
+]);
+
 export function escapeHTML(value, fallback = FALLBACK) {
-  const entities = new Map([
-    ["&", "&amp;"], ["<", "&lt;"], [">", "&gt;"], ['"', "&quot;"], ["'", "&#39;"],
-  ]);
-  return String(value ?? fallback).replace(/[&<>"']/g, (character) => entities.get(character));
+  return String(value ?? fallback).replace(/[&<>"']/g, (character) => ENTITIES.get(character));
 }
 
 export const encodeId = (value) => encodeURIComponent(String(value ?? ""));

@@ -15,6 +15,7 @@ from notewitness.lessons.music_export_renderers import (
     midi_bytes as _midi_bytes,
     overlapping_same_pitch_ids as _overlapping_same_pitch_ids,
 )
+from notewitness.lessons.review_rules import reviewed_record_ids
 from notewitness.core.exports import LossSeverity, ProjectionLoss
 from notewitness.projects.artifacts import write_new_private_bytes
 from notewitness.projects.store import ProjectStore
@@ -209,7 +210,10 @@ def _extract_notes(
 ) -> tuple[SymbolicNote, ...]:
     targets = _targets_by_id(payload)
     events = tuple(item for item in payload.get("events", ()) if isinstance(item, Mapping))
-    accepted_sources = _accepted_note_suggestion_ids(events)
+    accepted_sources = _accepted_note_suggestion_ids(events) | reviewed_record_ids(
+        (item for item in payload.get("revisions", ()) if isinstance(item, Mapping)),
+        "reject",
+    )
     notes = [
         note
         for event in events
@@ -256,6 +260,14 @@ def _event_notes(
 ) -> tuple[SymbolicNote, ...]:
     if not _is_exportable_note(event, accepted_sources):
         return ()
+    target_ids = [
+        target_id
+        for target_id in event.get("target_ids", ())
+        if isinstance(target_id, str)
+        and not _on_other_source(targets.get(target_id), selected_source_id)
+    ]
+    if not target_ids and event.get("target_ids"):
+        return ()
     event_id, value, status = _note_parts(event)
     context = _NoteContext(
         event_id,
@@ -266,8 +278,7 @@ def _event_notes(
     )
     return tuple(
         note
-        for target_id in event.get("target_ids", ())
-        if isinstance(target_id, str)
+        for target_id in target_ids
         if (note := _note_from_target(context, target_id)) is not None
     )
 
@@ -278,6 +289,15 @@ def _is_exportable_note(event: Mapping[str, Any], accepted_sources: set[str]) ->
         event.get("type") == "local:note"
         and status in _EXPORTABLE_STATUSES
         and not (status == "machine_suggested" and event.get("id") in accepted_sources)
+    )
+
+
+def _on_other_source(target: Mapping[str, Any] | None, selected_source_id: str | None) -> bool:
+    # Filter before pitch/timing validation so another recording cannot block the export.
+    return (
+        selected_source_id is not None
+        and target is not None
+        and target.get("source_id") != selected_source_id
     )
 
 

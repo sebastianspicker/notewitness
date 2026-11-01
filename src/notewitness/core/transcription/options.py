@@ -1,13 +1,11 @@
-"""Transcription option snapshots and deterministic batch queue contracts."""
+"""Transcription option snapshots."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
-from pathlib import PurePosixPath
 from typing import Any
-import unicodedata
 
 from notewitness.core.time import MediaSpan
 from notewitness.core.transcription.shared import (
@@ -19,7 +17,6 @@ from notewitness.core.transcription.shared import (
 
 
 MAX_TRANSCRIPTION_SOURCES = 256
-MAX_TRANSCRIPTION_QUEUE_JOBS = 256
 MAX_EXACT_SPEAKERS = 10
 _PAUSE_THRESHOLDS_MS = frozenset({1_000, 2_000, 3_000})
 
@@ -85,85 +82,6 @@ class TranscriptionJobSpec:
 
     def as_dict(self) -> dict[str, Any]:
         return _json_ready(asdict(self))
-
-
-@dataclass(frozen=True, slots=True)
-class TranscriptionQueueItem:
-    job: TranscriptionJobSpec
-    output_name: str
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.job, TranscriptionJobSpec):
-            raise ValueError("Queue items require a validated transcription job.")
-        if not isinstance(self.output_name, str):
-            raise ValueError("Queue output_name must be a string.")
-        if (
-            not self.output_name
-            or self.output_name in {".", ".."}
-            or "/" in self.output_name
-            or "\\" in self.output_name
-        ):
-            raise ValueError(
-                "Queue output_name must be one safe filename, not a path."
-            )
-        expected_suffix = {
-            TranscriptExportFormat.HTML: ".html",
-            TranscriptExportFormat.TEXT: ".txt",
-            TranscriptExportFormat.WEBVTT: ".vtt",
-        }[self.job.output_format]
-        if not self.output_name.casefold().endswith(expected_suffix):
-            raise ValueError(
-                f"Queue output_name must end in {expected_suffix!r} for the job."
-            )
-
-
-@dataclass(frozen=True, slots=True)
-class TranscriptionQueuePlan:
-    """A bounded, deterministic, sequential queue like noScribe's batch flow."""
-
-    queue_id: str
-    items: tuple[TranscriptionQueueItem, ...]
-    output_root: str = "exports/transcripts"
-
-    def __post_init__(self) -> None:
-        if not self.queue_id:
-            raise ValueError("Transcription queues require an ID.")
-        if not isinstance(self.output_root, str) or not self.output_root:
-            raise ValueError("Transcription queues require an output root.")
-        root = PurePosixPath(self.output_root)
-        if (
-            root.is_absolute()
-            or "\\" in self.output_root
-            or any(
-                part in {"", ".", ".."} or ":" in part for part in root.parts
-            )
-        ):
-            raise ValueError(
-                "Transcription queue output_root must be a safe relative path."
-            )
-        if (
-            not isinstance(self.items, tuple)
-            or any(not isinstance(item, TranscriptionQueueItem) for item in self.items)
-            or not self.items
-            or len(self.items) > MAX_TRANSCRIPTION_QUEUE_JOBS
-        ):
-            raise ValueError(
-                "Transcription queues require 1-"
-                f"{MAX_TRANSCRIPTION_QUEUE_JOBS} jobs."
-            )
-        job_ids = tuple(item.job.job_id for item in self.items)
-        if len(job_ids) != len(set(job_ids)):
-            raise ValueError("Transcription queue job IDs must be unique.")
-        output_names = tuple(
-            unicodedata.normalize("NFC", item.output_name).casefold()
-            for item in self.items
-        )
-        if len(output_names) != len(set(output_names)):
-            raise ValueError("Transcription queue output names must be unique.")
-
-    @property
-    def jobs(self) -> tuple[TranscriptionJobSpec, ...]:
-        return tuple(item.job for item in self.items)
 
 
 def _validate_common_adapter_settings(settings: Mapping[str, Any]) -> None:

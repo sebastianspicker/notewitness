@@ -12,7 +12,9 @@ from notewitness.analysis.suite.adapter import (
     AnalysisCLIExecutionError,
     LocalAnalysisCLIAdapter,
     LocalAnalysisCLIExecution,
+    analysis_generator_parameters,
 )
+from notewitness.analysis.suite.checkpoints import PUBLISHABLE_STATES
 from notewitness.analysis.suite.evidence import (
     AnalysisEvidenceContext,
     AnalysisEvidenceRecords,
@@ -45,7 +47,6 @@ from notewitness.analysis.runs.workspace import (
 from notewitness.core.analysis.analysis import (
     AnalysisRequest,
     AnalysisStage,
-    AnalysisState,
     NoteHypothesis,
     PitchPointHypothesis,
 )
@@ -59,16 +60,6 @@ from notewitness.projects.store import ProjectStore
 
 
 MAX_ANALYSIS_STAGES = 16
-_PUBLISHABLE_STATES = frozenset(
-    {
-        AnalysisState.READY,
-        AnalysisState.UNKNOWN,
-        AnalysisState.NOT_DETECTED,
-        AnalysisState.NOT_APPLICABLE,
-        AnalysisState.NOT_ALIGNABLE,
-        AnalysisState.UNCERTAIN,
-    }
-)
 
 
 class LocalAnalysisRuntimeError(RuntimeError):
@@ -230,7 +221,7 @@ class LocalAnalysisRuntime:
                     raise LocalAnalysisRuntimeError(
                         f"Analysis executable changed during {stage.value}."
                     )
-                if execution.batch.result.state not in _PUBLISHABLE_STATES:
+                if execution.batch.result.state not in PUBLISHABLE_STATES:
                     raise LocalAnalysisRuntimeError(
                         f"Analysis stage {stage.value} ended in "
                         f"{execution.batch.result.state.value}."
@@ -305,15 +296,12 @@ class LocalAnalysisRuntime:
                             raw_artifact_id=item.raw_artifact_id,
                             raw_artifact_sha256=item.execution.raw_output_sha256,
                             raw_artifact_size_bytes=len(item.execution.raw_output),
-                            parameters={
-                                "adapter_license": settings.adapter_license,
-                                "code_sha256": item.executable_sha256,
-                                "effective_stage_parameters": dict(
-                                    item.step.parameters
-                                ),
-                                "model_license": settings.model_license,
-                                "network_requirement": "none",
-                            },
+                            parameters=analysis_generator_parameters(
+                                item.step.adapter.stage,
+                                item.step.adapter.tool,
+                                settings,
+                                item.step.parameters,
+                            ),
                             analysis_run_id=run_id,
                         ),
                         known_note_or_pitch_ids=known_note_or_pitch_ids,

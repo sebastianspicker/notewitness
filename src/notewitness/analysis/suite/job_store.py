@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
 import json
 import math
 from pathlib import Path
@@ -10,7 +11,11 @@ import sqlite3
 import time
 from typing import Iterator
 
-from notewitness.core.analysis.analysis import AnalysisStage, JobState
+from notewitness.core.analysis.analysis import (
+    AnalysisStage,
+    JobState,
+    MAX_CONTINUATION_TOKEN_CHARS,
+)
 from notewitness.core.analysis.jobs import (
     AnalysisJobSpec,
     DurableJob,
@@ -97,7 +102,7 @@ class SQLiteJobStore:
         with self._transaction() as connection:
             existing = self._select(connection, spec.job_id)
             if existing is not None:
-                if existing.spec != spec:
+                if replace(existing.spec, created_at=spec.created_at) != spec:
                     raise JobConflictError(
                         "job_id already belongs to a different immutable specification"
                     )
@@ -120,23 +125,14 @@ class SQLiteJobStore:
         with self._connection() as connection:
             return self._select(connection, job_id)
 
-    def list(self, *, state: JobState | None = None, limit: int = 100) -> tuple[DurableJob, ...]:
-        if state is not None and not isinstance(state, JobState):
-            raise ValueError("state must be a JobState.")
+    def list(self, *, limit: int = 100) -> tuple[DurableJob, ...]:
         if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 1_024:
             raise ValueError("limit must be between 1 and 1024.")
         with self._connection() as connection:
-            if state is None:
-                rows = connection.execute(
-                    "SELECT * FROM analysis_jobs ORDER BY created_at, job_id LIMIT ?",
-                    (limit,),
-                ).fetchall()
-            else:
-                rows = connection.execute(
-                    "SELECT * FROM analysis_jobs WHERE state = ? "
-                    "ORDER BY created_at, job_id LIMIT ?",
-                    (state.value, limit),
-                ).fetchall()
+            rows = connection.execute(
+                "SELECT * FROM analysis_jobs ORDER BY created_at DESC, job_id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
             return tuple(_row_to_job(row) for row in rows)
 
     def claim(
@@ -179,48 +175,6 @@ class SQLiteJobStore:
                 ),
             ).rowcount
             return self._required(connection, job_id) if changed else None
-
-    def claim_next(
-        self,
-        *,
-        owner_id: str,
-        lease_seconds: float,
-        source_sha256: str,
-        adapter_fingerprint_sha256: str,
-        runtime_fingerprint_sha256: str,
-        settings_fingerprint_sha256: str,
-        score_sha256: str | None,
-    ) -> DurableJob | None:
-        """Claim the oldest compatible resumable job without a read/claim race."""
-        _identifier(owner_id, "owner_id")
-        lease_until = time.time() + _lease_seconds(lease_seconds)
-        with self._transaction() as connection:
-            row = connection.execute(
-                """SELECT job_id FROM analysis_jobs WHERE state IN (?, ?) AND cancel_requested = 0
-                   AND source_sha256 = ? AND adapter_fingerprint_sha256 = ?
-                   AND runtime_fingerprint_sha256 = ? AND settings_fingerprint_sha256 = ?
-                   AND score_sha256 IS ? ORDER BY created_at, job_id LIMIT 1""",
-                (
-                    JobState.QUEUED.value,
-                    JobState.PAUSED.value,
-                    source_sha256,
-                    adapter_fingerprint_sha256,
-                    runtime_fingerprint_sha256,
-                    settings_fingerprint_sha256,
-                    score_sha256,
-                ),
-            ).fetchone()
-            if row is None:
-                return None
-            job_id = str(row["job_id"])
-            connection.execute(
-                "UPDATE analysis_jobs SET state = ?, owner_id = ?, lease_expires_at = ? "
-                "WHERE job_id = ?",
-                (JobState.RUNNING.value, owner_id, lease_until, job_id),
-            )
-            return self._required(connection, job_id)
-
-    resume = claim
 
     def heartbeat(self, job_id: str, *, owner_id: str, lease_seconds: float) -> DurableJob:
         return self._owned_update(job_id, owner_id, lease_seconds=lease_seconds)
@@ -284,27 +238,32 @@ class SQLiteJobStore:
                 )
             return self._required(connection, job_id)
 
-    cancel = request_cancellation
-
     def complete(
         self,
         job_id: str,
         *,
         owner_id: str,
         last_artifact_id: str | None = None,
+        published: bool = False,
     ) -> DurableJob:
+        """Finish an owned job; a published job completes even if cancel was requested."""
         if last_artifact_id is not None:
             _identifier(last_artifact_id, "last_artifact_id", MAX_ARTIFACT_ID_CHARS)
         with self._transaction() as connection:
             job = self._owned(connection, job_id, owner_id)
-            state = JobState.CANCELLED if job.cancel_requested else JobState.COMPLETED
+            cancelled = job.cancel_requested and not published
+            state = JobState.CANCELLED if cancelled else JobState.COMPLETED
             connection.execute(
                 "UPDATE analysis_jobs SET state = ?, owner_id = NULL, lease_expires_at = NULL, "
-                "continuation_token = CASE WHEN cancel_requested = 1 "
-                "THEN continuation_token ELSE NULL END, "
+                "continuation_token = ?, "
                 "last_artifact_id = COALESCE(?, last_artifact_id) "
                 "WHERE job_id = ?",
-                (state.value, last_artifact_id, job_id),
+                (
+                    state.value,
+                    job.continuation_token if cancelled else None,
+                    last_artifact_id,
+                    job_id,
+                ),
             )
             return self._required(connection, job_id)
 
@@ -445,7 +404,7 @@ def _validate_completed_span_count(value: int) -> None:
 def _validate_continuation_token(value: str | None) -> None:
     if value is None:
         return
-    if not isinstance(value, str) or not value or len(value) > 4_096:
+    if not isinstance(value, str) or not value or len(value) > MAX_CONTINUATION_TOKEN_CHARS:
         raise ValueError("continuation_token exceeds its bounded contract.")
 
 

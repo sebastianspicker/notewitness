@@ -32,6 +32,7 @@ from notewitness.core.transcription.renderers import (
     render_txt,
     render_webvtt,
 )
+from notewitness.lessons.review_rules import reviewed_record_ids
 from notewitness.projects.artifacts import publish_new_private_text
 from notewitness.projects.store import ProjectStore
 
@@ -95,6 +96,7 @@ class _EventSelection:
     evidence_layer: TranscriptEvidenceLayer
     accepted_sources: frozenset[str]
     superseded_annotations: frozenset[str]
+    rejected_suggestions: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,6 +251,12 @@ def _document(
         request.evidence_layer,
         frozenset(_body_references(events, "source_suggestion_id")),
         frozenset(_body_references(events, "source_annotation_id")),
+        frozenset(
+            reviewed_record_ids(
+                (item for item in payload.get("revisions", ()) if isinstance(item, Mapping)),
+                "reject",
+            )
+        ),
     )
     entries = _selected_entries(events, selection)
     _require_entries(entries, request.evidence_layer)
@@ -321,7 +329,7 @@ def _eligible_review_status(
 ) -> bool:
     if status not in {"human_accepted", "human_created", "machine_suggested"}:
         return False
-    if event_id in selection.superseded_annotations:
+    if event_id in selection.superseded_annotations or event_id in selection.rejected_suggestions:
         return False
     return not (
         status == "machine_suggested"

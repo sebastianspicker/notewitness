@@ -1,4 +1,5 @@
-import { encodeId, formatTime, humanActor } from "/assets/workbench_ui.mjs";
+import { encodeId, humanActor } from "/assets/ui/value_utils.mjs";
+import { formatTime } from "/assets/ui/timeline_utils.mjs";
 
 const MAX_CAPTURE_BYTES = 512 * 1024 * 1024;
 const MAX_CAPTURE_MILLISECONDS = 2 * 60 * 60 * 1000;
@@ -18,8 +19,10 @@ export function createCaptureActions(c) {
 
   async function toggleRecording() {
     if (c.state.recorder?.state === "recording") { c.state.captureState = "saving"; c.state.recorder.stop(); refreshRecordingUI(); return; }
+    let stream = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (c.state.recorder?.state === "recording") { stream.getTracks().forEach((track) => track.stop()); return; } // a concurrent start already won
       Object.assign(c.state, { chunks: [], captureBytes: 0, captureStartedAt: Date.now(), captureTooLarge: false, captureDiscarded: false, captureState: "recording" });
       c.state.recorder = new MediaRecorder(stream);
       c.state.recorder.ondataavailable = (event) => {
@@ -31,7 +34,7 @@ export function createCaptureActions(c) {
       c.state.recorder.onstop = uploadCapture; c.state.recorder.start(1000);
       c.state.captureTimeout = window.setTimeout(() => { if (c.state.recorder?.state === "recording") c.state.recorder.stop(); }, MAX_CAPTURE_MILLISECONDS);
       c.state.captureInterval = window.setInterval(refreshRecordingUI, 250); refreshRecordingUI();
-    } catch (error) { c.state.captureState = "idle"; c.setNotice(`Recording is unavailable: ${error.message}`, "error"); }
+    } catch (error) { stream?.getTracks().forEach((track) => track.stop()); c.state.captureState = "idle"; c.setNotice(`Recording is unavailable: ${error.message}`, "error"); }
   }
 
   function cancelRecording() { if (c.state.recorder?.state === "recording") { c.state.captureDiscarded = true; c.state.recorder.stop(); refreshRecordingUI(); } }
@@ -54,7 +57,7 @@ export function createCaptureActions(c) {
       if (!author) throw new Error("The selected reviewer is no longer eligible.");
       const blob = new Blob(c.state.chunks, { type: recorder?.mimeType || "audio/webm" }); if (!blob.size) throw new Error("The microphone returned an empty recording.");
       c.state.captureState = "saving";
-      const result = await c.request("/api/captures", { method: "POST", headers: { ...c.actionHeaders(blob.type), "X-Capture-Author": author.id, "X-Capture-Duration-Ms": String(Math.max(0, Date.now() - c.state.captureStartedAt)), "X-Capture-Name": `Local take ${new Date(c.state.captureStartedAt).toLocaleTimeString()}`, "X-Capture-Started-At": new Date(c.state.captureStartedAt).toISOString() }, body: blob });
+      const result = await c.request("/api/captures", { method: "POST", headers: { ...c.actionHeaders(blob.type), "X-Capture-Author": author.id, "X-Capture-Duration-Ms": String(Math.max(0, Date.now() - c.state.captureStartedAt)), "X-Capture-Name": encodeURIComponent(`Local take ${new Date(c.state.captureStartedAt).toLocaleTimeString()}`), "X-Capture-Started-At": new Date(c.state.captureStartedAt).toISOString() }, body: blob });
       c.state.activeSourceId = result.source_id; await c.load({ quiet: true }); c.setNotice("Local take saved and selected as the active source.", "success");
     } catch (error) { c.setNotice(`Recording could not be saved: ${error.message}`, "error"); }
     finally { stream?.getTracks().forEach((track) => track.stop()); Object.assign(c.state, { recorder: null, chunks: [], captureState: "idle" }); refreshRecordingUI(); }

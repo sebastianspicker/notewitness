@@ -37,7 +37,7 @@ TOUR = (
         "lesson-notes.png",
         "Lesson notes",
         "An evidence-backed projection of the teaching sequence, practice "
-        "tasks, and rights-gated exports.",
+        "tasks, and exports.",
     ),
     (
         "dark-theme.png",

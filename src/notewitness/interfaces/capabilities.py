@@ -279,15 +279,9 @@ CAPABILITIES = (
         "noscribe_parity",
         "v0.1",
         CapabilityLevel.AVAILABLE,
-        "Preflight HTML, text, and WebVTT output through rights and deterministic loss gates.",
+        "Preflight HTML, text, and WebVTT output through operator rights authorization and deterministic loss gates.",
         "notewitness.lessons.transcript_export",
         "Writers are local and tested; wider qualitative-tool interchange remains future work.",
-    ),
-    _capability(
-        "project_domain_lexicon", "research_extension", "v0.1", CapabilityLevel.CONTRACT_READY,
-        "Keep project terminology separate from model tokenizers and adapter prompts.",
-        "notewitness.core.transcription.review.ProjectLexicon",
-        "This is a NoteWitness extension, not a noScribe parity claim.",
     ),
     _capability(
         "synchronized_timeline", "presentation", "v0.1", CapabilityLevel.PROJECTION_AVAILABLE,

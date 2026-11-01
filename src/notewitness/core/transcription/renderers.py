@@ -179,7 +179,11 @@ def _rendered_segments(
         if show_timestamp:
             next_timestamp_us = segment.start_us + timestamp_interval_ms * 1_000
         yield segment, show_timestamp, pause_duration_us
-        previous_end_us = segment.end_us
+        previous_end_us = (
+            segment.end_us
+            if previous_end_us is None
+            else max(previous_end_us, segment.end_us)
+        )
 
 
 def _pause_duration_us(

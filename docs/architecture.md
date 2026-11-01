@@ -109,7 +109,7 @@ flowchart TD
   verify --> suggestions[Atomic append of machine suggestions]
   suggestions --> review[Append-only human review]
   review --> projection[Lesson and transcript projections]
-  projection --> export[Rights-gated private exports]
+  projection --> export[Operator-authorized private exports]
 ```
 
 Raw provider output, normalized machine hypotheses, human review, and derived
@@ -184,7 +184,7 @@ user's permissions.
 Workbench processing stays disabled unless `--runtime-config` names an absolute,
 owner-private JSON file. Configuration version 2 assigns an executable, model,
 version, license, timeout, and bounded parameter object per analysis stage;
-version 1 files are still accepted. The server validates that configuration at
+other versions are rejected. The server validates that configuration at
 startup and exposes only approved capabilities to the browser.
 
 External analysis engines extend the application through the strict

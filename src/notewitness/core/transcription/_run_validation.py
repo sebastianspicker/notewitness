@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import math
 from typing import Any
 
@@ -11,7 +10,6 @@ from notewitness.core.transcription.options import LanguageMode
 from notewitness.core.transcription.shared import (
     _SHA256,
     _freeze_settings,
-    _json_ready,
     _require_bool,
     _require_enum,
     _span_contains,
@@ -137,33 +135,6 @@ def _validate_manifest(
     _validate_manifest_timestamps(manifest)
     _validate_manifest_state(manifest, run_state_type=run_state_type)
     _validate_manifest_failure_and_retry(manifest, run_state_type=run_state_type)
-
-
-def _validate_run_ledger(
-    manifests: tuple[object, ...],
-    *,
-    manifest_type: type[Any],
-) -> None:
-    """Validate immutable retry ancestry for a collection of run manifests."""
-
-    if not manifests or any(not isinstance(run, manifest_type) for run in manifests):
-        raise ValueError("Run ledgers require typed transcription manifests.")
-    by_id = {run.run_id: run for run in manifests}
-    if len(by_id) != len(manifests):
-        raise ValueError("Run ledger IDs must be unique.")
-    for run in manifests:
-        parent_id = run.retry_parent_run_id
-        if parent_id is None:
-            continue
-        parent = by_id.get(parent_id)
-        if parent is None:
-            raise ValueError("Run ledger retry parents must exist.")
-        if not _same_retry_contract(parent, run):
-            raise ValueError(
-                "Retry runs must preserve job, source, adapter, model, settings, "
-                "and runtime fingerprint."
-            )
-    _reject_run_cycles(by_id)
 
 
 def _validate_manifest_identity(manifest: object) -> None:
@@ -384,42 +355,3 @@ def _validate_manifest_failure_and_retry(
         raise ValueError("failure_code is only valid for failed runs.")
     if manifest.retry_parent_run_id == manifest.run_id:
         raise ValueError("A transcription run cannot retry itself.")
-
-
-def _same_retry_contract(parent: object, child: object) -> bool:
-    return _retry_contract(parent) == _retry_contract(child)
-
-
-def _retry_contract(manifest: object) -> tuple[object, ...]:
-    return (
-        manifest.job.as_dict(),
-        manifest.source_checksums,
-        manifest.adapter_id,
-        manifest.adapter_version,
-        manifest.code_artifact,
-        manifest.model_artifacts,
-        manifest.runtime_artifacts,
-        manifest.resolved_model_profile,
-        manifest.runtime_fingerprint_sha256,
-        _json_ready(manifest.effective_settings),
-    )
-
-
-def _reject_run_cycles(by_id: Mapping[str, object]) -> None:
-    visiting: set[str] = set()
-    visited: set[str] = set()
-
-    def visit(run_id: str) -> None:
-        if run_id in visiting:
-            raise ValueError("Run ledger retry ancestry must be acyclic.")
-        if run_id in visited:
-            return
-        visiting.add(run_id)
-        parent_id = by_id[run_id].retry_parent_run_id
-        if parent_id is not None:
-            visit(parent_id)
-        visiting.remove(run_id)
-        visited.add(run_id)
-
-    for run_id in by_id:
-        visit(run_id)

@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import PurePosixPath
 from typing import Any, Mapping
+from urllib.parse import quote
 
 from notewitness.core.evidence.graph import EvidenceGraph
-from notewitness.lessons.actors import is_human_evidence_author
+from notewitness.core.evidence.contract import is_human_evidence_author
 from notewitness.lessons.lesson_notes import LessonNotesProjector
 from notewitness.lessons.review_rules import ReviewError, identifier, index
 from notewitness.projects.media import is_project_media_uri
@@ -139,10 +140,6 @@ def _capture_details_by_source(payload: Mapping[str, Any]) -> dict[str, dict[str
 
 
 def _url_path_segment(value: str) -> str:
-    """Percent-encode UTF-8 without importing a network-capable URL package."""
+    """Percent-encode UTF-8 for one URL path segment."""
 
-    unreserved = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
-    return "".join(
-        chr(byte) if byte in unreserved else f"%{byte:02X}"
-        for byte in value.encode("utf-8")
-    )
+    return quote(value, safe="")

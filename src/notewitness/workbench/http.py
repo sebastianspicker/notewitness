@@ -13,10 +13,12 @@ import threading
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+from notewitness.analysis.local_tools.contracts import LocalToolError
+from notewitness.analysis.media_probe import MediaProbeError
 from notewitness.lessons.actors import TranscriptReviewError
 from notewitness.lessons.review_rules import ReviewError
 from notewitness.lessons.music_export import MusicExportError
-from notewitness.projects.artifacts import LocalArtifactError, TranscriptPublicationError
+from notewitness.projects.artifacts import LocalArtifactError
 from notewitness.projects.media import MediaIngestError
 from notewitness.projects.store import ProjectConflictError, ProjectStore, ProjectStoreError
 
@@ -46,8 +48,9 @@ _POST_ERROR_RESPONSES = (
             TranscriptReviewError,
             ValueError,
             LocalArtifactError,
-            TranscriptPublicationError,
             MusicExportError,
+            MediaProbeError,
+            LocalToolError,
         ),
         HTTPStatus.UNPROCESSABLE_ENTITY,
         None,

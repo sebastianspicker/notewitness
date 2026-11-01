@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import hashlib
 from pathlib import Path
 import threading
+import time
 from typing import Any, Mapping
 
 from notewitness.analysis.suite.adapter import (
@@ -13,6 +14,7 @@ from notewitness.analysis.suite.adapter import (
     AnalysisCLIError,
     AnalysisCLIExecutionError,
     LocalAnalysisCLIAdapter,
+    analysis_generator_parameters,
 )
 from notewitness.analysis.suite.checkpoints import (
     MAX_RESUMABLE_CHUNKS_PER_STAGE,
@@ -38,9 +40,13 @@ from notewitness.core.analysis.analysis import (
 )
 from notewitness.core.analysis.jobs import AnalysisJobSpec, DurableJob
 from notewitness.core.strict_json import is_sha256_hex
-from notewitness.analysis.suite.job_store import JobConflictError, SQLiteJobStore
+from notewitness.analysis.suite.job_store import (
+    JobConflictError,
+    JobStoreError,
+    SQLiteJobStore,
+)
 from notewitness.projects.artifacts import LocalArtifactError
-from notewitness.projects.store import ProjectStore
+from notewitness.projects.store import ProjectStore, ProjectStoreError
 
 
 MAX_RESUMABLE_STAGES = 16
@@ -121,9 +127,10 @@ class ResumableAnalysisCoordinator:
     def enqueue(self, spec: AnalysisJobSpec) -> DurableJob:
         """Create the durable job and its immutable private identity manifest."""
         self._validate_spec(spec)
-        job = self._store.enqueue(spec)
+        # Identity first: a crash before the store row leaves no stranded job,
+        # and re-enqueueing verifies the same manifest.
         self._artifacts.ensure_identity(spec.job_id, self._identity_payload(spec))
-        return job
+        return self._store.enqueue(spec)
 
     def run(self, job_id: str) -> DurableJob | None:
         """Claim, resume, and publish one job without re-running durable stages."""
@@ -141,6 +148,9 @@ class ResumableAnalysisCoordinator:
             return None
         try:
             self._verify_identity(job)
+            # Replays read no inputs, so the sources are re-hashed once per run.
+            for adapter in {step.adapter.settings: step.adapter for step in self._steps}.values():
+                adapter.require_source_identities()
             chunks = self._completed_chunks(job)
             start = self._resume_stage_index(job)
             for index in range(start, len(job.spec.stages)):
@@ -163,26 +173,35 @@ class ResumableAnalysisCoordinator:
                 return self._store.complete(job.spec.job_id, owner_id=self._owner_id)
             require_unique_hypothesis_ids(chunk.batch for chunk in chunks)
             self._publish_once(job, chunks)
+            # The evidence is in the project now, so a late cancel cannot undo it.
             return self._store.complete(
                 job.spec.job_id,
                 owner_id=self._owner_id,
                 last_artifact_id="artifact:analysis-publication",
+                published=True,
             )
         except AnalysisCLICancelled:
             return self._store.complete(job_id, owner_id=self._owner_id)
         except (
             AnalysisCLIError,
             AnalysisEvidenceError,
+            JobStoreError,
             LocalArtifactError,
             OSError,
+            ProjectStoreError,
+            RecursionError,
             ResumableAnalysisError,
             ValueError,
-        ):
-            return self._store.fail(
-                job_id,
-                owner_id=self._owner_id,
-                reason="resumable_analysis_failed",
-            )
+        ) as exc:
+            try:
+                return self._store.fail(
+                    job_id,
+                    owner_id=self._owner_id,
+                    reason="resumable_analysis_failed",
+                )
+            except JobConflictError:
+                # The lease is genuinely lost; its new owner or recovery decides.
+                raise exc from None
 
     def _validate_spec(self, spec: AnalysisJobSpec) -> None:
         if not isinstance(spec, AnalysisJobSpec):
@@ -265,6 +284,7 @@ class ResumableAnalysisCoordinator:
             job.spec.job_id,
             self._owner_id,
             self._lease_seconds,
+            job.lease_expires_at or 0.0,
         )
         renewer.start()
         try:
@@ -384,26 +404,13 @@ class ResumableAnalysisCoordinator:
             for chunk in chunks
             for index, _ in enumerate(chunk.batch.hypotheses, start=1)
         )
-        snapshot = self._project.load()
-        if events_exist(snapshot.payload, expected_events):
+        if events_exist(self._project.load().payload, expected_events):
             return
-        first_settings = self._steps[0].adapter.settings
-        generator_parameters = {
-            "adapter_fingerprint_sha256": self._adapter_fingerprint_sha256,
-            "adapter_license": first_settings.adapter_license,
-            "executable_sha256": self._steps[0].adapter.tool.identity.sha256,
-            "executable_size_bytes": self._steps[0].adapter.tool.identity.size_bytes,
-            "effective_stage_parameters": {
-                step.adapter.stage.value: dict(step.parameters) for step in self._steps
-            },
-            "model_license": first_settings.model_license,
-            "network_requirement": "none",
-            "runtime_fingerprint_sha256": self._runtime_fingerprint_sha256,
-            "score_license": first_settings.score_license,
-            "settings_fingerprint_sha256": self._settings_fingerprint_sha256,
-        }
 
         def publish(payload: dict[str, Any]) -> None:
+            # Checked again under the project lock instead of a compare-and-swap.
+            if events_exist(payload, expected_events):
+                return
             known = tuple(
                 hypothesis.hypothesis_id
                 for chunk in chunks
@@ -432,13 +439,18 @@ class ResumableAnalysisCoordinator:
                         ),
                         raw_artifact_sha256=hashlib.sha256(raw).hexdigest(),
                         raw_artifact_size_bytes=len(raw),
-                        parameters=generator_parameters,
+                        parameters=analysis_generator_parameters(
+                            step.adapter.stage,
+                            step.adapter.tool,
+                            step.adapter.settings,
+                            step.parameters,
+                        ),
                         analysis_run_id=job.spec.job_id,
                     ),
                     known_note_or_pitch_ids=known,
                 )
 
-        self._project.mutate(publish, expected_sha256=snapshot.sha256)
+        self._project.mutate(publish)
 
     def _verify_identity(self, job: DurableJob) -> None:
         self._validate_spec(job.spec)
@@ -449,7 +461,6 @@ class ResumableAnalysisCoordinator:
         first = self._steps[0].adapter.settings
         return {
             "adapter_fingerprint_sha256": spec.adapter_fingerprint_sha256,
-            "created_at": spec.created_at,
             "executable": {
                 "changed_ns": self._steps[0].adapter.tool.identity.changed_ns,
                 "device": self._steps[0].adapter.tool.identity.device,
@@ -530,9 +541,11 @@ class _LeaseRenewer:
         job_id: str,
         owner_id: str,
         lease_seconds: float,
+        lease_expires_at: float,
     ) -> None:
         self._store = store
         self._job_id = job_id
+        self._lease_expires_at = lease_expires_at
         self._owner_id = owner_id
         self._lease_seconds = lease_seconds
         self._interval_seconds = min(lease_seconds / 3, _MAX_LEASE_RENEWAL_SECONDS)
@@ -554,11 +567,19 @@ class _LeaseRenewer:
     def _renew(self) -> None:
         while not self._stopped.wait(self._interval_seconds):
             try:
-                self._store.heartbeat(
+                job = self._store.heartbeat(
                     self._job_id,
                     owner_id=self._owner_id,
                     lease_seconds=self._lease_seconds,
                 )
+                self._lease_expires_at = job.lease_expires_at or 0.0
+            except Exception as exc:
+                # Only lost ownership or an expired lease is terminal; a transient
+                # store error such as ``database is locked`` is retried.
+                if isinstance(exc, JobConflictError) or time.time() >= self._lease_expires_at:
+                    self._failure = exc
+                    self._stopped.set()
+                    return
             except BaseException as exc:
                 self._failure = exc
                 self._stopped.set()

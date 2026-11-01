@@ -97,8 +97,6 @@ def execute_bounded(
             return_code=return_code,
             stdout=stdout,
             stderr=stderr,
-            stdout_truncated=False,
-            stderr_truncated=False,
             duration_ms=max(0, round((time.monotonic() - started) * 1_000)),
             network_isolated=network_isolated,
         )

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 from typing import Callable, Mapping
 
@@ -11,10 +10,10 @@ from notewitness.analysis.suite.adapter import (
     LocalAnalysisCLIAdapter,
     LocalAnalysisCLISettings,
     LocalAnalysisSource,
+    analysis_generator_id,
 )
 from notewitness.analysis.media_probe import FFprobeMediaProbe
 from notewitness.analysis.transcription.whisper_cli import WhisperCLIAdapter
-from notewitness.analysis.suite.jobs import analysis_generator_id
 from notewitness.analysis.suite.runtime import (
     LocalAnalysisRunRequest,
     LocalAnalysisRuntime,
@@ -85,8 +84,7 @@ class LocalWorkbenchExecutor:
     ) -> "LocalWorkbenchExecutor":
         payload = read_private_configuration(Path(config_path))
         exact_keys(payload, {"version", "transcription", "analysis"}, {"version"})
-        version = payload.get("version")
-        if version not in {1, 2}:
+        if payload.get("version") != 2:
             raise WorkbenchRuntimeConfigurationError(
                 "runtime_config_version_unsupported"
             )
@@ -98,11 +96,7 @@ class LocalWorkbenchExecutor:
             else None
         )
         analysis = (
-            analysis_profile(
-                require_object(analysis_raw, "analysis"),
-                ProjectStore(project_root).root,
-                version=version,
-            )
+            analysis_profile(require_object(analysis_raw, "analysis"))
             if analysis_raw is not None
             else None
         )
@@ -292,34 +286,28 @@ class LocalWorkbenchExecutor:
         media: LocalAnalysisSource,
     ) -> LocalAnalysisStep:
         parameters = analysis_parameters(profile, provider)
-        parameters_sha256 = hashlib.sha256(
-            json.dumps(
-                parameters,
-                allow_nan=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            ).encode("utf-8")
-        ).hexdigest()
+        settings = LocalAnalysisCLISettings(
+            working_directory=self.project_root,
+            media=media,
+            model=provider.model,
+            model_license=provider.model_license,
+            adapter_license=provider.adapter_license,
+            timeout_seconds=provider.timeout_seconds,
+            score=profile.score,
+            score_license=profile.score_license,
+        )
         adapter = LocalAnalysisCLIAdapter(
             provider.tool,
             stage=provider.stage,
             version=provider.adapter_version,
             generator_id=analysis_generator_id(
                 provider.stage,
-                provider.tool.identity.sha256,
-                provider.model.sha256,
-                parameters_sha256,
+                provider.tool,
+                provider.adapter_version,
+                settings,
+                parameters,
             ),
-            settings=LocalAnalysisCLISettings(
-                working_directory=self.project_root,
-                media=media,
-                model=provider.model,
-                model_license=provider.model_license,
-                adapter_license=provider.adapter_license,
-                timeout_seconds=provider.timeout_seconds,
-                score=profile.score,
-                score_license=profile.score_license,
-            ),
+            settings=settings,
         )
         return LocalAnalysisStep(adapter, parameters)
 

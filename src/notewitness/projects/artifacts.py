@@ -23,38 +23,12 @@ class LocalArtifactError(RuntimeError):
     pass
 
 
-class TranscriptPublicationError(RuntimeError):
-    """Raised when a rendered transcript cannot be published privately."""
-
-
 def publish_new_private_text(path: str | Path, contents: str) -> Path:
     """Exclusively create an owner-private UTF-8 transcript without symlinks."""
 
-    if not isinstance(contents, str):
-        raise TranscriptPublicationError("Transcript contents must be text.")
-    encoded = contents.encode("utf-8")
-    if len(encoded) > MAX_TRANSCRIPT_BYTES:
-        raise TranscriptPublicationError("Transcript output exceeds its byte limit.")
-    try:
-        return write_new_private_bytes(
-            path,
-            encoded,
-            maximum_bytes=MAX_TRANSCRIPT_BYTES,
-        )
-    except LocalArtifactError as exc:
-        message = str(exc)
-        translations = {
-            "Artifact parent must be an existing, non-symlink directory":
-                "Transcript parent must be an existing, non-symlink directory",
-            "Artifact parent must deny group and other access":
-                "Transcript parent must deny group and other access",
-            "Invalid artifact path": "Invalid transcript path",
-            "Refusing to replace existing artifact path":
-                "Refusing to replace existing transcript path",
-        }
-        for source, target in translations.items():
-            message = message.replace(source, target)
-        raise TranscriptPublicationError(message) from exc
+    return write_new_private_bytes(
+        path, contents.encode("utf-8"), maximum_bytes=MAX_TRANSCRIPT_BYTES
+    )
 
 
 def write_new_private_json(path: str | Path, payload: Mapping[str, Any]) -> Path:

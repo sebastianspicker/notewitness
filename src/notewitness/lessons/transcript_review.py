@@ -8,16 +8,18 @@ import hashlib
 from typing import Any, Mapping
 from uuid import uuid4
 
+from notewitness.core.evidence.contract import is_human_evidence_author
 from notewitness.lessons.actors import (
     MAX_ACTOR_FIELD_CHARS,
     TranscriptReviewError,
-    is_human_evidence_author,
+)
+from notewitness.lessons.review_rules import (
+    MAX_REPLACEMENT_TEXT_CHARS,
+    MAX_REVIEW_REASON_CHARS,
+    ReviewError,
+    require_evidence_not_decided,
 )
 from notewitness.projects.store import ProjectStore
-
-
-MAX_REVIEW_REASON_CHARS = 4_000
-MAX_REPLACEMENT_TEXT_CHARS = 20_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +129,10 @@ def accept_transcript_events(
                 )
             if decision.event_id in already_accepted:
                 raise TranscriptReviewError("Transcript suggestion was already accepted.")
+            try:
+                require_evidence_not_decided(payload, decision.event_id)
+            except ReviewError as error:
+                raise TranscriptReviewError(str(error)) from error
             effective_actor_id = decision.actor_id or str(source.get("actor_id"))
             if effective_actor_id not in actors:
                 raise TranscriptReviewError("Accepted speaker is not a project actor.")

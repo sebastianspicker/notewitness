@@ -44,7 +44,7 @@ def parse_batch(
     try:
         payload = json.loads(raw, object_pairs_hook=unique_object)
         payload = json_value(payload, "output")
-    except (json.JSONDecodeError, AnalysisCLIError) as exc:
+    except (json.JSONDecodeError, RecursionError, AnalysisCLIError) as exc:
         raise AnalysisCLIError("Analysis CLI did not emit valid JSON.") from exc
     expect_keys(
         payload,

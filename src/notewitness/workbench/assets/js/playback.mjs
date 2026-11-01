@@ -2,11 +2,13 @@
 
 import {
   formatTime,
-  list,
   musicalTimeAt,
   sourceDurationSeconds,
+} from "/assets/ui/timeline_utils.mjs";
+import {
+  list,
   sourceName,
-} from "/assets/workbench_ui.mjs";
+} from "/assets/ui/value_utils.mjs";
 
 /**
  * @param {object} c Controller context (state, app, setNotice, refresh*).

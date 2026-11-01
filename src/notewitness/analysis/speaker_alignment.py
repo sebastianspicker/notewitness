@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from notewitness.analysis.runs.publication import append_or_require_equal
 from notewitness.projects.store import ProjectStore
 
 
@@ -67,26 +68,40 @@ def align_speech_to_anonymous_speakers(
             raise SpeakerAlignmentError(
                 f"Existing speaker alignment {relation['id']!r} conflicts."
             )
-    missing = tuple(
-        relation for relation in planned if relation["id"] not in existing
-    )
-    if not missing:
+    if all(relation["id"] in existing for relation in planned):
         return SpeakerAlignmentResult(
             tuple(relation["id"] for relation in planned),
             (),
             snapshot.sha256,
         )
+    added: list[str] = []
 
     def append(payload: dict[str, Any]) -> None:
-        _append_or_require_equal(payload["actors"], _ANNOTATOR)
-        _append_or_require_equal(payload["generators"], _GENERATOR)
-        for relation in planned:
-            _append_or_require_equal(payload["relations"], relation)
+        # Re-plan under the project lock so concurrent edits never fail the call.
+        nonlocal planned
+        planned = _planned_relations(payload)
+        present = {
+            item.get("id") for item in payload["relations"] if isinstance(item, Mapping)
+        }
+        added[:] = [item["id"] for item in planned if item["id"] not in present]
+        if not planned:
+            return
+        for collection, records in (
+            ("actors", (_ANNOTATOR,)),
+            ("generators", (_GENERATOR,)),
+            ("relations", planned),
+        ):
+            append_or_require_equal(
+                payload[collection],
+                records,
+                error_type=SpeakerAlignmentError,
+                collection=collection,
+            )
 
-    updated = store.mutate(append, expected_sha256=snapshot.sha256)
+    updated = store.mutate(append)
     return SpeakerAlignmentResult(
         tuple(relation["id"] for relation in planned),
-        tuple(relation["id"] for relation in missing),
+        tuple(added),
         updated.sha256,
     )
 
@@ -124,18 +139,28 @@ def _planned_relations(payload: Mapping[str, Any]) -> tuple[dict[str, Any], ...]
         and event.get("review_status") == "machine_suggested"
         and _anonymous_cluster(event) is not None
     )
+    # Build each speaker event's spans once; sorted by earliest start so the
+    # scan per speech event can stop at the first event starting after it ends.
+    speaker_spans = sorted(
+        (
+            (min(start for _, _, start, _ in spans), spans, event)
+            for event in diarization
+            if (spans := _event_spans(event, targets))
+        ),
+        key=lambda item: item[0],
+    )
     planned: list[dict[str, Any]] = []
     for speech_event in sorted(speech, key=lambda item: str(item["id"])):
         speech_spans = _event_spans(speech_event, targets)
         speech_duration = sum(end - start for _, _, start, end in speech_spans)
         if speech_duration <= 0:
             continue
+        speech_end = max(end for _, _, _, end in speech_spans)
         scored: list[tuple[int, Mapping[str, Any], str, int]] = []
-        for speaker_event in diarization:
-            overlap = _total_overlap(
-                speech_spans,
-                _event_spans(speaker_event, targets),
-            )
+        for first_start, spans, speaker_event in speaker_spans:
+            if first_start >= speech_end:
+                break
+            overlap = _total_overlap(speech_spans, spans)
             if overlap > 0:
                 scored.append(
                     (
@@ -277,16 +302,3 @@ def _total_overlap(
         for right_source, right_stream, right_start, right_end in right
         if (left_source, left_stream) == (right_source, right_stream)
     )
-
-
-def _append_or_require_equal(
-    collection: list[dict[str, Any]], record: Mapping[str, Any]
-) -> None:
-    matches = [item for item in collection if item.get("id") == record["id"]]
-    expected = dict(record)
-    if not matches:
-        collection.append(expected)
-    elif len(matches) != 1 or matches[0] != expected:
-        raise SpeakerAlignmentError(
-            f"Existing record {record['id']!r} has incompatible meaning."
-        )

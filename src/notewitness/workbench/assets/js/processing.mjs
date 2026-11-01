@@ -1,9 +1,12 @@
 /** Local processing job queue: poll, enqueue, cancel, retry. */
 
 import {
+  ACTIVE_JOB_STATES,
   list,
+} from "/assets/ui/value_utils.mjs";
+import {
   processingTerminalTransition,
-} from "/assets/workbench_ui.mjs";
+} from "/assets/ui/processing.mjs";
 
 const JOB_POLL_MILLISECONDS = 2000;
 
@@ -11,6 +14,7 @@ const JOB_POLL_MILLISECONDS = 2000;
  * @param {object} c Controller context (state, app, request, actionHeaders, …).
  */
 export function createProcessing(c) {
+  let polling = false;
   async function enqueueJob() {
     const selector = c.app.querySelector("[data-run-kind]");
     const kind = selector?.value;
@@ -39,11 +43,15 @@ export function createProcessing(c) {
       });
       await pollJobs({ rethrowErrors: true });
     });
-    if (saved) c.setNotice(actionName === "cancel" ? "Cancellation requested." : "Processing queued for a safe retry.", "success");
+    if (saved) {
+      c.setNotice(actionName === "cancel" ? "Cancellation requested." : "Processing queued for a safe retry.", "success");
+      if (actionName === "retry") startJobPolling();
+    }
   }
 
   async function pollJobs({ rethrowErrors = false } = {}) {
-    if (!c.state.data) return;
+    if (!c.state.data || polling) return;
+    polling = true;
     try {
       const previous = list(c.state.processing?.jobs);
       const processing = await c.request("/api/jobs");
@@ -58,13 +66,15 @@ export function createProcessing(c) {
           transition === "completed" ? "success" : "warning",
         );
       } else c.refreshProcessing();
-      if (!list(c.state.processing.jobs).some((job) => ["queued", "running", "cancelling"].includes(job.state))) {
+      if (!list(c.state.processing.jobs).some((job) => ACTIVE_JOB_STATES.includes(job.state))) {
         stopJobPolling();
       }
     } catch (error) {
       stopJobPolling();
       c.setNotice(`Processing status is unavailable: ${error.message}`, "error");
       if (rethrowErrors) throw error;
+    } finally {
+      polling = false;
     }
   }
 

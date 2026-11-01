@@ -1,4 +1,5 @@
-import { encodeId, humanActor, list, reviewItems } from "/assets/workbench_ui.mjs";
+import { encodeId, humanActor, list } from "/assets/ui/value_utils.mjs";
+import { reviewItems } from "/assets/ui/filter_utils.mjs";
 
 export function createReviewActions(c) {
   function attributedActorId(eventId) {

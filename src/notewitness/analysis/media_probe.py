@@ -82,8 +82,6 @@ class FFprobeMediaProbe:
         )
         if content_stat_identity(source.stat()) != content_stat_identity(source_before):
             raise MediaProbeError("Media source changed while ffprobe was running.")
-        if result.stdout_truncated:
-            raise MediaProbeError("FFprobe output exceeded its bounded result size.")
         payload = _load_object(result.stdout)
         streams = payload.get("streams")
         media_format = payload.get("format")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Any, Iterable, Mapping
 
 from notewitness.core.evidence.contract import (
@@ -49,14 +50,20 @@ def require_non_empty_string(
         issues.append(ValidationIssue(path, "must be a non-empty string"))
 
 
+_RFC3339 = re.compile(
+    r"\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})",
+    re.ASCII,
+)
+
+
 def validate_datetime(
     value: object, path: str, issues: list[ValidationIssue]
 ) -> None:
-    if not isinstance(value, str):
+    if not isinstance(value, str) or not _RFC3339.fullmatch(value):
         issues.append(ValidationIssue(path, "must be an RFC 3339 date-time"))
         return
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.upper().replace("Z", "+00:00"))
     except ValueError:
         issues.append(ValidationIssue(path, "must be an RFC 3339 date-time"))
         return

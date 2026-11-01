@@ -32,6 +32,10 @@ BANNED_ROOT_DIRECTORIES = frozenset(
         "projects",
     }
 )
+# Checked at any depth; the root-only list above must not apply nested (src/notewitness/projects is a package).
+BANNED_ANY_DEPTH_DIRECTORIES = frozenset(
+    {".agent", ".agents", ".ai", ".claude", ".codex", ".cursor", ".serena", "media", "models"}
+)
 BANNED_FILENAMES = frozenset(
     {
         ".ds_store",
@@ -54,13 +58,18 @@ BANNED_SUFFIXES = frozenset(
         ".aac",
         ".aif",
         ".aiff",
+        ".avi",
         ".bak",
+        ".bin",
         ".caf",
+        ".ckpt",
         ".db",
         ".flac",
+        ".gguf",
         ".key",
         ".log",
         ".m4a",
+        ".m4v",
         ".mei",
         ".mid",
         ".midi",
@@ -68,21 +77,30 @@ BANNED_SUFFIXES = frozenset(
         ".mov",
         ".mp3",
         ".mp4",
+        ".mpeg",
+        ".mpg",
         ".mscz",
         ".musicxml",
         ".mxl",
+        ".oga",
         ".ogg",
+        ".ogv",
+        ".onnx",
         ".opus",
         ".orig",
         ".p12",
         ".pem",
         ".pfx",
+        ".pt",
+        ".pth",
         ".rej",
+        ".safetensors",
         ".sqlite",
         ".sqlite3",
         ".tmp",
         ".wav",
         ".webm",
+        ".wma",
     }
 )
 SENSITIVE_TEXT_PATTERNS = (
@@ -166,6 +184,8 @@ def candidate_paths() -> tuple[Path, ...]:
 def path_violations(path: Path) -> tuple[str, ...]:
     problems: list[str] = []
     if path.parts and path.parts[0].casefold() in BANNED_ROOT_DIRECTORIES:
+        problems.append("local or private directory")
+    if any(part.casefold() in BANNED_ANY_DEPTH_DIRECTORIES for part in path.parts[:-1]):
         problems.append("local or private directory")
     if path.name.casefold() in BANNED_FILENAMES:
         problems.append("disallowed local or development-process file")

@@ -8,7 +8,7 @@ specific roles such as ``music analysis researcher``.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
 from notewitness.projects.store import ProjectSnapshot, ProjectStore
 
@@ -18,30 +18,6 @@ MAX_ACTOR_FIELD_CHARS = 256
 
 class TranscriptReviewError(RuntimeError):
     pass
-
-
-INELIGIBLE_HUMAN_EVIDENCE_ROLES = frozenset(
-    {
-        "",
-        "analysis",
-        "machine",
-        "system",
-        "unattributed",
-        "unknown",
-    }
-)
-
-
-def is_human_evidence_author(actor: Mapping[str, Any] | None) -> bool:
-    """Return whether an explicit project actor may author human evidence."""
-
-    if actor is None:
-        return False
-    role = actor.get("role")
-    return (
-        isinstance(role, str)
-        and role.strip().casefold() not in INELIGIBLE_HUMAN_EVIDENCE_ROLES
-    )
 
 
 def add_project_actor(

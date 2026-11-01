@@ -28,7 +28,9 @@ Judge the workbench on whether an authorized user can:
 2. tell machine suggestions apart from accepted evidence;
 3. correct evidence without overwriting earlier records;
 4. resume interrupted local processing without repeating completed work;
-5. export only the evidence and media derivatives the recorded rights allow.
+5. export evidence only after the operator explicitly authorizes it and
+   acknowledges the projection-loss preview; rights records are kept but not
+   interpreted at export time.
 
 The current alpha has not demonstrated those outcomes in a user study.
 

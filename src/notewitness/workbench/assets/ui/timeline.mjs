@@ -1,14 +1,18 @@
 import {
   escapeHTML,
-  formatTime,
   itemDuration,
   itemSource,
   itemTime,
   list,
-  renderDualClocks,
+} from "/assets/ui/value_utils.mjs";
+import {
+  formatTime,
   sourceDurationSeconds,
   timelineTicks,
-} from "/assets/ui/utils.mjs";
+} from "/assets/ui/timeline_utils.mjs";
+import {
+  renderDualClocks,
+} from "/assets/ui/render_utils.mjs";
 
 export function renderTimeline(state) {
   const sourceId = state.activeSourceId;

@@ -35,6 +35,37 @@ def validate_revisions(
             record.get("parent_revision_ids"), path, revisions, issues
         )
         _validate_revision_values(record, path, issues)
+    _validate_revision_cycles(revisions, issues)
+
+
+def _validate_revision_cycles(
+    revisions: RecordIndex, issues: list[ValidationIssue]
+) -> None:
+    done: set[str] = set()
+    for start in revisions:
+        stack, on_path = [(start, iter(_parent_ids(revisions[start])))], {start}
+        while stack and start not in done:
+            node, parents = stack[-1]
+            parent = next(parents, None)
+            if parent is None:
+                stack.pop()
+                on_path.discard(node)
+                done.add(node)
+            elif parent in on_path:
+                issues.append(
+                    ValidationIssue(
+                        record_path("revisions", node),
+                        f"parent_revision_ids form a cycle through {parent!r}",
+                    )
+                )
+            elif parent in revisions and parent not in done:
+                on_path.add(parent)
+                stack.append((parent, iter(_parent_ids(revisions[parent]))))
+
+
+def _parent_ids(record: Mapping[str, Any]) -> list[str]:
+    parents = record.get("parent_revision_ids")
+    return [item for item in parents if isinstance(item, str)] if isinstance(parents, list) else []
 
 
 def _validate_revision_shape(
@@ -82,6 +113,10 @@ def _validate_revision_references(
     if not isinstance(revised_record_id, str) or revised_record_id not in all_ids:
         issues.append(
             ValidationIssue(f"{path}.record_id", "references an unknown record")
+        )
+    elif not all_ids[revised_record_id].startswith(("$.events[", "$.relations[")):
+        issues.append(
+            ValidationIssue(f"{path}.record_id", "must reference an event or relation")
         )
     author_id = record.get("author_id")
     if not isinstance(author_id, str) or author_id not in actors:

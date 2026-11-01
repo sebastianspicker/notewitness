@@ -157,12 +157,18 @@ def _midi_intervals_by_pitch(
 ) -> dict[int, list[tuple[int, int, int]]]:
     by_pitch: dict[int, list[tuple[int, int, int]]] = {}
     for note in notes:
-        start = _rounded_tick(note.start_us)
-        end = max(start + 1, _rounded_tick(note.start_us + note.duration_us))
+        start, end = _tick_interval(note)
+        # A note-on with velocity 0 is a note-off in MIDI, so clamp to 1.
+        velocity = 96 if note.velocity is None else max(1, note.velocity)
         by_pitch.setdefault(_rounded_midi_pitch(note), []).append(
-            (start, end, note.velocity if note.velocity is not None else 96)
+            (start, end, velocity)
         )
     return by_pitch
+
+
+def _tick_interval(note: _SymbolicNote) -> tuple[int, int]:
+    start = _rounded_tick(note.start_us)
+    return start, max(start + 1, _rounded_tick(note.start_us + note.duration_us))
 
 
 def _merge_pitch_intervals(
@@ -201,10 +207,10 @@ def overlapping_same_pitch_ids(
         active_ids: list[str] = []
         for note in sorted(
             candidates,
-            key=lambda item: (item.start_us, item.duration_us, item.event_id),
+            key=lambda item: (*_tick_interval(item), item.event_id),
         ):
-            end = note.start_us + note.duration_us
-            if note.start_us < active_end:
+            start, end = _tick_interval(note)
+            if start < active_end:
                 affected.extend(active_ids)
                 affected.append(note.event_id)
                 active_ids.append(note.event_id)

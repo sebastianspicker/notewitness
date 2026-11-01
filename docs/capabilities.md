@@ -15,7 +15,7 @@ leaves out. The [README](../README.md) summarizes it, and
   and instrument-activity bridges.
 - Deterministic, run-aware speech-to-anonymous-speaker alignment, plus
   source-aware private CSV/MIDI note export and HTML/TXT/WebVTT transcript
-  export behind explicit rights and projection-loss gates.
+  export behind explicit operator rights authorization and projection-loss gates.
 - SQLite-backed resumable analysis jobs with leases, heartbeats, bounded
   continuation chunks, cancellation, checkpoints, raw replay, exact executable
   checks around every stage, and identity checks before resume.

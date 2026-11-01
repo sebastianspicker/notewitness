@@ -1,18 +1,24 @@
 import {
   encodeId,
   escapeHTML,
-  formatTime,
   humanActor,
   itemDuration,
   itemSource,
   itemTime,
   list,
+  sourceName,
+} from "/assets/ui/value_utils.mjs";
+import {
+  formatTime,
+  sourceDurationSeconds,
+} from "/assets/ui/timeline_utils.mjs";
+import {
   renderActorAttributionOptionsHTML,
   renderConfidence,
+} from "/assets/ui/render_utils.mjs";
+import {
   selectedReviewItem,
-  sourceDurationSeconds,
-  sourceName,
-} from "/assets/ui/utils.mjs";
+} from "/assets/ui/filter_utils.mjs";
 
 export function renderContextInspector(state) {
   const lesson = state.data?.lesson || {};

@@ -225,7 +225,7 @@ _no_duplicates = reject_duplicate_keys(lambda key: ValueError(f"duplicate object
 def _parse_payload(raw: bytes) -> dict[str, Any]:
     try:
         payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicates)
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError) as exc:
         raise ProjectStoreError(f"project document contains invalid JSON: {exc}") from exc
     if not isinstance(payload, dict):
         raise ProjectStoreError("project document must be a JSON object")

@@ -21,7 +21,6 @@ from notewitness.core.transcription._run_validation import (
     _validate_manifest,
     _validate_resolved_model_profile,
     _validate_resolved_run_artifact,
-    _validate_run_ledger,
     _validate_source_checksum,
 )
 
@@ -145,16 +144,6 @@ class TranscriptionRunManifest:
 
     def as_dict(self) -> dict[str, Any]:
         return _json_ready(asdict(self))
-
-
-@dataclass(frozen=True, slots=True)
-class TranscriptionRunLedger:
-    """Validate retry ancestry as one acyclic, immutable run collection."""
-
-    manifests: tuple[TranscriptionRunManifest, ...]
-
-    def __post_init__(self) -> None:
-        _validate_run_ledger(self.manifests, manifest_type=TranscriptionRunManifest)
 
 
 @dataclass(frozen=True, slots=True)

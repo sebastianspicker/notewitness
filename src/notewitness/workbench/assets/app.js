@@ -33,7 +33,7 @@ c.app.addEventListener("input", events.handleInput);
 c.app.addEventListener("submit", events.handleSubmit);
 c.app.addEventListener("cancel", (event) => {
   if (event.target.matches("[data-editor-dialog]")) { event.preventDefault(); c.closeDialog(); }
-});
+}, true);
 document.addEventListener("keydown", events.handleKeydown);
 window.addEventListener("beforeunload", () => {
   c.stopJobPolling(); state.tuner?.stop(); c.stopMetronome();

@@ -5,6 +5,45 @@ identifiers.
 
 ## [Unreleased]
 
+- Honor human review decisions everywhere: `review-accept` refuses a
+  suggestion that was already rejected; transcript and music exports skip
+  rejected suggestions; rejected speaker alignments no longer label speakers;
+  and lesson notes, key moments, and practice tasks show the latest revised
+  text.
+- Fix browser recordings being lost when the browser language produces a
+  non-Latin-1 time string (the capture name is now percent-encoded).
+- Return 422 with the probe's reason instead of dropping the connection when a
+  workbench import is rejected by ffprobe or a local tool.
+- Generator IDs for local analysis and Whisper runs now hash the complete
+  generator record, so a second run with different stages, spans, license
+  text, code version, or checkpoint name no longer fails at publication. New
+  runs get new generator IDs; existing records are unchanged.
+- Analysis jobs: re-enqueueing the same job is idempotent, transient lease
+  errors are retried, a cancel that arrives after publication no longer marks
+  the job cancelled, failures no longer leave jobs running until lease
+  expiry, and `analysis-job` lists the newest jobs first.
+- Whisper output whose final end time overshoots the media duration by up to
+  100 ms is clamped instead of failing the run; transcripts above the
+  2,000-segment graph bound still write their requested export and report
+  where the transcript was kept.
+- Evidence validation now rejects revision parent cycles, revisions of records
+  other than events and relations, non-human adjudicators, and timestamps that
+  are not RFC 3339.
+- Workbench runtime configuration accepts only version 2; version 1 files are
+  rejected with `runtime_config_version_unsupported`.
+- Workbench UI: key-moment time buttons seek to the right time, retry resumes
+  status polling, Esc closes dialogs for good, conflict errors keep their
+  reason, the tempo survives reloads, and millisecond timecodes round
+  correctly.
+- The public-hygiene gate also blocks common video and model-weight formats
+  and private folder names at any depth; CI pins Node with `actions/setup-node`.
+- Remove unused transcription and analysis contracts (project lexicon,
+  speaker-correction, queue-plan and run-ledger types, six unproduced
+  hypothesis types) and the `project_domain_lexicon` capability entry.
+- Describe exports accurately: they are gated by explicit operator
+  authorization and the loss preview; rights records are not interpreted at
+  export time.
+
 - Harden local boundaries found by the repository security scan: port-scoped
   workbench header sessions and source-bound media capabilities, bounded
   pre-authentication HTTP handlers, captured media-copy budgets, trusted SQLite
