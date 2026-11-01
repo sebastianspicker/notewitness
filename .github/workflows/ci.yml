@@ -1,7 +1,7 @@
 name: verify
 
 on:
-  push:
+  workflow_dispatch:
   pull_request:
 
 permissions:
@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   test:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -27,6 +28,7 @@ jobs:
           TMPDIR="$verify_tmp_dir" bash scripts/verify.sh
 
   package:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]')
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0

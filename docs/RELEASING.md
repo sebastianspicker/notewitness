@@ -44,8 +44,8 @@ protocol accepts only `--request request.json`. Also import
 top-level browser assets checked by CI are present.
 
 Run the complete gate again on the exact candidate commit, and require the
-GitHub Actions workflow to pass. Any change after verification creates a new
-candidate.
+manually dispatched GitHub Actions verification workflow to pass. Any change
+after verification creates a new candidate.
 
 ## Publish
 
@@ -53,7 +53,8 @@ After approval:
 
 1. Create the annotated version tag on the verified commit.
 2. Push the commit and tag.
-3. Wait for the required GitHub checks.
+3. Manually dispatch verification for the intended revision and require the
+   hosted checks to pass.
 4. Create a GitHub prerelease from the matching `CHANGELOG.md` entry.
 5. Verify the public file list, source archive, package metadata, and license.
 
@@ -84,8 +85,10 @@ The README and the generated `tour.html` embed the committed captures under
 and review every image for private content before staging, because the
 public-hygiene gate checks filenames but not image contents.
 
-A push to `main` that affects the demo inputs builds and deploys the artifact. A
-maintainer may instead use the workflow's manual dispatch. After deployment, open
+The Pages workflow builds and deploys only after a maintainer manually
+dispatches it on the default branch. Pushes and pull requests never publish
+the demo. Generic verification is automatic only for Dependabot-authored pull
+requests; other candidates need a manual verification run. After deployment, open
 the environment URL reported by GitHub Actions, confirm the published
 `release.json` names the candidate revision, and repeat the primary interaction
 smoke test. Preparing the artifact locally does not authorize a push or Pages

@@ -234,6 +234,10 @@ a static screenshot tour (`tour.html`) built from the committed captures in
 local processing, persist a project, or export. They demonstrate the interface;
 they are not a deployment of the private workbench.
 
+Generic CI verifies Dependabot-authored pull requests or manual dispatches.
+The Pages build and deployment require a manual dispatch on the default
+branch; ordinary pushes and pull requests do not publish either artifact.
+
 ## Invariants and non-goals
 
 - Source rights and provenance remain explicit at every evidence boundary.

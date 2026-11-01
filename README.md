@@ -1,7 +1,5 @@
 # NoteWitness
 
-[![verify](https://github.com/sebastianspicker/notewitness/actions/workflows/ci.yml/badge.svg)](https://github.com/sebastianspicker/notewitness/actions/workflows/ci.yml)
-[![deploy mock-data demo](https://github.com/sebastianspicker/notewitness/actions/workflows/pages.yml/badge.svg)](https://github.com/sebastianspicker/notewitness/actions/workflows/pages.yml)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
@@ -10,9 +8,31 @@ artistic research. Recorded media, machine hypotheses, human review decisions,
 and exports stay separate records, so every conclusion remains traceable to the
 source span it came from.
 
-> **Status: unreleased alpha.** File formats, the command-line interface, and
-> workbench routes can change before a stable release. Testers: read the
-> [known issues](ALPHA_KNOWN_ISSUES.md) first.
+<details>
+<summary>Status and limitations</summary>
+
+NoteWitness is independent research software for keeping recorded music
+lessons, machine hypotheses and human review decisions traceable to their
+sources. Developed independently alongside my main professional work. This
+unreleased alpha is a work in progress and a starting point for adaptation;
+formats, command-line interfaces and workbench routes may change. Read the
+[known issues](ALPHA_KNOWN_ISSUES.md) and keep original recordings
+separately.
+
+**Disclaimer.** Machine hypotheses require human review and are not forensic
+proof, verified accounts of events or validated assessments of teaching. You
+are responsible for recording permissions, sensitive data and the
+conclusions you draw or export.
+
+</details>
+
+```mermaid
+flowchart LR
+  Source[Local recording and source span] --> Hypothesis[Machine suggestion]
+  Hypothesis --> Review[Human accepts, revises or rejects]
+  Review --> Record[Separate review decision]
+  Record --> Export[Rights-checked evidence export]
+```
 
 ## Screenshot tour
 
