@@ -10,7 +10,8 @@ specific contracts and procedures.
   explicitly out of scope.
 - [Product guidance](product.md) — who NoteWitness is for and the interface
   rules it follows.
-- [Architecture](architecture.md) — components, dependency direction, and trust
+- [Architecture](architecture.md) — what runs where, what happens when you
+  review or process, the data model, dependency direction, and trust
   boundaries.
 
 ## Run and operate

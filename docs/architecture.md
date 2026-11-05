@@ -8,22 +8,231 @@ on GitHub Pages.
 
 ## System context
 
+Who uses NoteWitness, and what does it talk to?
+
 ```mermaid
 flowchart LR
-  operator[Local operator] --> cli[NoteWitness CLI]
-  operator --> browser[Bundled browser UI]
-  browser -->|session-authenticated loopback HTTP| workbench[Workbench]
-  cli --> application[Project, analysis, and lesson features]
-  workbench --> application
-  application --> project[(Owner-private project directory)]
-  application -->|bounded invocation| tools[Approved local tools and models]
-  application -.->|selected text only; explicit authorization| openai[OpenAI Responses API]
+  operator((Operator))
+  subgraph machine [Operator's machine]
+    browser[Browser UI]
+    subgraph proc [notewitness process]
+      cli[CLI]
+      workbench[Workbench server]
+      features[projects / analysis / lessons]
+    end
+    project[(Project directory)]
+    tools[Approved local tools]
+  end
+  openai[OpenAI Responses API]
+  operator -->|commands| cli
+  operator -->|clicks| browser
+  browser -->|"loopback HTTP + session"| workbench
+  cli -->|calls| features
+  workbench -->|calls| features
+  features -->|"read / atomic write"| project
+  features -->|"subprocess, network denied"| tools
+  features -.->|"selected text, opt-in"| openai
+  classDef focus fill:#fde68a,stroke:#b45309,color:#1f2937
+  class features focus
 ```
 
 The CLI and the workbench compose the same project, analysis, and lesson
 features. The browser holds no separate authority: it can call only the
 operations the loopback server exposes, and it cannot supply executable, model,
-score, or arbitrary filesystem paths.
+score, or arbitrary filesystem paths. The OpenAI edge is the only network
+traffic and stays off unless the project policy and the operator allow it.
+
+Where in the code: [interfaces/cli/main.py](../src/notewitness/interfaces/cli/main.py),
+[workbench/server.py](../src/notewitness/workbench/server.py),
+[lessons/openai_responses.py](../src/notewitness/lessons/openai_responses.py).
+
+## How it runs
+
+What runs where once `notewitness workbench <project>` starts?
+
+```mermaid
+flowchart TB
+  subgraph browser [Browser tab]
+    js["app.js + js/*.mjs"]
+  end
+  subgraph proc [notewitness workbench process]
+    main["serve_workbench<br/>main thread"]
+    handlers["WorkbenchRequestHandler<br/>one thread per request"]
+    worker["WorkbenchProcessingService<br/>worker thread"]
+  end
+  subgraph disk [Project directory]
+    pj[(project.json)]
+    jobs[(runs/workbench-jobs.sqlite)]
+    runs[(runs/ run folders)]
+  end
+  child["Tool subprocess<br/>sandbox-exec, no network"]
+  main -->|"accepts on 127.0.0.1"| handlers
+  js -->|"GET /api/workbench, POST /api/..."| handlers
+  handlers -->|"ProjectStore.mutate"| pj
+  handlers -->|"enqueue job"| jobs
+  jobs -.->|"claim_next"| worker
+  worker -->|"run approved tool"| child
+  child -->|"raw output"| runs
+  worker -->|"integrate run"| pj
+```
+
+`serve_workbench` builds a `LocalWorkbenchServer` (a standard-library
+`ThreadingHTTPServer`) bound to `127.0.0.1`, opens the browser on a single-use
+launch URL, and serves until Ctrl-C. Every request gets its own handler thread;
+reads build a fresh snapshot from `project.json`, writes go through
+`ProjectStore.mutate`. Only when `--runtime-config` is given does the server
+create a `WorkbenchProcessingService`, which takes the project's processing
+lock and starts one background worker thread. That worker claims jobs from
+SQLite and launches each approved tool as a bounded child process. There is no
+separate daemon, database server, or build step: the browser assets are static
+files shipped inside the package.
+
+CLI commands (`init`, `validate`, `analyze-local`, `analysis-job`, ...) run in
+the same packages but as one short-lived process each, with no server.
+
+Where in the code: [workbench/server.py](../src/notewitness/workbench/server.py),
+[workbench/http.py](../src/notewitness/workbench/http.py),
+[workbench/processing.py](../src/notewitness/workbench/processing.py),
+[workbench/jobs.py](../src/notewitness/workbench/jobs.py),
+[analysis/local_tools/runner.py](../src/notewitness/analysis/local_tools/runner.py).
+
+## User journeys
+
+### Accepting a machine suggestion
+
+What happens when a reviewer clicks **Accept** in the review queue?
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as Reviewer
+  participant ui as review_actions.mjs
+  participant http as WorkbenchRequestHandler
+  participant rev as evidence_review.py
+  participant store as ProjectStore
+  participant pj as project.json
+  U->>ui: Click "Accept"
+  ui->>http: POST /api/review/accept (event_id, author, project_sha256)
+  http->>http: Check Host, Origin, session, CSRF
+  http->>rev: accept_evidence_suggestion()
+  rev->>store: mutate(append, expected_sha256)
+  store->>pj: lock, compare hash, validate, atomic replace
+  store-->>rev: new snapshot + sha256
+  rev-->>http: accepted event + revision ids
+  http-->>ui: 201 Created
+  ui->>http: GET /api/workbench
+  http-->>ui: fresh snapshot
+  ui-->>U: Next suggestion focused
+```
+
+The browser sends the hash of the document it was showing (step 2); if anyone
+else changed `project.json` since, step 6 rejects the write with a conflict
+instead of overwriting it. Acceptance never edits the machine event: the
+`append` callback adds a new `human_accepted` event that points back to the
+suggestion through `source_suggestion_id`, plus an `adjudicate` revision. The
+UI then reloads the whole snapshot (step 10) rather than patching local state.
+
+Where in the code: [assets/js/review_actions.mjs](../src/notewitness/workbench/assets/js/review_actions.mjs)
+(`acceptSuggestion`), [workbench/http.py](../src/notewitness/workbench/http.py)
+(`do_POST`, `_dispatch_post`), [workbench/api.py](../src/notewitness/workbench/api.py)
+(`_accept_review`), [lessons/evidence_review.py](../src/notewitness/lessons/evidence_review.py),
+[projects/store.py](../src/notewitness/projects/store.py) (`mutate`),
+[workbench/snapshot.py](../src/notewitness/workbench/snapshot.py) (`project_workbench`).
+
+### Running a transcription job
+
+What happens when the operator starts speech transcription from the workbench?
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as Operator
+  participant ui as processing.mjs
+  participant http as WorkbenchRequestHandler
+  participant svc as WorkbenchProcessingService
+  participant exec as LocalWorkbenchExecutor
+  participant tool as Whisper subprocess
+  participant store as ProjectStore
+  U->>ui: Start transcription
+  ui->>http: POST /api/jobs (kind, source_id)
+  http->>svc: enqueue()
+  svc-->>http: job queued in SQLite
+  http-->>ui: 202 Accepted
+  svc-)exec: worker: claim_next, execute()
+  exec->>tool: BoundedLocalToolRunner.run()
+  tool-->>exec: raw transcript in runs/
+  exec->>exec: seal publication.completed.json
+  exec->>store: integrate_completed_run()
+  store-->>exec: machine suggestions appended
+  loop until job finishes
+    ui->>http: GET /api/jobs
+    http-->>ui: state + progress
+  end
+  ui-->>U: New suggestions in review queue
+```
+
+The HTTP request only queues the job (steps 2–5); the work happens on the
+worker thread (step 6), so a slow model never blocks the UI. The tool writes
+into its own run folder, and nothing reaches `project.json` until the sealed
+envelope is verified and appended in one transaction (steps 9–11). Everything
+the job adds is `machine_suggested`; it shows up in the review queue from the
+previous journey. The analysis-suite stages follow the same shape through
+`LocalWorkbenchExecutor._analyze`.
+
+Where in the code: [assets/js/processing.mjs](../src/notewitness/workbench/assets/js/processing.mjs),
+[workbench/api.py](../src/notewitness/workbench/api.py) (`_enqueue_job`),
+[workbench/processing.py](../src/notewitness/workbench/processing.py) (`enqueue`, `_work_loop`),
+[workbench/executor.py](../src/notewitness/workbench/executor.py) (`execute`, `_transcribe`),
+[analysis/transcription/runtime.py](../src/notewitness/analysis/transcription/runtime.py),
+[analysis/transcription/whisper_cli.py](../src/notewitness/analysis/transcription/whisper_cli.py),
+[analysis/runs/publication.py](../src/notewitness/analysis/runs/publication.py),
+[analysis/runs/integration.py](../src/notewitness/analysis/runs/integration.py).
+
+## Data model
+
+What is stored in `project.json`, and how do the records refer to each other?
+
+```mermaid
+erDiagram
+  RIGHTS ||--o{ SOURCE : "rights_id"
+  SOURCE ||--o{ TARGET : "source_id"
+  TARGET }o--o{ EVENT : "target_ids"
+  GENERATOR ||--o{ EVENT : "generator_id"
+  ACTOR ||--o{ EVENT : "actor_id"
+  RIGHTS ||--o{ EVENT : "rights_id"
+  EVENT ||--o{ RELATION : "ref_id"
+  ACTOR ||--o{ REVISION : "author_id"
+  EVENT ||--o{ REVISION : "record_id"
+```
+
+The document holds eight collections (`COLLECTIONS` in
+`core/evidence/contract.py`). A **source** is a recording with its **rights**
+record; a **target** selects a span of it; an **event** is one observation
+(speech, music, ...) over targets, made by a **generator** (`human`, `machine`
+or `import`) and attributed to an **actor**. **Relations** link events
+(`demonstrates`, `feedback_on`, ...), and **revisions** record every human
+decision against a record. Review status and evidence layer
+(`raw_model_output` → `normalized_hypothesis` → `accepted_annotation`) live on
+each event, which is how machine output and human review stay separate in one
+file. The [JSON Schema](../schemas/v0.1/evidence-graph.schema.json) is the
+full contract.
+
+Other state lives next to the document:
+
+| Path in the project | Holds | Written by |
+|---|---|---|
+| `project.json` | The evidence graph above | `projects/store.py` only |
+| `media/` | Ingested recordings, checksummed | `projects/media.py` |
+| `runs/<run-id>/` | Raw tool output, status files, sealed publication envelope | `analysis/runs/*` |
+| `runs/workbench-jobs.sqlite` | Workbench job queue, attempts, step checkpoints | `workbench/jobs.py` |
+| `runs/analysis-jobs.sqlite` | CLI analysis-suite leases and checkpoints | `analysis/suite/job_store.py` |
+| `exports/` | Operator-authorized transcript and music exports | `lessons/*_export.py` |
+
+Where in the code: [core/evidence/contract.py](../src/notewitness/core/evidence/contract.py),
+[core/evidence/validation.py](../src/notewitness/core/evidence/validation.py),
+[projects/initialize.py](../src/notewitness/projects/initialize.py),
+[examples/synthetic-lesson/project.json](../examples/synthetic-lesson/project.json)
+(a small real document to read alongside).
 
 ## Packages and the authority gradient
 
@@ -59,6 +268,15 @@ and only `lessons` turns it into human evidence or an export.
 | Exports | `core/exports.py` (loss gates), `lessons/music_export*.py`, `lessons/transcript_export.py` |
 | Remote suggestions | `lessons/network.py` (bounded transport), `lessons/openai_responses.py` |
 | Workbench processing | `workbench/runtime_config.py`, `workbench/jobs.py`, `workbench/processing.py`, `workbench/executor.py` |
+
+### Reading order for newcomers
+
+1. [core/evidence/contract.py](../src/notewitness/core/evidence/contract.py): the record types everything else manipulates.
+2. [projects/store.py](../src/notewitness/projects/store.py): how `project.json` is read and safely rewritten.
+3. [lessons/evidence_review.py](../src/notewitness/lessons/evidence_review.py): how a machine suggestion becomes human evidence.
+4. [interfaces/cli/main.py](../src/notewitness/interfaces/cli/main.py): every command and the function it calls.
+5. [workbench/http.py](../src/notewitness/workbench/http.py) and [workbench/api.py](../src/notewitness/workbench/api.py): every browser route.
+6. [workbench/executor.py](../src/notewitness/workbench/executor.py) and [analysis/runs/integration.py](../src/notewitness/analysis/runs/integration.py): how tool output enters the project.
 
 `src/notewitness/evidence.py` is the one deliberately public Python module. The
 supported external surface is otherwise what is documented and installed: the
@@ -219,6 +437,28 @@ The [security policy](../SECURITY.md) records the supported and residual
 security boundary.
 
 ## Build and deployment boundaries
+
+How is it checked, built, and published?
+
+```mermaid
+flowchart LR
+  dev["Change on a branch"] -->|"bash scripts/verify.sh"| gate[Local gate]
+  gate -->|"PR or manual dispatch"| ci["ci.yml: verify on<br/>Python 3.11 + 3.14"]
+  ci --> pkg["ci.yml: pip install .<br/>on macOS, run entry points"]
+  pkg --> wheel[notewitness wheel]
+  gate -.->|"manual dispatch on main"| pages["pages.yml: verify +<br/>build_pages_demo.sh"]
+  pages -.-> site["GitHub Pages:<br/>demo + tour"]
+```
+
+The same `scripts/verify.sh` gate runs locally, in CI and before a Pages build.
+Nothing publishes on push: CI runs for Dependabot pull requests or a manual
+dispatch, and Pages deploys only from a manual dispatch on the default branch.
+Release steps are in [RELEASING.md](RELEASING.md).
+
+Where in the code: [scripts/verify.sh](../scripts/verify.sh),
+[.github/workflows/ci.yml](../.github/workflows/ci.yml),
+[.github/workflows/pages.yml](../.github/workflows/pages.yml),
+[scripts/build_pages_demo.sh](../scripts/build_pages_demo.sh).
 
 Hatchling builds one dependency-free `notewitness` wheel containing the Python
 package and the workbench assets. It installs the `notewitness`,

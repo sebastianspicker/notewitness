@@ -6,7 +6,10 @@
 NoteWitness is a local-first evidence workbench for recorded music teaching and
 artistic research. Recorded media, machine hypotheses, human review decisions,
 and exports stay separate records, so every conclusion remains traceable to the
-source span it came from.
+source span it came from. For how it works inside, start with
+[docs/architecture.md](docs/architecture.md).
+
+> _Claude was used to polish and proof-read the code and documentation of this repository._
 
 <details>
 <summary>Status and limitations</summary>
