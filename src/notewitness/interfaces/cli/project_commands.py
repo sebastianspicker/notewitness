@@ -6,18 +6,27 @@ import argparse
 from dataclasses import asdict
 from pathlib import Path
 
+from notewitness.analysis.local_tools.discovery import discover_local_tool
 from notewitness.analysis.media_probe import FFprobeMediaProbe
-from notewitness.analysis.transcription.whisper_cli import WhisperCLIAdapter, WhisperCLISettings
 from notewitness.analysis.runs.integration import integrate_completed_run
 from notewitness.analysis.speaker_alignment import align_speech_to_anonymous_speakers
-from notewitness.analysis.transcription.runtime import LocalTranscriptionRequest, LocalTranscriptionRuntime
-from notewitness.analysis.local_tools.discovery import discover_local_tool
+from notewitness.analysis.transcription.runtime import (
+    LocalTranscriptionRequest,
+    LocalTranscriptionRuntime,
+)
+from notewitness.analysis.transcription.whisper_cli import (
+    WhisperCLIAdapter,
+    WhisperCLISettings,
+)
 from notewitness.core.transcription.options import (
     DisfluencyPolicy,
     TranscriptExportFormat,
 )
 from notewitness.lessons.actors import add_project_actor
-from notewitness.lessons.music_export import MusicExportFormat, SymbolicMusicExportService
+from notewitness.lessons.music_export import (
+    MusicExportFormat,
+    SymbolicMusicExportService,
+)
 from notewitness.lessons.transcript_review import (
     TranscriptReviewDecision,
     accept_transcript_events,

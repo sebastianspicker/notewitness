@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 import hashlib
 import json
@@ -9,14 +10,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
-from collections.abc import Callable, Mapping
 
-from notewitness.core.analysis.analysis import (
-    AnalysisBatch,
-    AnalysisRequest,
-    AnalysisStage,
-)
-from notewitness.core.strict_json import is_sha256_hex
 from notewitness.analysis.local_tools.contracts import (
     LocalToolCancelled,
     LocalToolError,
@@ -24,7 +18,6 @@ from notewitness.analysis.local_tools.contracts import (
 )
 from notewitness.analysis.local_tools.discovery import LocalTool
 from notewitness.analysis.local_tools.runner import BoundedLocalToolRunner
-
 from notewitness.analysis.suite import identity as _identity
 from notewitness.analysis.suite import protocol as _protocol
 from notewitness.analysis.suite.protocol import (
@@ -32,6 +25,12 @@ from notewitness.analysis.suite.protocol import (
     MAX_STRING_CHARS,
     AnalysisCLIError,
 )
+from notewitness.core.analysis.analysis import (
+    AnalysisBatch,
+    AnalysisRequest,
+    AnalysisStage,
+)
+from notewitness.core.strict_json import is_sha256_hex
 
 
 _SUPPORTED_STAGES = frozenset(

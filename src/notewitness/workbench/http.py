@@ -2,41 +2,45 @@
 
 from __future__ import annotations
 
+import hmac
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-import hmac
+from pathlib import Path
 import secrets
 import socket
 import sqlite3
 import sys
 import threading
-from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from notewitness.analysis.local_tools.contracts import LocalToolError
 from notewitness.analysis.media_probe import MediaProbeError
 from notewitness.lessons.actors import TranscriptReviewError
-from notewitness.lessons.review_rules import ReviewError
 from notewitness.lessons.music_export import MusicExportError
+from notewitness.lessons.review_rules import ReviewError
 from notewitness.projects.artifacts import LocalArtifactError
 from notewitness.projects.media import MediaIngestError
-from notewitness.projects.store import ProjectConflictError, ProjectStore, ProjectStoreError
+from notewitness.projects.store import (
+    ProjectConflictError,
+    ProjectStore,
+    ProjectStoreError,
+)
 
 from .api import WorkbenchApiMixin
 from .executor import LocalWorkbenchExecutor
 from .jobs import WorkbenchExecutor, WorkbenchProcessingError
 from .media import WorkbenchMediaMixin
+from .processing import WorkbenchProcessingService
 from .protocol import (
-    RequestError,
     ALLOWED_BIND_HOST,
     ASSETS,
     LAUNCH_PATH_PREFIX,
     SESSION_HEADER_NAME,
+    RequestError,
     WorkbenchProtocolMixin,
     WorkbenchServerError,
     coarse_log_route,
 )
-from .processing import WorkbenchProcessingService
 
 
 _POST_ERROR_RESPONSES = (

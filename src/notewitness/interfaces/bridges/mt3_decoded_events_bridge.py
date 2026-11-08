@@ -8,13 +8,32 @@ guesses a model/API; it only normalizes the already-decoded local output.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
+import sys
+
 
 try:
-    from ._protocol import BridgeError, bounded_span, confidence, fail, main_request, model_path, response, seconds_to_us
+    from ._protocol import (
+        BridgeError,
+        bounded_span,
+        confidence,
+        fail,
+        main_request,
+        model_path,
+        response,
+        seconds_to_us,
+    )
 except ImportError:  # direct execution before package installation
-    from _protocol import BridgeError, bounded_span, confidence, fail, main_request, model_path, response, seconds_to_us
+    from _protocol import (
+        BridgeError,
+        bounded_span,
+        confidence,
+        fail,
+        main_request,
+        model_path,
+        response,
+        seconds_to_us,
+    )
 
 
 def run(argv: list[str]) -> None:

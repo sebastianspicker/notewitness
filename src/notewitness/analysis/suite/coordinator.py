@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
 import threading
 import time
 from typing import Any
-from collections.abc import Mapping
 
 from notewitness.analysis.local_tools.contracts import LocalToolError
 from notewitness.analysis.suite.adapter import (
@@ -34,6 +34,11 @@ from notewitness.analysis.suite.evidence import (
     append_analysis_batches,
     require_unique_hypothesis_ids,
 )
+from notewitness.analysis.suite.job_store import (
+    JobConflictError,
+    JobStoreError,
+    SQLiteJobStore,
+)
 from notewitness.core.analysis.analysis import (
     AnalysisBatch,
     AnalysisRequest,
@@ -42,11 +47,6 @@ from notewitness.core.analysis.analysis import (
 )
 from notewitness.core.analysis.jobs import AnalysisJobSpec, DurableJob
 from notewitness.core.strict_json import is_sha256_hex
-from notewitness.analysis.suite.job_store import (
-    JobConflictError,
-    JobStoreError,
-    SQLiteJobStore,
-)
 from notewitness.projects.artifacts import LocalArtifactError
 from notewitness.projects.store import ProjectStore, ProjectStoreError
 

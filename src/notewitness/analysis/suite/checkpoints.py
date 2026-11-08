@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
 import stat
-from collections.abc import Callable, Mapping
 
-from notewitness.core.analysis.analysis import AnalysisBatch, AnalysisStage, AnalysisState
+from notewitness.core.analysis.analysis import (
+    AnalysisBatch,
+    AnalysisStage,
+    AnalysisState,
+)
 from notewitness.core.analysis.jobs import DurableJob
-from notewitness.projects.artifacts import write_new_private_bytes, write_new_private_json
+from notewitness.projects.artifacts import (
+    write_new_private_bytes,
+    write_new_private_json,
+)
 from notewitness.projects.private_fs import is_owner_private
 
 

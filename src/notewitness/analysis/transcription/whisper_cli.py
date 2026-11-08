@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import hashlib
 import json
@@ -12,8 +13,13 @@ import platform
 import re
 import stat
 from typing import Any
-from collections.abc import Callable
 
+from notewitness.analysis.local_tools.contracts import (
+    LocalToolIdentityChanged,
+    LocalToolResult,
+)
+from notewitness.analysis.local_tools.discovery import LocalTool
+from notewitness.analysis.local_tools.runner import BoundedLocalToolRunner
 from notewitness.core.strict_json import reject_duplicate_keys
 from notewitness.core.transcription.document import (
     MAX_SEGMENTS,
@@ -22,12 +28,6 @@ from notewitness.core.transcription.document import (
     TranscriptSegment,
     TranscriptWord,
 )
-from notewitness.analysis.local_tools.contracts import (
-    LocalToolIdentityChanged,
-    LocalToolResult,
-)
-from notewitness.analysis.local_tools.discovery import LocalTool
-from notewitness.analysis.local_tools.runner import BoundedLocalToolRunner
 from notewitness.projects.private_fs import content_stat_identity
 
 

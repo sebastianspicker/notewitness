@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import errno
 import json
 import os
 from pathlib import Path
 import stat
 from typing import Any
-from collections.abc import Mapping
 from uuid import uuid4
 
-from notewitness.projects.private_fs import open_directory_no_follow, trusted_absolute_path
+from notewitness.projects.private_fs import (
+    open_directory_no_follow,
+    trusted_absolute_path,
+)
 
 
 _FILE_MODE = 0o600

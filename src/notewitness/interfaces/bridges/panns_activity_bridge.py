@@ -6,21 +6,36 @@ import json
 import sys
 from typing import Any
 
+
 try:
-    from ._protocol import BridgeError, bounded_span, confidence, fail, main_request, response
+    from ._protocol import (
+        BridgeError,
+        bounded_span,
+        confidence,
+        fail,
+        main_request,
+        response,
+    )
     from .panns_instrument_bridge import (
-        _frame_score,
         _bounded_plain_sequence,
+        _frame_score,
         _nonnegative_int,
         _positive_int,
         _require_panns_timing,
         sound_event_frame_chunks,
     )
 except ImportError:  # direct execution before package installation
-    from _protocol import BridgeError, bounded_span, confidence, fail, main_request, response
+    from _protocol import (
+        BridgeError,
+        bounded_span,
+        confidence,
+        fail,
+        main_request,
+        response,
+    )
     from panns_instrument_bridge import (
-        _frame_score,
         _bounded_plain_sequence,
+        _frame_score,
         _nonnegative_int,
         _positive_int,
         _require_panns_timing,

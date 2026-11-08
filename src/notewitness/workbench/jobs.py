@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -10,11 +11,13 @@ import os
 from pathlib import Path
 import sqlite3
 from typing import Protocol
-from collections.abc import Callable, Iterator, Mapping
 from uuid import uuid4
 
 from notewitness.projects.media import is_project_media_uri
-from notewitness.projects.private_sqlite import PrivateSQLiteDatabase, PrivateSQLiteFailure
+from notewitness.projects.private_sqlite import (
+    PrivateSQLiteDatabase,
+    PrivateSQLiteFailure,
+)
 from notewitness.projects.store import ProjectStore
 
 

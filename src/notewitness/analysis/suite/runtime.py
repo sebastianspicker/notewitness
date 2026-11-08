@@ -2,26 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Mapping
 import copy
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable, Iterable, Mapping
 from uuid import uuid4
 
-from notewitness.analysis.suite.adapter import (
-    AnalysisCLIExecutionError,
-    LocalAnalysisCLIAdapter,
-    LocalAnalysisCLIExecution,
-    analysis_generator_parameters,
-)
-from notewitness.analysis.suite.checkpoints import PUBLISHABLE_STATES
-from notewitness.analysis.suite.evidence import (
-    AnalysisEvidenceContext,
-    AnalysisEvidenceRecords,
-    append_analysis_batches,
-    require_unique_hypothesis_ids,
-)
 from notewitness.analysis.runs.integration import (
     capture_source_identity,
     integrate_completed_run,
@@ -44,6 +31,19 @@ from notewitness.analysis.runs.workspace import (
     valid_run_token,
     write_queued_status,
     write_status,
+)
+from notewitness.analysis.suite.adapter import (
+    AnalysisCLIExecutionError,
+    LocalAnalysisCLIAdapter,
+    LocalAnalysisCLIExecution,
+    analysis_generator_parameters,
+)
+from notewitness.analysis.suite.checkpoints import PUBLISHABLE_STATES
+from notewitness.analysis.suite.evidence import (
+    AnalysisEvidenceContext,
+    AnalysisEvidenceRecords,
+    append_analysis_batches,
+    require_unique_hypothesis_ids,
 )
 from notewitness.core.analysis.analysis import (
     AnalysisRequest,

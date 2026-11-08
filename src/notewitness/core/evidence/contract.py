@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 import re
-from collections.abc import Iterable, Mapping
 
 
 SCHEMA_VERSION = "0.1.0"

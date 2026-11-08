@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
-from notewitness.core.evidence.graph import EvidenceGraph, SCHEMA_VERSION
+from notewitness.core.evidence.graph import SCHEMA_VERSION, EvidenceGraph
 from notewitness.projects.private_fs import trusted_absolute_path
 
 

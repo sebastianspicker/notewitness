@@ -8,6 +8,7 @@ reads used to identify artifacts, and sealing/reading the envelope itself.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 import copy
 from dataclasses import dataclass
 import hashlib
@@ -17,11 +18,13 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from notewitness.core.evidence.contract import ID_PATTERN, SHA256_PATTERN
 from notewitness.core.strict_json import reject_duplicate_keys
-from notewitness.projects.artifacts import MAX_LOCAL_ARTIFACT_BYTES, write_new_private_json
+from notewitness.projects.artifacts import (
+    MAX_LOCAL_ARTIFACT_BYTES,
+    write_new_private_json,
+)
 from notewitness.projects.private_fs import content_stat_identity, is_owner_private
 
 

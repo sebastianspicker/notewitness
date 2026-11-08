@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 import hashlib
 import json
 import os
 import re
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from notewitness.core.evidence.graph import CORE_RELATION_TYPES, EvidenceGraph
 from notewitness.lessons.network import MAX_API_KEY_CHARS, OpenAIHTTPTransport

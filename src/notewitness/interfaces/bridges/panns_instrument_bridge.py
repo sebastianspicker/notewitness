@@ -2,18 +2,39 @@
 
 from __future__ import annotations
 
-import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 import json
 import math
 import os
-from contextlib import contextmanager
+import sys
 from typing import Any
-from collections.abc import Iterator
+
 
 try:
-    from ._protocol import MAX_ITEMS, BridgeError, bounded_span, confidence, fail, main_request, media_path, model_path, response
+    from ._protocol import (
+        MAX_ITEMS,
+        BridgeError,
+        bounded_span,
+        confidence,
+        fail,
+        main_request,
+        media_path,
+        model_path,
+        response,
+    )
 except ImportError:  # direct execution before package installation
-    from _protocol import MAX_ITEMS, BridgeError, bounded_span, confidence, fail, main_request, media_path, model_path, response
+    from _protocol import (
+        MAX_ITEMS,
+        BridgeError,
+        bounded_span,
+        confidence,
+        fail,
+        main_request,
+        media_path,
+        model_path,
+        response,
+    )
 
 
 PARAMETERS = {
@@ -79,8 +100,8 @@ def sound_event_frame_chunks(
     try:
         with _suppress_provider_output():
             import librosa
-            import soundfile
             from panns_inference import SoundEventDetection, labels
+            import soundfile
 
             provider_labels = _provider_labels(labels)
             requested = request["spans"][0]

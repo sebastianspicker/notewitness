@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import csv
 import io
 import json
 import math
 import struct
 from typing import Protocol
-from collections.abc import Iterable
 
 
 _TICKS_PER_QUARTER = 1_000

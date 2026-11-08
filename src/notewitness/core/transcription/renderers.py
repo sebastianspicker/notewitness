@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 from html import escape
 
-from notewitness.core.transcription.document import TranscriptDocument, TranscriptSegment
+from notewitness.core.transcription.document import (
+    TranscriptDocument,
+    TranscriptSegment,
+)
 
 
 MAX_RENDERED_CHARACTERS = 10_000_000

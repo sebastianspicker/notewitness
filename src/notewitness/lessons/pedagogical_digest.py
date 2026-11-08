@@ -9,10 +9,10 @@ relation before it appears in the practice-plan projection.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
-from collections.abc import Mapping
 
 from notewitness.lessons.lesson_projection_events import is_accepted_record
 from notewitness.lessons.review_rules import reviewed_record_ids

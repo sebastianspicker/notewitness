@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from notewitness.core.evidence.contract import (
-    EvidenceGraphError,
     MAX_JSON_DEPTH,
     MAX_PROJECT_BYTES,
+    EvidenceGraphError,
     ValidationIssue,
 )
 from notewitness.core.evidence.graph import EvidenceGraph

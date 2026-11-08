@@ -3,16 +3,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable, Mapping
 
-from notewitness.lessons.lesson_projection_events import (
-    anchor_from_target,
-    is_accepted_record,
-    unique_anchors,
-)
-from notewitness.lessons.review_rules import latest_event_ids, reviewed_record_ids
 from notewitness.core.lesson.model import (
     EvidenceExcerpt,
     EvidenceTopic,
@@ -21,6 +15,12 @@ from notewitness.core.lesson.model import (
     text_body,
 )
 from notewitness.core.time import EvidenceAnchor
+from notewitness.lessons.lesson_projection_events import (
+    anchor_from_target,
+    is_accepted_record,
+    unique_anchors,
+)
+from notewitness.lessons.review_rules import latest_event_ids, reviewed_record_ids
 
 
 @dataclass(frozen=True, slots=True)

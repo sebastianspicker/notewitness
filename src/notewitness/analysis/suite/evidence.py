@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 import json
 import re
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from notewitness.analysis.runs.publication import append_or_require_equal
 from notewitness.core.analysis.analysis import (

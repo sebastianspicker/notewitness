@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import PurePosixPath
 from typing import Any
-from collections.abc import Mapping
 from urllib.parse import quote
 
-from notewitness.core.evidence.graph import EvidenceGraph
 from notewitness.core.evidence.contract import is_human_evidence_author
+from notewitness.core.evidence.graph import EvidenceGraph
 from notewitness.lessons.lesson_notes import LessonNotesProjector
 from notewitness.lessons.review_rules import ReviewError, identifier, index
 from notewitness.projects.media import is_project_media_uri

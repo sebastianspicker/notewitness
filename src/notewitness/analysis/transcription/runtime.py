@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import copy
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 from uuid import uuid4
 
 from notewitness.analysis.media_probe import FFprobeMediaProbe
@@ -69,7 +69,10 @@ from notewitness.core.transcription.run import (
     TranscriptionRunState,
     transcription_settings_sha256,
 )
-from notewitness.projects.artifacts import publish_new_private_text, write_new_private_json
+from notewitness.projects.artifacts import (
+    publish_new_private_text,
+    write_new_private_json,
+)
 from notewitness.projects.store import ProjectStore
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 import json
@@ -9,22 +10,24 @@ import math
 from pathlib import Path
 import sqlite3
 import time
-from collections.abc import Iterator
 
 from notewitness.core.analysis.analysis import (
+    MAX_CONTINUATION_TOKEN_CHARS,
     AnalysisStage,
     JobState,
-    MAX_CONTINUATION_TOKEN_CHARS,
 )
 from notewitness.core.analysis.jobs import (
-    AnalysisJobSpec,
-    DurableJob,
     MAX_ARTIFACT_ID_CHARS,
     MAX_JOB_ID_CHARS,
+    AnalysisJobSpec,
+    DurableJob,
 )
 from notewitness.core.time import MediaSpan
 from notewitness.projects.private_fs import trusted_absolute_path
-from notewitness.projects.private_sqlite import PrivateSQLiteDatabase, PrivateSQLiteFailure
+from notewitness.projects.private_sqlite import (
+    PrivateSQLiteDatabase,
+    PrivateSQLiteFailure,
+)
 
 
 _SCHEMA = """

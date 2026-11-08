@@ -2,22 +2,28 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 import hashlib
 import math
 from pathlib import Path
 from typing import Any
-from collections.abc import Iterable, Mapping
 
+from notewitness.core.exports import LossSeverity, ProjectionLoss
 from notewitness.lessons.music_export_renderers import (
     MusicExportError,
+)
+from notewitness.lessons.music_export_renderers import (
     csv_bytes as _csv_bytes,
+)
+from notewitness.lessons.music_export_renderers import (
     midi_bytes as _midi_bytes,
+)
+from notewitness.lessons.music_export_renderers import (
     overlapping_same_pitch_ids as _overlapping_same_pitch_ids,
 )
 from notewitness.lessons.review_rules import reviewed_record_ids
-from notewitness.core.exports import LossSeverity, ProjectionLoss
 from notewitness.projects.artifacts import write_new_private_bytes
 from notewitness.projects.store import ProjectStore
 

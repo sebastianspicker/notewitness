@@ -4,10 +4,29 @@ from __future__ import annotations
 
 import sys
 
+
 try:
-    from ._protocol import BridgeError, bounded_span, fail, main_request, media_path, model_path, response, seconds_to_us
+    from ._protocol import (
+        BridgeError,
+        bounded_span,
+        fail,
+        main_request,
+        media_path,
+        model_path,
+        response,
+        seconds_to_us,
+    )
 except ImportError:  # direct execution before package installation
-    from _protocol import BridgeError, bounded_span, fail, main_request, media_path, model_path, response, seconds_to_us
+    from _protocol import (
+        BridgeError,
+        bounded_span,
+        fail,
+        main_request,
+        media_path,
+        model_path,
+        response,
+        seconds_to_us,
+    )
 
 
 def run(argv: list[str]) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import errno
 import hashlib
@@ -11,17 +12,16 @@ import os
 from pathlib import Path
 import stat
 from typing import Any
-from collections.abc import Mapping
 
-from notewitness.analysis.suite.adapter import LocalAnalysisSource
-from notewitness.analysis.suite.identity import analysis_artifact_identity
-from notewitness.analysis.transcription.whisper_cli import WhisperCLISettings
 from notewitness.analysis.local_tools.discovery import (
     LocalTool,
     discover_local_tool,
     executable_stat_identity,
     validated_trusted_path,
 )
+from notewitness.analysis.suite.adapter import LocalAnalysisSource
+from notewitness.analysis.suite.identity import analysis_artifact_identity
+from notewitness.analysis.transcription.whisper_cli import WhisperCLISettings
 from notewitness.core.analysis.analysis import AnalysisStage
 from notewitness.core.strict_json import reject_duplicate_keys
 from notewitness.projects.private_fs import content_stat_identity, is_owner_private

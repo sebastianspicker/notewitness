@@ -8,13 +8,13 @@ IDs, fingerprints, or run paths themselves.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
 from typing import Any
-from collections.abc import Mapping
 from uuid import uuid4
 
 from notewitness.analysis.local_tools.discovery import LocalTool

@@ -3,20 +3,18 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from dataclasses import asdict
 import json
 import sys
-from collections.abc import Sequence
 
 from notewitness import __version__
-from notewitness.interfaces.capabilities import (
-    PROFILES,
-    capability_manifest,
-    profile_readiness,
-)
 from notewitness.analysis.local_tools.contracts import LocalToolError
+from notewitness.core.audio import MetronomePlan, tuner_reading
+from notewitness.core.evidence.contract import NetworkAccessDenied
 from notewitness.core.evidence.graph import EvidenceGraph, EvidenceGraphError
 from notewitness.core.time import MediaSpan
+from notewitness.core.transcription.export import transcript_export_losses
 from notewitness.core.transcription.options import (
     DiarizationMode,
     DisfluencyPolicy,
@@ -24,10 +22,12 @@ from notewitness.core.transcription.options import (
     TranscriptExportFormat,
     TranscriptionJobSpec,
 )
-from notewitness.core.transcription.export import transcript_export_losses
-from notewitness.core.audio import MetronomePlan, tuner_reading
+from notewitness.interfaces.capabilities import (
+    PROFILES,
+    capability_manifest,
+    profile_readiness,
+)
 from notewitness.lessons.lesson_notes import LessonNotesProjector
-from notewitness.core.evidence.contract import NetworkAccessDenied
 from notewitness.lessons.network import TransportFailure
 from notewitness.lessons.openai_responses import (
     OpenAIConfigurationError,
@@ -36,7 +36,10 @@ from notewitness.lessons.openai_responses import (
 )
 from notewitness.projects.artifacts import LocalArtifactError, write_new_private_json
 from notewitness.projects.document import load_evidence_graph
-from notewitness.projects.initialize import ProjectInitializationError, initialize_project
+from notewitness.projects.initialize import (
+    ProjectInitializationError,
+    initialize_project,
+)
 from notewitness.projects.store import ProjectStoreError
 from notewitness.workbench.jobs import WorkbenchProcessingError
 from notewitness.workbench.server import WorkbenchServerError, serve_workbench

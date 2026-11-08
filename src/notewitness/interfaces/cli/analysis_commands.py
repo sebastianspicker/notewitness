@@ -8,6 +8,8 @@ from pathlib import Path
 from notewitness.analysis.local_tools.discovery import discover_local_tool
 from notewitness.analysis.suite.jobs import (
     analysis_job as _analysis_job,
+)
+from notewitness.analysis.suite.jobs import (
     analysis_steps,
     durable_job_output,
     list_analysis_jobs,

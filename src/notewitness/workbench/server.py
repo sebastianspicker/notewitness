@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 import json
 import os
 from pathlib import Path
@@ -9,7 +10,6 @@ import select
 import sys
 import threading
 import time
-from collections.abc import Iterable, Iterator
 from typing import TextIO
 import webbrowser
 

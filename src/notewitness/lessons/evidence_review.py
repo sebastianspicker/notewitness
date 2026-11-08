@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 from uuid import uuid4
 
+from notewitness.core.evidence.graph import ACCESS_RANK, EvidenceGraph
+from notewitness.lessons.lesson_notes import LessonNotesProjector
 from notewitness.lessons.review_rules import (
     MAX_BOOKMARK_LABEL_CHARS,
     MAX_REPLACEMENT_TEXT_CHARS,
@@ -21,8 +23,6 @@ from notewitness.lessons.review_rules import (
     require_evidence_not_decided,
     require_human_author,
 )
-from notewitness.core.evidence.graph import ACCESS_RANK, EvidenceGraph
-from notewitness.lessons.lesson_notes import LessonNotesProjector
 from notewitness.projects.store import ProjectStore
 
 

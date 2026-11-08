@@ -9,18 +9,21 @@ import platform
 import sys
 from tempfile import TemporaryDirectory
 
-from notewitness.analysis.suite.adapter import AnalysisCLIError
-from notewitness.analysis.media_probe import MediaProbeError
-from notewitness.analysis.transcription.whisper_cli import WhisperCLIError, WhisperCLISettings
-from notewitness.analysis.suite.runtime import LocalAnalysisRuntimeError
-from notewitness.analysis.suite.checkpoints import ResumableAnalysisError
-from notewitness.analysis.runs.publication import RunIntegrationError
-from notewitness.analysis.suite.job_store import JobStoreError
-from notewitness.analysis.speaker_alignment import SpeakerAlignmentError
-from notewitness.analysis.transcription.runtime import LocalTranscriptionRuntimeError
 from notewitness.analysis.local_tools.contracts import LocalToolError
 from notewitness.analysis.local_tools.discovery import LocalTool, discover_local_tool
 from notewitness.analysis.local_tools.runner import BoundedLocalToolRunner
+from notewitness.analysis.media_probe import MediaProbeError
+from notewitness.analysis.runs.publication import RunIntegrationError
+from notewitness.analysis.speaker_alignment import SpeakerAlignmentError
+from notewitness.analysis.suite.adapter import AnalysisCLIError
+from notewitness.analysis.suite.checkpoints import ResumableAnalysisError
+from notewitness.analysis.suite.job_store import JobStoreError
+from notewitness.analysis.suite.runtime import LocalAnalysisRuntimeError
+from notewitness.analysis.transcription.runtime import LocalTranscriptionRuntimeError
+from notewitness.analysis.transcription.whisper_cli import (
+    WhisperCLIError,
+    WhisperCLISettings,
+)
 from notewitness.lessons.music_export import MusicExportError
 from notewitness.lessons.transcript_review import TranscriptReviewError
 from notewitness.projects.artifacts import LocalArtifactError

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 import copy
 from dataclasses import dataclass
@@ -14,16 +14,18 @@ import os
 from pathlib import Path
 import stat
 from typing import Any
-from collections.abc import Mapping
 from uuid import uuid4
 
 from notewitness.core.evidence.graph import (
+    MAX_PROJECT_BYTES,
     EvidenceGraph,
     EvidenceGraphError,
-    MAX_PROJECT_BYTES,
 )
 from notewitness.core.strict_json import is_sha256_hex, reject_duplicate_keys
-from notewitness.projects.private_fs import open_directory_no_follow, trusted_absolute_path
+from notewitness.projects.private_fs import (
+    open_directory_no_follow,
+    trusted_absolute_path,
+)
 
 
 _DIRECTORY_MODE = 0o700

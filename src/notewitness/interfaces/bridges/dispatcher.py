@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-from ._protocol import BridgeError, MAX_BYTES, fail
+from ._protocol import MAX_BYTES, BridgeError, fail
 
 
 def main() -> None:

@@ -2,33 +2,33 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 import hashlib
 from pathlib import Path
-from collections.abc import Callable, Mapping
 
+from notewitness.analysis.media_probe import FFprobeMediaProbe
+from notewitness.analysis.runs.integration import integrate_completed_run
+from notewitness.analysis.runs.publication import PUBLICATION_FILENAME
+from notewitness.analysis.speaker_alignment import align_speech_to_anonymous_speakers
 from notewitness.analysis.suite.adapter import (
     LocalAnalysisCLIAdapter,
     LocalAnalysisCLISettings,
     LocalAnalysisSource,
     analysis_generator_id,
 )
-from notewitness.analysis.media_probe import FFprobeMediaProbe
-from notewitness.analysis.transcription.whisper_cli import WhisperCLIAdapter
 from notewitness.analysis.suite.runtime import (
     LocalAnalysisRunRequest,
     LocalAnalysisRuntime,
     LocalAnalysisStep,
 )
-from notewitness.lessons.pedagogical_digest import suggest_practice_relations
-from notewitness.analysis.speaker_alignment import align_speech_to_anonymous_speakers
 from notewitness.analysis.transcription.runtime import (
     LocalTranscriptionRequest,
     LocalTranscriptionRuntime,
 )
-from notewitness.analysis.runs.integration import integrate_completed_run
-from notewitness.analysis.runs.publication import PUBLICATION_FILENAME
+from notewitness.analysis.transcription.whisper_cli import WhisperCLIAdapter
 from notewitness.core.analysis.analysis import AnalysisStage
 from notewitness.core.time import MediaSpan
+from notewitness.lessons.pedagogical_digest import suggest_practice_relations
 from notewitness.projects.store import ProjectStore
 
 from .jobs import (

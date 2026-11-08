@@ -22,6 +22,7 @@ from notewitness.core.evidence.validation_common import (
     validate_id,
 )
 
+
 RecordIndex = Mapping[str, Mapping[str, Any]]
 
 

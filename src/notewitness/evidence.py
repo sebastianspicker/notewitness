@@ -9,7 +9,6 @@ from notewitness.core.evidence.contract import (
     CORE_EVENT_TYPES,
     CORE_RELATION_TYPES,
     EVENT_LAYERS,
-    EvidenceGraphError,
     GENERATOR_KINDS,
     MAX_JSON_DEPTH,
     MAX_PROJECT_BYTES,
@@ -17,8 +16,9 @@ from notewitness.core.evidence.contract import (
     REVIEW_STATUSES,
     REVISION_OPERATIONS,
     SCHEMA_VERSION,
-    ValidationIssue,
     VISIBILITY_LEVELS,
+    EvidenceGraphError,
+    ValidationIssue,
 )
 from notewitness.core.evidence.graph import EvidenceGraph as _EvidenceGraph
 from notewitness.projects.document import load_payload

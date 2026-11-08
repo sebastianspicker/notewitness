@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 import os
 from pathlib import Path
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
 
 from notewitness.analysis.local_tools.contracts import (
     LocalToolCancelled,
@@ -14,11 +14,23 @@ from notewitness.analysis.local_tools.contracts import (
 from notewitness.analysis.local_tools.discovery import LocalTool
 from notewitness.analysis.local_tools.policy import (
     bounded_environment as _bounded_environment,
+)
+from notewitness.analysis.local_tools.policy import (
     network_isolated_command as _network_isolated_command,
+)
+from notewitness.analysis.local_tools.policy import (
     resource_limited_launcher_command as _policy_resource_limited_launcher_command,
+)
+from notewitness.analysis.local_tools.policy import (
     validated_arguments as _validated_arguments,
+)
+from notewitness.analysis.local_tools.policy import (
     validated_private_directory as _validated_private_directory,
+)
+from notewitness.analysis.local_tools.policy import (
     validated_search_paths as _validated_search_paths,
+)
+from notewitness.analysis.local_tools.policy import (
     validated_timeout as _validated_timeout,
 )
 from notewitness.analysis.local_tools.process import (

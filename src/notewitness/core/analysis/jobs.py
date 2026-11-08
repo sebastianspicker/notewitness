@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 import re
 
 from notewitness.core.analysis.analysis import (
+    MAX_CONTINUATION_TOKEN_CHARS,
     AnalysisStage,
     JobState,
-    MAX_CONTINUATION_TOKEN_CHARS,
 )
 from notewitness.core.time import MediaSpan
 

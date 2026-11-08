@@ -10,11 +10,6 @@ import json
 from typing import Any
 
 from notewitness.core.time import MediaSpan
-from notewitness.core.transcription.options import TranscriptionJobSpec
-from notewitness.core.transcription.shared import (
-    _freeze_settings,
-    _json_ready,
-)
 from notewitness.core.transcription._run_validation import (
     _validate_canonical_transcript_evidence,
     _validate_detected_language,
@@ -22,6 +17,11 @@ from notewitness.core.transcription._run_validation import (
     _validate_resolved_model_profile,
     _validate_resolved_run_artifact,
     _validate_source_checksum,
+)
+from notewitness.core.transcription.options import TranscriptionJobSpec
+from notewitness.core.transcription.shared import (
+    _freeze_settings,
+    _json_ready,
 )
 
 

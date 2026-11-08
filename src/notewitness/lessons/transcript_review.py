@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 from typing import Any
-from collections.abc import Mapping
 from uuid import uuid4
 
 from notewitness.core.evidence.contract import is_human_evidence_author

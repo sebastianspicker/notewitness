@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 import json
 import os
 import selectors
@@ -9,7 +10,6 @@ import signal
 import subprocess
 import time
 from typing import TYPE_CHECKING
-from collections.abc import Callable, Mapping
 
 from notewitness.analysis.local_tools.contracts import (
     MAX_TOOL_OUTPUT_BYTES,
@@ -21,6 +21,7 @@ from notewitness.analysis.local_tools.contracts import (
     LocalToolResult,
     LocalToolTimeout,
 )
+
 
 if TYPE_CHECKING:
     from pathlib import Path

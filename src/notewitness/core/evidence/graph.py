@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Iterable, Mapping
+from typing import Any
 
 from notewitness.core.evidence.collections import (
     index as index_collection,
+)
+from notewitness.core.evidence.collections import (
     records as collection_records,
+)
+from notewitness.core.evidence.collections import (
     selected_events_allow_remote as payload_events_allow_remote,
 )
 from notewitness.core.evidence.contract import (

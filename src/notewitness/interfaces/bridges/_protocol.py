@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 import json
 import math
-import sys
 from pathlib import Path
+import sys
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 
 MAX_BYTES = 2 * 1024 * 1024

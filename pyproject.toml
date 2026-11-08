@@ -37,3 +37,16 @@ notewitness-mt3-events-bridge = "notewitness.interfaces.bridges.mt3_decoded_even
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/notewitness"]
+
+[tool.ruff]
+# Explicit select: Codacy reads this file and otherwise falls back to Ruff's minimal defaults.
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+# No TRY: TRY004 flags the deliberate ValueError-from-type-check convention, TRY003 is pure noise.
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "BLE", "EXE", "ISC", "PIE", "PYI", "SIM", "RUF", "FURB", "PLE"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+lines-after-imports = 2

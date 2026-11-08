@@ -11,7 +11,7 @@ from urllib.parse import unquote
 
 from notewitness.core.audio import MetronomePlan, tuner_reading
 from notewitness.core.transcription.options import TranscriptExportFormat
-from notewitness.lessons.review_rules import ReviewError
+from notewitness.lessons.actors import add_project_actor
 from notewitness.lessons.evidence_review import (
     accept_evidence_suggestion,
     accept_relation_suggestion,
@@ -21,13 +21,16 @@ from notewitness.lessons.evidence_review import (
     revise_evidence_annotation,
     set_practice_task_completed,
 )
-from notewitness.lessons.music_export import MusicExportFormat, SymbolicMusicExportService
+from notewitness.lessons.music_export import (
+    MusicExportFormat,
+    SymbolicMusicExportService,
+)
+from notewitness.lessons.review_rules import ReviewError
 from notewitness.lessons.transcript_export import (
     TranscriptEvidenceExportService,
     TranscriptEvidenceLayer,
     TranscriptExportError,
 )
-from notewitness.lessons.actors import add_project_actor
 from notewitness.projects.store import ProjectStoreError
 
 from .jobs import WorkbenchProcessingError

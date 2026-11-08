@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable, Mapping
 import hashlib
 import json
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from notewitness.analysis.speaker_alignment import diarization_run_id
+from notewitness.core.evidence.graph import EvidenceGraph
 from notewitness.core.lesson.model import (
     LessonNotes,
     LessonProgress,
@@ -17,10 +18,9 @@ from notewitness.core.lesson.model import (
     NamedCount,
     PracticePlan,
     RecordRevisionLink,
-    SourceReference,
     SourceGraphProvenance,
+    SourceReference,
 )
-from notewitness.core.evidence.graph import EvidenceGraph
 from notewitness.lessons.lesson_projection_events import project_events
 from notewitness.lessons.lesson_projection_relations import project_relations
 from notewitness.lessons.review_rules import reviewed_record_ids

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 import hashlib
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 from notewitness.core.exports import (
     ExportFormat,

@@ -14,8 +14,9 @@ from typing import Any, BinaryIO
 import unicodedata
 from urllib.parse import unquote
 
-from notewitness.lessons.capture import capture_publication_hook
 from notewitness.core.strict_json import is_sha256_hex
+from notewitness.lessons.capture import capture_publication_hook
+from notewitness.projects.media import MAX_INGEST_BYTES, ingest_open_media
 from notewitness.projects.private_fs import (
     PrivateDirectory,
     PrivatePathError,
@@ -23,7 +24,6 @@ from notewitness.projects.private_fs import (
     is_owner_private,
     private_directory,
 )
-from notewitness.projects.media import MAX_INGEST_BYTES, ingest_open_media
 from notewitness.projects.store import ProjectStore
 
 from .protocol import RequestError, WorkbenchServerError, required_header

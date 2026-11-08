@@ -9,6 +9,7 @@ per-runtime policies rather than separate implementations.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -16,7 +17,6 @@ import os
 from pathlib import Path, PurePosixPath
 import stat
 from typing import Any
-from collections.abc import Mapping
 
 from notewitness.analysis.local_tools.contracts import LocalToolFailure
 from notewitness.projects.artifacts import write_new_private_json

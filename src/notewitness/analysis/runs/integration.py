@@ -7,6 +7,7 @@ evidence graph or not present at all.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 import copy
 from dataclasses import dataclass
 import hashlib
@@ -14,7 +15,6 @@ import json
 from pathlib import Path, PurePosixPath
 import stat
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from notewitness.analysis.runs.publication import (
     MAX_PUBLICATION_BYTES,

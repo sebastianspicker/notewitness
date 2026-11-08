@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from http import HTTPStatus
 import json
 from typing import Any
-from collections.abc import Mapping
 from urllib.parse import urlsplit
 
 from notewitness.core.strict_json import reject_duplicate_keys
