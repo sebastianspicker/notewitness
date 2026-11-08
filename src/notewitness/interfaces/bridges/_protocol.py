@@ -6,7 +6,8 @@ import json
 import math
 import sys
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 
 MAX_BYTES = 2 * 1024 * 1024
@@ -120,9 +121,15 @@ def bounded_span(request: Mapping[str, Any], start_us: int, end_us: int) -> dict
 
 
 def seconds_to_us(value: Any, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise BridgeError(f"{label} must be a non-negative finite number")
-    return int(round(float(value) * 1_000_000))
+    try:
+        scaled = float(value) * 1_000_000
+    except OverflowError as exc:  # an int beyond float range
+        raise BridgeError(f"{label} is too large") from exc
+    if not math.isfinite(scaled) or scaled < 0:
+        raise BridgeError(f"{label} must be a non-negative finite number")
+    return int(round(scaled))
 
 
 def confidence(value: Any) -> float | None:

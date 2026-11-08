@@ -13,7 +13,8 @@ import json
 import os
 from pathlib import Path
 import stat
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from uuid import uuid4
 
 from notewitness.core.evidence.graph import (

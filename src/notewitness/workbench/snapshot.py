@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import PurePosixPath
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from urllib.parse import quote
 
 from notewitness.core.evidence.graph import EvidenceGraph

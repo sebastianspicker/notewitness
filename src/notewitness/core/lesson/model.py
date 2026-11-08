@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from notewitness.core.time import EvidenceAnchor
 

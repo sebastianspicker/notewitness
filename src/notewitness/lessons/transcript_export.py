@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 import hashlib
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from notewitness.core.exports import (
     ExportFormat,
@@ -16,6 +17,7 @@ from notewitness.core.exports import (
 )
 from notewitness.core.time import MediaSpan
 from notewitness.core.transcription.document import (
+    MAX_TEXT_CHARS,
     TranscriptDocument,
     TranscriptSegment,
 )
@@ -440,6 +442,10 @@ def _segment(
     )
     actor_id = event.get("actor_id")
     speaker = actor_id if isinstance(actor_id, str) and actor_id else None
+    if len(text) > MAX_TEXT_CHARS or "\x00" in text:
+        raise TranscriptExportError(
+            f"Transcript event {event.get('id')!r} has text that cannot be exported."
+        )
     return TranscriptSegment(
         f"segment:workbench-export-{index}",
         projection.source_id,

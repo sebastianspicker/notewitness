@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 import re
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 
 SCHEMA_VERSION = "0.1.0"

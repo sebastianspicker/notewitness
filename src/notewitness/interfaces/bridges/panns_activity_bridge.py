@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Normalize pinned PANNs speech and music activity into reviewable spans."""
 
 from __future__ import annotations
@@ -13,7 +12,6 @@ try:
         _frame_score,
         _bounded_plain_sequence,
         _nonnegative_int,
-        _plain_sequence,
         _positive_int,
         _require_panns_timing,
         sound_event_frame_chunks,
@@ -24,7 +22,6 @@ except ImportError:  # direct execution before package installation
         _frame_score,
         _bounded_plain_sequence,
         _nonnegative_int,
-        _plain_sequence,
         _positive_int,
         _require_panns_timing,
         sound_event_frame_chunks,

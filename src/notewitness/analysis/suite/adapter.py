@@ -8,7 +8,8 @@ import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Callable, Mapping
+from typing import Any
+from collections.abc import Callable, Mapping
 
 from notewitness.core.analysis.analysis import (
     AnalysisBatch,
@@ -240,13 +241,13 @@ class LocalAnalysisCLIAdapter:
                 raise AnalysisCLIExecutionError(
                     "Analysis CLI process failed.",
                     request_sha256=request_sha256,
-                    raw_output=failure.stdout.encode("utf-8"),
+                    raw_output=failure.stdout_bytes,
                 ) from failure
         _require_configured_source_identities(self)
-        raw_output = result.stdout.encode("utf-8")
+        raw_output = result.stdout_bytes
         try:
-            batch = _protocol.parse_batch(result.stdout, request, self)
-        except AnalysisCLIError as exc:
+            batch = _protocol.parse_batch(raw_output.decode("utf-8"), request, self)
+        except (AnalysisCLIError, UnicodeDecodeError) as exc:
             raise AnalysisCLIExecutionError(
                 "Analysis CLI output could not be normalized.",
                 request_sha256=request_sha256,

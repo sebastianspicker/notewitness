@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from notewitness.analysis.speaker_alignment import diarization_run_id
 from notewitness.core.lesson.model import (

@@ -6,7 +6,7 @@ import hashlib
 import os
 from pathlib import Path
 import stat
-from typing import Callable
+from collections.abc import Callable
 
 from notewitness.projects.private_fs import is_owner_private
 

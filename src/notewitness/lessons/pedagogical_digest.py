@@ -11,8 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
+from notewitness.lessons.lesson_projection_events import is_accepted_record
+from notewitness.lessons.review_rules import reviewed_record_ids
 from notewitness.projects.store import ProjectStore
 
 
@@ -55,10 +58,23 @@ def suggest_practice_relations(project_root: str) -> PedagogicalDigestResult:
         existing_ids = {
             item.get("id") for item in payload.get("relations", []) if isinstance(item, dict)
         }
+        # Same rule as the lesson projection: accepted copies and reject revisions close a suggestion.
+        reviewed = reviewed_record_ids(
+            (item for item in payload.get("revisions", []) if isinstance(item, Mapping)), "reject"
+        ) | {
+            str(body["source_suggestion_id"])
+            for event in events
+            if isinstance(event, Mapping)
+            and is_accepted_record(event)
+            and isinstance((body := event.get("body")), Mapping)
+            and isinstance(body.get("source_suggestion_id"), str)
+        }
         candidates = [
             event
             for event in events
-            if isinstance(event, dict) and _is_explicit_instruction(event)
+            if isinstance(event, dict)
+            and event.get("id") not in reviewed
+            and _is_explicit_instruction(event)
         ]
         if not candidates:
             return

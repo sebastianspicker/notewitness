@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import Callable, Mapping
+from collections.abc import Callable, Mapping
 
 from notewitness.analysis.suite.adapter import (
     LocalAnalysisCLIAdapter,

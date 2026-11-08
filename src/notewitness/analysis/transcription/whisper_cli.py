@@ -11,7 +11,8 @@ from pathlib import Path
 import platform
 import re
 import stat
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from notewitness.core.strict_json import reject_duplicate_keys
 from notewitness.core.transcription.document import (
@@ -584,10 +585,13 @@ def _runtime_fingerprint(
 def _seconds_to_microseconds(value: Any, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise WhisperCLIError(f"Whisper {label} must be numeric.")
-    numeric = float(value)
-    if not math.isfinite(numeric) or numeric < 0:
+    try:
+        scaled = float(value) * 1_000_000
+    except OverflowError as exc:
+        raise WhisperCLIError(f"Whisper {label} is too large.") from exc
+    if not math.isfinite(scaled) or scaled < 0:
         raise WhisperCLIError(f"Whisper {label} must be finite and non-negative.")
-    return round(numeric * 1_000_000)
+    return round(scaled)
 
 
 def _probability(value: Any, label: str) -> float:

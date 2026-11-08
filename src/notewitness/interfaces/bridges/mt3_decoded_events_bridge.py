@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Map output from an approved local MT3 decoder into JSON v1 hypotheses.
 
 The model identity points to a JSON decoded-event artifact created locally by a

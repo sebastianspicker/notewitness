@@ -10,7 +10,8 @@ import math
 import os
 from pathlib import Path
 import stat
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from notewitness.analysis.suite.adapter import LocalAnalysisSource
 from notewitness.analysis.suite.identity import analysis_artifact_identity

@@ -9,7 +9,7 @@ import math
 from pathlib import Path
 import sqlite3
 import time
-from typing import Iterator
+from collections.abc import Iterator
 
 from notewitness.core.analysis.analysis import (
     AnalysisStage,

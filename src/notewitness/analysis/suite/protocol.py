@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from notewitness.core.analysis.analysis import (
     ActivityHypothesis,

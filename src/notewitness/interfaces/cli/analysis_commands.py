@@ -68,7 +68,7 @@ def analyze_local(args: argparse.Namespace) -> int:
             lease_seconds=args.lease_seconds, resume=args.resume, enqueue_only=args.enqueue_only,
         )
         print_json(run.output)
-        if args.enqueue_only and not args.resume:
+        if args.enqueue_only:
             return 0
         return 0 if run.job.state.value in {"completed", "queued", "paused"} else 7
     result, speaker_alignment = run_one_shot_analysis(root, args.source_id, spans, steps)

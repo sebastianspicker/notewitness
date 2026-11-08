@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import stat
-from typing import Callable, Mapping
+from collections.abc import Callable, Mapping
 
 from notewitness.core.analysis.analysis import AnalysisBatch, AnalysisStage, AnalysisState
 from notewitness.core.analysis.jobs import DurableJob

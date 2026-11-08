@@ -5,7 +5,8 @@ from __future__ import annotations
 import copy
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any
+from collections.abc import Callable, Iterable, Mapping
 from uuid import uuid4
 
 from notewitness.analysis.suite.adapter import (

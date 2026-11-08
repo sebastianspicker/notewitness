@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import subprocess
-from typing import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from notewitness.analysis.local_tools.contracts import (
     LocalToolCancelled,

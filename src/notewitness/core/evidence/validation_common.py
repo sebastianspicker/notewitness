@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 import re
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from notewitness.core.evidence.contract import (
     ACCESS_RANK,

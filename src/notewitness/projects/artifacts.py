@@ -7,7 +7,8 @@ import json
 import os
 from pathlib import Path
 import stat
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from uuid import uuid4
 
 from notewitness.projects.private_fs import open_directory_no_follow, trusted_absolute_path

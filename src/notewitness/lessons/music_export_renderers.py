@@ -7,7 +7,8 @@ import io
 import json
 import math
 import struct
-from typing import Iterable, Protocol
+from typing import Protocol
+from collections.abc import Iterable
 
 
 _TICKS_PER_QUARTER = 1_000
@@ -228,6 +229,8 @@ def _rounded_tick(value_us: int) -> int:
 def _vlq(value: int) -> bytes:
     if value < 0:
         raise MusicExportError("MIDI events must be ordered by non-negative time.")
+    if value > 0x0FFFFFFF:
+        raise MusicExportError("Standard MIDI files cannot encode a gap this long (about 74 hours).")
     chunks = [value & 0x7F]
     while value > 0x7F:
         value >>= 7

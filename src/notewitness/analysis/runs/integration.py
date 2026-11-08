@@ -13,7 +13,8 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import stat
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from notewitness.analysis.runs.publication import (
     MAX_PUBLICATION_BYTES,

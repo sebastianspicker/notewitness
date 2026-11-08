@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Map a locally installed Basic Pitch runtime to analysis-suite JSON v1."""
 
 from __future__ import annotations

@@ -13,7 +13,8 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from uuid import uuid4
 
 from notewitness.analysis.local_tools.discovery import LocalTool

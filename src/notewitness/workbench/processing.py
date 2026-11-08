@@ -185,7 +185,10 @@ class WorkbenchProcessingService:
 
     def _work_loop(self) -> None:
         while not self._stopping:
-            job = self.store.claim_next()
+            try:
+                job = self.store.claim_next()
+            except WorkbenchProcessingError:
+                job = None  # transient store error: retry after the idle wait
             if job is None:
                 with self._condition:
                     self._condition.wait(timeout=0.5)
@@ -201,9 +204,21 @@ class WorkbenchProcessingService:
                 )
                 self.store.complete(job.job_id)
             except Exception as exc:
-                self.store.fail(job.job_id, safe_exception_code(exc))
+                self._record_failure(job.job_id, safe_exception_code(exc))
             finally:
                 self._active_job_id = None
+
+    def _record_failure(self, job_id: str, code: str) -> None:
+        # A job left running blocks every later enqueue, so retry until stored.
+        while True:
+            try:
+                self.store.fail(job_id, code)
+                return
+            except WorkbenchProcessingError:
+                if self._stopping:
+                    return  # recover_interrupted() marks it on the next start
+                with self._condition:
+                    self._condition.wait(timeout=0.5)
 
     def _cancelled(self, job_id: str) -> bool:
         job = self.store.get(job_id)

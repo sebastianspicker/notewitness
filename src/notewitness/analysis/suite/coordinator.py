@@ -7,8 +7,10 @@ import hashlib
 from pathlib import Path
 import threading
 import time
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
+from notewitness.analysis.local_tools.contracts import LocalToolError
 from notewitness.analysis.suite.adapter import (
     AnalysisCLICancelled,
     AnalysisCLIError,
@@ -187,6 +189,7 @@ class ResumableAnalysisCoordinator:
             AnalysisEvidenceError,
             JobStoreError,
             LocalArtifactError,
+            LocalToolError,
             OSError,
             ProjectStoreError,
             RecursionError,

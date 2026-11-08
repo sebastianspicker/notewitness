@@ -16,7 +16,8 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import stat
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from notewitness.core.evidence.contract import ID_PATTERN, SHA256_PATTERN
 from notewitness.core.strict_json import reject_duplicate_keys

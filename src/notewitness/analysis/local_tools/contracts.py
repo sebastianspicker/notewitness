@@ -48,10 +48,12 @@ class LocalToolFailure(LocalToolError):
         *,
         stdout: str = "",
         stderr: str = "",
+        stdout_bytes: bytes = b"",
     ) -> None:
         self.tool_name = tool_name
         self.return_code = return_code
         self.stdout = stdout
+        self.stdout_bytes = stdout_bytes
         self.stderr = stderr
         super().__init__(
             f"Local tool {tool_name!r} failed with exit status {return_code}."
@@ -84,3 +86,4 @@ class LocalToolResult:
     stderr: str
     duration_ms: int
     network_isolated: bool
+    stdout_bytes: bytes = b""  # exact bytes; ``stdout`` is a lossy decode for display

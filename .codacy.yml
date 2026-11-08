@@ -1,0 +1,5 @@
+---
+# Dev, CI-verification and Pages-demo tooling; not shipped in the wheel (src/ only).
+exclude_paths:
+  - "scripts/**"
+  - "tests/**"

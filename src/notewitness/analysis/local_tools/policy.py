@@ -7,7 +7,7 @@ from pathlib import Path
 import platform
 import stat
 import sys
-from typing import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from notewitness.analysis.local_tools.contracts import (
     MAX_TOOL_ARGUMENT_CHARS,

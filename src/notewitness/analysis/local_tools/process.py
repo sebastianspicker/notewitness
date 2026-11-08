@@ -8,7 +8,8 @@ import selectors
 import signal
 import subprocess
 import time
-from typing import TYPE_CHECKING, Callable, Mapping
+from typing import TYPE_CHECKING
+from collections.abc import Callable, Mapping
 
 from notewitness.analysis.local_tools.contracts import (
     MAX_TOOL_OUTPUT_BYTES,
@@ -91,7 +92,9 @@ def execute_bounded(
         stdout = stdout_raw.decode("utf-8", errors="replace")
         stderr = stderr_raw.decode("utf-8", errors="replace")
         if return_code != 0:
-            raise LocalToolFailure(tool.name, return_code, stdout=stdout, stderr=stderr)
+            raise LocalToolFailure(
+                tool.name, return_code, stdout=stdout, stderr=stderr, stdout_bytes=stdout_raw
+            )
         return LocalToolResult(
             tool_name=tool.name,
             return_code=return_code,
@@ -99,6 +102,7 @@ def execute_bounded(
             stderr=stderr,
             duration_ms=max(0, round((time.monotonic() - started) * 1_000)),
             network_isolated=network_isolated,
+            stdout_bytes=stdout_raw,
         )
     finally:
         if process is not None:

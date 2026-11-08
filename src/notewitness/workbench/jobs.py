@@ -9,7 +9,8 @@ from enum import StrEnum
 import os
 from pathlib import Path
 import sqlite3
-from typing import Callable, Iterator, Mapping, Protocol
+from typing import Protocol
+from collections.abc import Callable, Iterator, Mapping
 from uuid import uuid4
 
 from notewitness.projects.media import is_project_media_uri

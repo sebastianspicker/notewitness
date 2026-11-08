@@ -15,7 +15,8 @@ import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import stat
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from notewitness.analysis.local_tools.contracts import LocalToolFailure
 from notewitness.projects.artifacts import write_new_private_json

@@ -7,7 +7,8 @@ from enum import StrEnum
 import hashlib
 import math
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from notewitness.lessons.music_export_renderers import (
     MusicExportError,
@@ -187,7 +188,7 @@ def _destination(exports: Path, filename: str, export_format: MusicExportFormat)
     if not isinstance(filename, str) or not filename or Path(filename).name != filename:
         raise MusicExportError("Export filename must be a non-empty basename.")
     suffix = ".csv" if export_format is MusicExportFormat.CSV else ".mid"
-    if not filename.endswith(suffix):
+    if not filename.casefold().endswith(suffix):
         raise MusicExportError(f"{export_format.value} exports must use the {suffix} suffix.")
     return exports / filename
 
@@ -307,6 +308,11 @@ def _note_parts(event: Mapping[str, Any]) -> tuple[str, Mapping[str, Any], str]:
         raise MusicExportError("local:note evidence must have an ID and structured body.")
     value = body.get("value")
     pitch = value.get("midi_pitch") if isinstance(value, Mapping) else None
+    frequency = value.get("frequency_hz") if isinstance(value, Mapping) else None
+    if pitch is None and _finite_number(frequency) and frequency > 0:
+        # NoteHypothesis allows frequency-only notes; derive the (possibly fractional) MIDI pitch.
+        pitch = 69 + 12 * math.log2(frequency / 440)
+        value = {**value, "midi_pitch": pitch}
     if not _valid_midi_pitch(pitch):
         raise MusicExportError(f"Note {event_id!r} has an invalid MIDI pitch.")
     return event_id, value, str(status)
@@ -491,6 +497,8 @@ def _conditional_losses(
         ("timing", "Standard MIDI timing is quantized to one millisecond in this deterministic projection.", _quantized_timing_ids(notes)),
         ("amplitude", "Provider amplitude is not equivalent to MIDI velocity and is omitted from this projection.", _amplitude_ids(notes)),
         ("pitch_bends", "Per-note pitch-bend curves require an explicit channel/range policy and are omitted from this MIDI projection.", _pitch_bend_ids(notes)),
+        ("velocity", "MIDI velocity 0 means note-off, so velocity 0 is raised to 1.", _unique_event_ids(note for note in notes if note.velocity == 0)),
+        ("frequency_hz", "Measured frequencies are kept only as the rounded MIDI note number.", _unique_event_ids(note for note in notes if note.frequency_hz is not None)),
         ("overlapping_same_pitch", "Overlapping notes that round to the same MIDI pitch on one source track are merged to avoid premature note-off playback.", _overlapping_same_pitch_ids(notes)),
     )
 

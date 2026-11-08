@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from notewitness.core.evidence.contract import is_human_evidence_author
 
@@ -80,6 +81,8 @@ def bounded_text(value: str, name: str, maximum: int) -> str:
     normalized = value.strip()
     if len(normalized) > maximum:
         raise ReviewError(f"{name} exceeds {maximum} characters.")
+    if "\x00" in normalized:
+        raise ReviewError(f"{name} must not contain NUL characters.")
     return normalized
 
 

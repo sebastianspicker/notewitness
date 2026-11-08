@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from notewitness.core.lesson.model import (
     ActivityKind,
@@ -140,7 +141,8 @@ def project_events(
         )
         if not is_accepted_record(event):
             if (
-                event_id not in accepted_suggestion_ids
+                event.get("review_status") == "machine_suggested"
+                and event_id not in accepted_suggestion_ids
                 and event_id not in rejected_suggestion_ids
             ):
                 transcript_suggestions.append(full_entry)

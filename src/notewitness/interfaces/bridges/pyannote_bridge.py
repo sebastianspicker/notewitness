@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Map a local pyannote pipeline artifact to anonymous diarization hypotheses."""
 
 from __future__ import annotations

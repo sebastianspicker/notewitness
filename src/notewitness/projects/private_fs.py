@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import stat
 import sys
-from typing import Iterator
+from collections.abc import Iterator
 
 
 class PrivatePathError(RuntimeError):

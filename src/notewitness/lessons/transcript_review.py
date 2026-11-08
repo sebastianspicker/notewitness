@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from uuid import uuid4
 
 from notewitness.core.evidence.contract import is_human_evidence_author
@@ -45,8 +46,9 @@ class TranscriptReviewDecision:
             if (
                 not isinstance(self.replacement_text, str)
                 or not self.replacement_text.strip()
+                or "\x00" in self.replacement_text
             ):
-                raise ValueError("Replacement transcript text must not be empty.")
+                raise ValueError("Replacement transcript text must be non-empty and NUL-free.")
             if len(self.replacement_text) > MAX_REPLACEMENT_TEXT_CHARS:
                 raise ValueError(
                     f"Replacement transcript text exceeds {MAX_REPLACEMENT_TEXT_CHARS} characters."

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Normalize local PANNs framewise instrument activity into temporal spans."""
 
 from __future__ import annotations
@@ -8,7 +7,8 @@ import json
 import math
 import os
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 
 try:
     from ._protocol import MAX_ITEMS, BridgeError, bounded_span, confidence, fail, main_request, media_path, model_path, response

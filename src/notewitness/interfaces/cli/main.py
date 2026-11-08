@@ -6,7 +6,7 @@ import argparse
 from dataclasses import asdict
 import json
 import sys
-from typing import Sequence
+from collections.abc import Sequence
 
 from notewitness import __version__
 from notewitness.interfaces.capabilities import (
