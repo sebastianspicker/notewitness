@@ -27,7 +27,7 @@ class PlaybackIntent:
     duration_us: int
 
     @classmethod
-    def from_anchor(cls, anchor: EvidenceAnchor) -> "PlaybackIntent":
+    def from_anchor(cls, anchor: EvidenceAnchor) -> PlaybackIntent:
         return cls(
             source_id=anchor.span.source_id,
             stream_id=anchor.span.stream_id,
@@ -65,7 +65,7 @@ class TimelineViewModel:
     lanes: tuple[TimelineLane, ...]
 
     @classmethod
-    def from_lesson_notes(cls, notes: LessonNotes) -> "TimelineViewModel":
+    def from_lesson_notes(cls, notes: LessonNotes) -> TimelineViewModel:
         return cls(project_id=notes.project_id, title=notes.title, lanes=_timeline_lanes(notes))
 
 

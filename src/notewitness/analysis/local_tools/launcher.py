@@ -7,6 +7,7 @@ this process sets finite resource limits and replaces itself with that command.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -68,15 +69,11 @@ def _command_matches_approved_tool(command: list[str]) -> bool:
         path = expected["path"]
         if not isinstance(path, str) or not os.path.isabs(path):
             return False
-        if command[0] == path:
-            pass
-        elif (
+        if command[0] != path and not (
             command[:3] == [_NETWORK_SANDBOX, "-p", _NETWORK_DENY_PROFILE]
             and len(command) >= 4
             and command[3] == path
         ):
-            pass
-        else:
             return False
         descriptor = os.open(
             path,
@@ -183,10 +180,8 @@ def _stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
 
 
 def _fail() -> int:
-    try:
+    with contextlib.suppress(OSError):
         os.write(2, _FAILURE_MESSAGE)
-    except OSError:
-        pass
     return 127
 
 

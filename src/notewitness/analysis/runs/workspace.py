@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import hashlib
 import os
 from pathlib import Path, PurePosixPath
@@ -66,7 +66,7 @@ class SourceMediaPolicy:
 def now() -> str:
     """Return the UTC timestamp written into run status records."""
 
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def valid_run_token(value: object) -> bool:

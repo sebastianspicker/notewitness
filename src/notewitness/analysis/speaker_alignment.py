@@ -183,7 +183,7 @@ def _planned_relations(payload: Mapping[str, Any]) -> tuple[dict[str, Any], ...]
             speech_id = str(speech_event["id"])
             speaker_id = str(speaker_event["id"])
             token = hashlib.sha256(
-                f"speaker-alignment-v1\0{speech_id}\0{speaker_id}".encode("utf-8")
+                f"speaker-alignment-v1\0{speech_id}\0{speaker_id}".encode()
             ).hexdigest()[:32]
             planned.append(
                 {

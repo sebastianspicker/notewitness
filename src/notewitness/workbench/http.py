@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hmac
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -92,17 +93,17 @@ class WorkbenchRequestHandler(
         self._cancel_header_deadline()
         super().finish()
 
-    def do_GET(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
+    def do_GET(self) -> None:
         if not self._request_headers_complete():
             return
         self._dispatch_get(send_body=True)
 
-    def do_HEAD(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
+    def do_HEAD(self) -> None:
         if not self._request_headers_complete():
             return
         self._dispatch_get(send_body=False)
 
-    def do_POST(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
+    def do_POST(self) -> None:
         if not self._request_headers_complete():
             return
         if not self._request_is_trusted(require_origin=True, require_session=True):
@@ -294,10 +295,8 @@ class WorkbenchRequestHandler(
             self._header_deadline = None
             self._request_headers_expired = True
             self.close_connection = True
-        try:
+        with contextlib.suppress(OSError):
             self.connection.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
 
     def _asset(self, path: str, *, send_body: bool) -> None:
         filename, content_type = ASSETS[path]

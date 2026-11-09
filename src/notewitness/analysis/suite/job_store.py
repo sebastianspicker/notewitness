@@ -119,7 +119,7 @@ class SQLiteJobStore:
                     completed_span_count, continuation_token, last_artifact_id, failure_reason
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, 0, NULL,
                     NULL, NULL)""",
-                _spec_values(spec) + (JobState.QUEUED.value,),
+                (*_spec_values(spec), JobState.QUEUED.value),
             )
             return self._required(connection, spec.job_id)
 
@@ -151,7 +151,8 @@ class SQLiteJobStore:
         score_sha256: str | None,
     ) -> DurableJob | None:
         """Atomically claim one queued/paused job after exact resume checks."""
-        _identifier(job_id, "job_id"); _identifier(owner_id, "owner_id")
+        _identifier(job_id, "job_id")
+        _identifier(owner_id, "owner_id")
         lease_until = time.time() + _lease_seconds(lease_seconds)
         with self._transaction() as connection:
             job = self._required(connection, job_id)
@@ -425,7 +426,7 @@ def _lease_seconds(value: float) -> float:
         raise ValueError("lease_seconds must be finite and between 0 and 86400.")
     if not math.isfinite(value):
         raise ValueError("lease_seconds must be finite and between 0 and 86400.")
-    if not 0 < value:
+    if not value > 0:
         raise ValueError("lease_seconds must be finite and between 0 and 86400.")
     if not value <= 86_400:
         raise ValueError("lease_seconds must be finite and between 0 and 86400.")

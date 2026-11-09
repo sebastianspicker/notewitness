@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import re
 
 from notewitness.core.analysis.analysis import (
@@ -85,7 +85,7 @@ class AnalysisJobSpec:
 
     def _default_or_validate_created_at(self) -> None:
         if not self.created_at:
-            object.__setattr__(self, "created_at", datetime.now(timezone.utc).isoformat())
+            object.__setattr__(self, "created_at", datetime.now(UTC).isoformat())
         else:
             _bounded(self.created_at, "created_at", 64)
             try:

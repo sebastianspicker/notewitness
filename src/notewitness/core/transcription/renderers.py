@@ -66,8 +66,8 @@ def render_webvtt(
         )
         cues.extend(
             (
-                f"{_format_webvtt_milliseconds(start_ms)} --> "
-                f"{_format_webvtt_milliseconds(end_ms)}",
+                (f"{_format_webvtt_milliseconds(start_ms)} --> "
+                f"{_format_webvtt_milliseconds(end_ms)}"),
                 text,
                 "",
             )
@@ -97,10 +97,8 @@ def render_html(
         if pause is not None:
             rendered_entries.append(pause)
         timestamp = (
-            "<time datetime=\"{datetime}\">{label}</time>".format(
-                datetime=_duration_datetime(segment.start_us),
-                label=escape(_format_timestamp(segment.start_us)),
-            )
+            f"<time datetime=\"{_duration_datetime(segment.start_us)}\">"
+            f"{escape(_format_timestamp(segment.start_us))}</time>"
             if show_timestamp
             else ""
         )

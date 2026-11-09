@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import ctypes
 import errno
 import os
 from pathlib import Path
 import stat
 import sys
+from typing import Self
+from uuid import uuid4
 
 
 class PrivatePathError(RuntimeError):
@@ -21,7 +23,7 @@ _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
 def open_private_directory(
     path: str | Path, *, require_trusted_ancestors: bool = False
-) -> "PrivateDirectory":
+) -> PrivateDirectory:
     """Pin an existing private directory and retain its no-follow descriptor."""
     absolute = trusted_absolute_path(Path(path))
     descriptor = _open_existing_private_directory(
@@ -59,7 +61,7 @@ class PrivateDirectory:
         self._identity = (device, inode)
         self._require_trusted_ancestors = require_trusted_ancestors
 
-    def __enter__(self) -> "PrivateDirectory":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_: object) -> None:
@@ -145,6 +147,39 @@ def is_owner_private(metadata: os.stat_result) -> bool:
     return metadata.st_uid == os.getuid() and not stat.S_IMODE(metadata.st_mode) & 0o077
 
 
+def write_new_private_file(directory_descriptor: int, name: str, contents: bytes) -> None:
+    """Atomically publish a new 0600 file; raise FileExistsError rather than replace a path."""
+    temporary_name = f".{name}.{uuid4().hex}.tmp"
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=directory_descriptor,
+        )
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb") as temporary_file:
+            descriptor = None
+            temporary_file.write(contents)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.link(
+            temporary_name,
+            name,
+            src_dir_fd=directory_descriptor,
+            dst_dir_fd=directory_descriptor,
+            follow_symlinks=False,
+        )
+        os.unlink(temporary_name, dir_fd=directory_descriptor)
+        os.fsync(directory_descriptor)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        with suppress(FileNotFoundError):
+            os.unlink(temporary_name, dir_fd=directory_descriptor)
+
+
 def require_private_regular(metadata: os.stat_result, label: str) -> None:
     if not stat.S_ISREG(metadata.st_mode):
         raise PrivatePathError(f"private path is not a regular file: {label}")
@@ -162,11 +197,14 @@ def trusted_absolute_path(path: str | Path) -> Path:
     absolute = Path(os.path.abspath(os.fspath(path)))
     var = Path("/var")
     private_var = Path("/private/var")
-    if (absolute == var or var in absolute.parents) and var.is_symlink():
-        # macOS exposes /var as this OS-owned alias. Normalize it before opening
-        # from / so every user-controlled component is still opened no-follow.
-        if Path(os.path.realpath(var)) == private_var:
-            return private_var / absolute.relative_to(var)
+    # macOS exposes /var as this OS-owned alias. Normalize it before opening
+    # from / so every user-controlled component is still opened no-follow.
+    if (
+        (absolute == var or var in absolute.parents)
+        and var.is_symlink()
+        and Path(os.path.realpath(var)) == private_var
+    ):
+        return private_var / absolute.relative_to(var)
     return absolute
 
 

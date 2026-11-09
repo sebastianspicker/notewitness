@@ -411,7 +411,7 @@ def reject_path_like_values(value: Any, label: str) -> None:
     elif isinstance(value, list):
         for item in value:
             reject_path_like_values(item, label)
-    elif isinstance(value, str) and (value.startswith("/") or value.startswith("~")):
+    elif isinstance(value, str) and value.startswith(("/", "~")):
         raise AnalysisCLIError(f"{label} must not contain filesystem paths.")
 
 

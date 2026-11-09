@@ -168,12 +168,12 @@ class LessonNotesProjector:
                 timeline_extents=event_projection.timeline_extents,
             ),
             limitations=(
-                "This artifact projects the current evidence graph; it does not run "
-                "ASR, diarization, or music transcription.",
-                "Speaker roles, summaries, and tasks retain the source graph's review "
-                "status and require human verification.",
-                "Descriptive statistics are activity counts and durations, not grades "
-                "or assessments of a learner, teacher, or performance.",
+                ("This artifact projects the current evidence graph; it does not run "
+                "ASR, diarization, or music transcription."),
+                ("Speaker roles, summaries, and tasks retain the source graph's review "
+                "status and require human verification."),
+                ("Descriptive statistics are activity counts and durations, not grades "
+                "or assessments of a learner, teacher, or performance."),
             ),
             contains_remote_derived_evidence=contains_remote,
         )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+import contextlib
 from dataclasses import asdict
 import hashlib
 from http import HTTPStatus
@@ -16,7 +18,11 @@ from urllib.parse import unquote
 
 from notewitness.core.strict_json import is_sha256_hex
 from notewitness.lessons.capture import capture_publication_hook
-from notewitness.projects.media import MAX_INGEST_BYTES, ingest_open_media
+from notewitness.projects.media import (
+    MAX_INGEST_BYTES,
+    ImportedMedia,
+    ingest_open_media,
+)
 from notewitness.projects.private_fs import (
     PrivateDirectory,
     PrivatePathError,
@@ -142,37 +148,13 @@ class WorkbenchMediaMixin:
             started_at=started_at,
             duration_ms=duration_ms,
         )
-        runs = ProjectStore(self.server.project_root).ensure_private_directory("runs")
-        staging_name = f"capture-{secrets.token_hex(16)}{suffix}"
-        descriptor: int | None = None
-        try:
-            with private_directory(runs) as staging_directory:
-                descriptor = staging_directory.open_file(
-                    staging_name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
-                )
-                try:
-                    _stream_request(self.rfile, descriptor, length)
-                    os.fsync(descriptor)
-                    _validate_capture_container(descriptor, content_type)
-                    imported = ingest_open_media(
-                        self.server.project_root,
-                        descriptor,
-                        staging_name,
-                        create_restricted_rights=True,
-                        publication_hook=publication_hook,
-                    )
-                    os.close(descriptor)
-                    descriptor = None
-                    staging_directory.unlink(staging_name)
-                except BaseException:
-                    _discard_staging(staging_directory, descriptor, staging_name)
-                    descriptor = None
-                    raise
-        except PrivatePathError as exc:
-            raise RequestError("Capture staging directory changed during import.") from exc
-        finally:
-            if descriptor is not None:
-                os.close(descriptor)
+        imported = self._stage_and_ingest(
+            "capture",
+            suffix,
+            length,
+            lambda descriptor: _validate_capture_container(descriptor, content_type),
+            publication_hook=publication_hook,
+        )
         self._json(
             HTTPStatus.CREATED,
             {
@@ -195,41 +177,14 @@ class WorkbenchMediaMixin:
         except (UnicodeError, ValueError) as exc:
             raise RequestError("Imported media name is invalid.") from exc
         suffix = _safe_import_suffix(content_type, media_name)
-        runs = ProjectStore(self.server.project_root).ensure_private_directory("runs")
-        staging_name = f"import-{secrets.token_hex(16)}{suffix}"
-        descriptor: int | None = None
-        try:
-            with private_directory(runs) as staging_directory:
-                descriptor = staging_directory.open_file(
-                    staging_name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
-                )
-                try:
-                    _stream_request(self.rfile, descriptor, length)
-                    os.fsync(descriptor)
-                    _validate_import_container(descriptor, suffix)
-                    probe_factory = getattr(
-                        self.server.processing.executor, "ingest_probe", None
-                    )
-                    probe = probe_factory() if callable(probe_factory) else None
-                    imported = ingest_open_media(
-                        self.server.project_root,
-                        descriptor,
-                        staging_name,
-                        create_restricted_rights=True,
-                        probe=probe,
-                    )
-                    os.close(descriptor)
-                    descriptor = None
-                    staging_directory.unlink(staging_name)
-                except BaseException:
-                    _discard_staging(staging_directory, descriptor, staging_name)
-                    descriptor = None
-                    raise
-        except PrivatePathError as exc:
-            raise RequestError("Import staging directory changed during import.") from exc
-        finally:
-            if descriptor is not None:
-                os.close(descriptor)
+        probe_factory = getattr(self.server.processing.executor, "ingest_probe", None)
+        imported = self._stage_and_ingest(
+            "import",
+            suffix,
+            length,
+            lambda descriptor: _validate_import_container(descriptor, suffix),
+            probe=probe_factory() if callable(probe_factory) else None,
+        )
         self._json(
             HTTPStatus.CREATED,
             {
@@ -243,18 +198,58 @@ class WorkbenchMediaMixin:
             },
         )
 
+    def _stage_and_ingest(
+        self,
+        kind: str,
+        suffix: str,
+        length: int,
+        validate: Callable[[int], None],
+        **ingest_options: Any,
+    ) -> ImportedMedia:
+        """Stream the request body into private staging, validate it, then ingest it."""
+        runs = ProjectStore(self.server.project_root).ensure_private_directory("runs")
+        staging_name = f"{kind}-{secrets.token_hex(16)}{suffix}"
+        descriptor: int | None = None
+        try:
+            with private_directory(runs) as staging_directory:
+                descriptor = staging_directory.open_file(
+                    staging_name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600
+                )
+                try:
+                    _stream_request(self.rfile, descriptor, length)
+                    os.fsync(descriptor)
+                    validate(descriptor)
+                    imported = ingest_open_media(
+                        self.server.project_root,
+                        descriptor,
+                        staging_name,
+                        create_restricted_rights=True,
+                        **ingest_options,
+                    )
+                    os.close(descriptor)
+                    descriptor = None
+                    staging_directory.unlink(staging_name)
+                except BaseException:
+                    _discard_staging(staging_directory, descriptor, staging_name)
+                    descriptor = None
+                    raise
+        except PrivatePathError as exc:
+            raise RequestError(
+                f"{kind.capitalize()} staging directory changed during import."
+            ) from exc
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+        return imported
+
 
 def _discard_staging(directory: PrivateDirectory, descriptor: int | None, name: str) -> None:
     """Best-effort removal of a rejected staging file without masking the failure."""
     if descriptor is not None:
-        try:
+        with contextlib.suppress(OSError):
             os.close(descriptor)
-        except OSError:
-            pass
-    try:
+    with contextlib.suppress(OSError, PrivatePathError):
         directory.unlink(name)
-    except (OSError, PrivatePathError):
-        pass
 
 
 def _parse_range(value: str | None, size: int) -> tuple[int, int, bool] | None:

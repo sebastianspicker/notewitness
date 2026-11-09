@@ -279,7 +279,7 @@ def score_topics(
         elif start == end:
             label = f"{score_id}, bar {start}"
         else:
-            label = f"{score_id}, bars {start}–{end}"
+            label = f"{score_id}, bars {start}\N{EN DASH}{end}"
         target_ids_by_label[label].append(str(target["id"]))
     return tuple(
         EvidenceTopic(label=label, target_ids=tuple(target_ids))

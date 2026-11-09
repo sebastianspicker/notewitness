@@ -9,15 +9,14 @@ import os
 from pathlib import Path
 import stat
 from typing import Any
-from uuid import uuid4
 
 from notewitness.projects.private_fs import (
     open_directory_no_follow,
     trusted_absolute_path,
+    write_new_private_file,
 )
 
 
-_FILE_MODE = 0o600
 MAX_LOCAL_JSON_BYTES = 256 * 1024 * 1024
 MAX_LOCAL_ARTIFACT_BYTES = 512 * 1024 * 1024
 MAX_TRANSCRIPT_BYTES = 10_000_000
@@ -100,38 +99,9 @@ def write_new_private_bytes(
 def _write_new_private_file(
     directory_descriptor: int, name: str, contents: bytes
 ) -> None:
-    temporary_name = f".{name}.{uuid4().hex}.tmp"
-    descriptor: int | None = None
     try:
-        descriptor = os.open(
-            temporary_name,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-            _FILE_MODE,
-            dir_fd=directory_descriptor,
-        )
-        os.fchmod(descriptor, _FILE_MODE)
-        with os.fdopen(descriptor, "wb") as temporary_file:
-            descriptor = None
-            temporary_file.write(contents)
-            temporary_file.flush()
-            os.fsync(temporary_file.fileno())
-        os.link(
-            temporary_name,
-            name,
-            src_dir_fd=directory_descriptor,
-            dst_dir_fd=directory_descriptor,
-            follow_symlinks=False,
-        )
-        os.unlink(temporary_name, dir_fd=directory_descriptor)
-        os.fsync(directory_descriptor)
+        write_new_private_file(directory_descriptor, name, contents)
     except FileExistsError as exc:
         raise LocalArtifactError(
             f"Refusing to replace existing artifact path: {name}"
         ) from exc
-    finally:
-        if descriptor is not None:
-            os.close(descriptor)
-        try:
-            os.unlink(temporary_name, dir_fd=directory_descriptor)
-        except FileNotFoundError:
-            pass

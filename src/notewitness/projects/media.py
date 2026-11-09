@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 import errno
 import hashlib
@@ -408,10 +409,8 @@ def _link_staged_media(media_descriptor: int, staging_name: str, destination_nam
 
 
 def _unlink_if_present(directory_descriptor: int, name: str) -> None:
-    try:
+    with contextlib.suppress(FileNotFoundError):
         os.unlink(name, dir_fd=directory_descriptor)
-    except FileNotFoundError:
-        pass
 
 
 def _open_explicit_regular_file(source: Path) -> int:

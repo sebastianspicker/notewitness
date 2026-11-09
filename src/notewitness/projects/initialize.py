@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import errno
 import json
 import os
@@ -10,7 +10,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from notewitness.core.evidence.graph import SCHEMA_VERSION, EvidenceGraph
-from notewitness.projects.private_fs import trusted_absolute_path
+from notewitness.projects.private_fs import (
+    trusted_absolute_path,
+    write_new_private_file,
+)
 
 
 class ProjectInitializationError(RuntimeError):
@@ -18,7 +21,6 @@ class ProjectInitializationError(RuntimeError):
 
 
 _DIRECTORY_MODE = 0o700
-_FILE_MODE = 0o600
 
 
 def _open_or_create_private_directory(
@@ -99,40 +101,12 @@ def _open_empty_private_directory(target: Path) -> int:
 
 def _write_private_file(directory_descriptor: int, name: str, contents: str) -> None:
     """Atomically publish a new private file without replacing an existing path."""
-    temporary_name = f".{name}.{uuid4().hex}.tmp"
-    descriptor: int | None = None
     try:
-        descriptor = os.open(
-            temporary_name,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-            _FILE_MODE,
-            dir_fd=directory_descriptor,
-        )
-        os.fchmod(descriptor, _FILE_MODE)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as temporary_file:
-            descriptor = None
-            temporary_file.write(contents)
-            temporary_file.flush()
-            os.fsync(temporary_file.fileno())
-        os.link(
-            temporary_name,
-            name,
-            src_dir_fd=directory_descriptor,
-            dst_dir_fd=directory_descriptor,
-            follow_symlinks=False,
-        )
-        os.unlink(temporary_name, dir_fd=directory_descriptor)
+        write_new_private_file(directory_descriptor, name, contents.encode("utf-8"))
     except FileExistsError as exc:
         raise ProjectInitializationError(
             f"Refusing to replace existing project path: {name}"
         ) from exc
-    finally:
-        if descriptor is not None:
-            os.close(descriptor)
-        try:
-            os.unlink(temporary_name, dir_fd=directory_descriptor)
-        except FileNotFoundError:
-            pass
 
 
 def _create_private_project_directory(
@@ -194,7 +168,7 @@ def initialize_project(directory: str | Path, *, name: str | None = None) -> Pat
         "project": {
             "id": f"project:{uuid4()}",
             "name": project_name,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         },
         "network": {"mode": "offline"},
         "rights": [],

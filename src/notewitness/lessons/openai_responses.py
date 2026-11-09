@@ -98,7 +98,7 @@ class OpenAISettings:
     @classmethod
     def from_environment(
         cls, environment: Mapping[str, str] | None = None
-    ) -> "OpenAISettings":
+    ) -> OpenAISettings:
         env = os.environ if environment is None else environment
         api_key = env.get("OPENAI_API_KEY", "")
         model_value = env.get("NOTEWITNESS_OPENAI_MODEL", "")

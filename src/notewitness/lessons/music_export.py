@@ -104,7 +104,7 @@ class SymbolicMusicExportService:
         self._store = project_store
 
     @classmethod
-    def for_project(cls, project_root: str | Path) -> "SymbolicMusicExportService":
+    def for_project(cls, project_root: str | Path) -> SymbolicMusicExportService:
         return cls(ProjectStore(project_root))
 
     def preflight(

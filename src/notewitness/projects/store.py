@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import copy
 from dataclasses import dataclass
 import errno
@@ -88,31 +88,27 @@ class ProjectStore:
         """Validate and atomically publish a mutation, optionally compare-and-swap."""
         if expected_sha256 is not None and not is_sha256_hex(expected_sha256):
             raise ProjectConflictError("expected_sha256 must be a lowercase SHA-256 digest")
-        with self.locked():
-            with self._open_root() as root_descriptor:
-                return self._mutate_from(root_descriptor, mutation, expected_sha256)
+        with self.locked(), self._open_root() as root_descriptor:
+            return self._mutate_from(root_descriptor, mutation, expected_sha256)
 
     def ensure_private_directory(self, name: str) -> Path:
         """Create or verify one allowlisted owner-private runtime directory."""
 
         if name not in {"exports", "runs"}:
             raise ProjectStoreError("runtime directory name is not allowlisted")
-        with self.locked():
-            with self._open_root() as root_descriptor:
-                try:
-                    os.mkdir(name, _DIRECTORY_MODE, dir_fd=root_descriptor)
-                except FileExistsError:
-                    pass
-                descriptor = os.open(
-                    name,
-                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                    dir_fd=root_descriptor,
-                )
-                try:
-                    _require_private_directory(descriptor, self.root / name)
-                    os.fchmod(descriptor, _DIRECTORY_MODE)
-                finally:
-                    os.close(descriptor)
+        with self.locked(), self._open_root() as root_descriptor:
+            with suppress(FileExistsError):
+                os.mkdir(name, _DIRECTORY_MODE, dir_fd=root_descriptor)
+            descriptor = os.open(
+                name,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=root_descriptor,
+            )
+            try:
+                _require_private_directory(descriptor, self.root / name)
+                os.fchmod(descriptor, _DIRECTORY_MODE)
+            finally:
+                os.close(descriptor)
         return self.root / name
 
     @contextmanager
@@ -280,10 +276,8 @@ def _replace_private_file(directory_descriptor: int, name: str, raw: bytes) -> N
     finally:
         if descriptor is not None:
             os.close(descriptor)
-        try:
+        with suppress(FileNotFoundError):
             os.unlink(temporary, dir_fd=directory_descriptor)
-        except FileNotFoundError:
-            pass
 
 
 def _open_lock(directory_descriptor: int) -> int:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import hashlib
 from typing import Any
 from uuid import uuid4
@@ -166,7 +166,7 @@ def accept_transcript_events(
                     "record_id": accepted_id,
                     "parent_revision_ids": [],
                     "author_id": author_id,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "operation": "adjudicate",
                     "reason": normalized_reason,
                 }

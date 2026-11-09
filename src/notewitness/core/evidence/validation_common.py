@@ -64,7 +64,7 @@ def validate_datetime(
         issues.append(ValidationIssue(path, "must be an RFC 3339 date-time"))
         return
     try:
-        parsed = datetime.fromisoformat(value.upper().replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.upper())
     except ValueError:
         issues.append(ValidationIssue(path, "must be an RFC 3339 date-time"))
         return

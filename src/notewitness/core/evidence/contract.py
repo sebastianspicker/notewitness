@@ -99,7 +99,7 @@ class NetworkPolicy:
     mode: NetworkMode = NetworkMode.OFFLINE
 
     @classmethod
-    def from_mapping(cls, value: object) -> "NetworkPolicy":
+    def from_mapping(cls, value: object) -> NetworkPolicy:
         if not isinstance(value, Mapping):
             return cls()
         raw_mode = value.get("mode", NetworkMode.OFFLINE.value)

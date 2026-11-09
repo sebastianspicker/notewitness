@@ -107,8 +107,6 @@ def project_events(
             else "unknown"
         )
         body_value = body.get("value") if isinstance(body, Mapping) else None
-        confidence = event.get("confidence")
-        confidence_value = dict(confidence) if isinstance(confidence, Mapping) else {}
         label = event_display_text(event_type, body)
         if event_type == "local:bookmark":
             if is_accepted_record(event):
@@ -123,6 +121,14 @@ def project_events(
                     for anchor in anchors
                 )
             continue
+        confidence = event.get("confidence")
+        provenance = {
+            "review_status": str(event["review_status"]),
+            "layer": str(event["layer"]),
+            "generator_id": str(event["generator_id"]),
+            "rights_id": str(event["rights_id"]),
+            "confidence": dict(confidence) if isinstance(confidence, Mapping) else {},
+        }
         full_entry = FullTranscriptEntry(
             event_id=event_id,
             content_kind=full_transcript_kind(event_type, body_format),
@@ -133,11 +139,7 @@ def project_events(
             body_value=body_value,
             alternatives=tuple(event.get("alternatives", [])),
             anchors=anchors,
-            review_status=str(event["review_status"]),
-            layer=str(event["layer"]),
-            generator_id=str(event["generator_id"]),
-            rights_id=str(event["rights_id"]),
-            confidence=confidence_value,
+            **provenance,
         )
         if not is_accepted_record(event):
             if (
@@ -155,11 +157,7 @@ def project_events(
                     actor_id=actor_id,
                     actor_role=actor_role,
                     anchors=anchors,
-                    review_status=str(event["review_status"]),
-                    layer=str(event["layer"]),
-                    generator_id=str(event["generator_id"]),
-                    rights_id=str(event["rights_id"]),
-                    confidence=confidence_value,
+                    **provenance,
                 )
             )
         full_transcript.append(full_entry)
@@ -171,11 +169,7 @@ def project_events(
                     speaker_role=actor_role,
                     text=label,
                     anchors=anchors,
-                    review_status=str(event["review_status"]),
-                    layer=str(event["layer"]),
-                    generator_id=str(event["generator_id"]),
-                    rights_id=str(event["rights_id"]),
-                    confidence=confidence_value,
+                    **provenance,
                 )
             )
         bookmarks.extend(

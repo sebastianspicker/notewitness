@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import contextlib
 import json
 import os
 import selectors
@@ -209,10 +210,8 @@ def drain_output_or_wait(
     wait_seconds: float,
 ) -> None:
     if not selector.get_map():
-        try:
+        with contextlib.suppress(subprocess.TimeoutExpired):
             process.wait(timeout=max(0.001, wait_seconds))
-        except subprocess.TimeoutExpired:
-            pass
         return
     for key, _ in selector.select(timeout=wait_seconds):
         stream_name, buffer = streams[key.fd]

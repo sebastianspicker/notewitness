@@ -70,8 +70,8 @@ class FFprobeMediaProbe:
                 "-v",
                 "error",
                 "-show_entries",
-                "format=duration,format_name:"
-                "stream=codec_type,codec_name,duration,sample_rate,channels",
+                ("format=duration,format_name:"
+                "stream=codec_type,codec_name,duration,sample_rate,channels"),
                 "-of",
                 "json",
                 str(source),

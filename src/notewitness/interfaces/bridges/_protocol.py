@@ -129,7 +129,7 @@ def seconds_to_us(value: Any, label: str) -> int:
         raise BridgeError(f"{label} is too large") from exc
     if not math.isfinite(scaled) or scaled < 0:
         raise BridgeError(f"{label} must be a non-negative finite number")
-    return int(round(scaled))
+    return round(scaled)
 
 
 def confidence(value: Any) -> float | None:

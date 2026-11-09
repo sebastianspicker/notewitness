@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import stat
 import threading
+from typing import ClassVar
 
 from notewitness.projects.private_fs import is_owner_private
 from notewitness.projects.store import ProjectStore
@@ -30,7 +31,7 @@ _FILE_MODE = 0o600
 class _ProjectProcessingLock:
     """A private, process-wide advisory lock held for one service lifetime."""
 
-    _owned_paths: set[str] = set()
+    _owned_paths: ClassVar[set[str]] = set()
     _owned_paths_lock = threading.Lock()
 
     def __init__(self, path: Path) -> None:

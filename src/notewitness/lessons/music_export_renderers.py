@@ -83,7 +83,11 @@ def csv_bytes(notes: tuple[_SymbolicNote, ...]) -> bytes:
 
 def _spreadsheet_safe_text(value: str) -> str:
     candidate = value.lstrip()
-    if candidate.startswith(("=", "+", "-", "@", "＝", "＋", "－", "＠")):
+    if candidate.startswith((
+        "=", "+", "-", "@",
+        "\N{FULLWIDTH EQUALS SIGN}", "\N{FULLWIDTH PLUS SIGN}",
+        "\N{FULLWIDTH HYPHEN-MINUS}", "\N{FULLWIDTH COMMERCIAL AT}",
+    )):
         raise MusicExportError("CSV text fields must not contain spreadsheet formulas.")
     return value
 
@@ -139,7 +143,7 @@ def _midi_group_key(note: _SymbolicNote) -> tuple[str, str]:
 
 
 def _rounded_midi_pitch(note: _SymbolicNote) -> int:
-    return int(math.floor(note.midi_pitch + 0.5))
+    return math.floor(note.midi_pitch + 0.5)
 
 
 def merged_midi_notes(

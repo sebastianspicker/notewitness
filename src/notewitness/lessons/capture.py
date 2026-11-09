@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -47,12 +47,12 @@ def capture_publication_hook(
             f"duration_ms must be in [0, {MAX_CAPTURE_DURATION_MS}]."
         )
     try:
-        parsed_start = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-    except (AttributeError, ValueError) as exc:
+        parsed_start = datetime.fromisoformat(started_at)
+    except (TypeError, ValueError) as exc:
         raise ReviewError("Capture start must be an ISO-8601 timestamp.") from exc
     if parsed_start.tzinfo is None:
         raise ReviewError("Capture start timestamp must include a timezone.")
-    normalized_start = parsed_start.astimezone(timezone.utc).isoformat()
+    normalized_start = parsed_start.astimezone(UTC).isoformat()
     token = uuid4().hex
     event_id = f"event:capture-{token}"
     revision_id = f"revision:create-capture-{token}"

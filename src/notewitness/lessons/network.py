@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import json
-import socket
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
@@ -122,7 +121,7 @@ def _openai_response(opener: Any, request: Request) -> tuple[int, str, bytes]:
             f"OpenAI request failed with HTTP {status_code}.",
             status_code=status_code,
         ) from None
-    except (TimeoutError, socket.timeout):
+    except TimeoutError:
         raise TransportFailure("OpenAI request timed out.") from None
     except URLError:
         raise TransportFailure("OpenAI request could not reach the endpoint.") from None

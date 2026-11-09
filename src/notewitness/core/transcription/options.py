@@ -203,7 +203,7 @@ def _is_non_boolean_number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def _is_unit_interval(value: int | float) -> bool:
+def _is_unit_interval(value: float) -> bool:
     return 0.0 <= value <= 1.0
 
 

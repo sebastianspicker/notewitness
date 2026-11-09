@@ -81,7 +81,7 @@ class LocalWorkbenchExecutor:
     @classmethod
     def from_private_config(
         cls, project_root: str | Path, config_path: str | Path
-    ) -> "LocalWorkbenchExecutor":
+    ) -> LocalWorkbenchExecutor:
         payload = read_private_configuration(Path(config_path))
         exact_keys(payload, {"version", "transcription", "analysis"}, {"version"})
         if payload.get("version") != 2:

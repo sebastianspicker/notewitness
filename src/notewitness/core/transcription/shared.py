@@ -44,7 +44,7 @@ class FrozenJsonObject(Mapping[str, Any]):
     def __len__(self) -> int:
         return len(self._items)
 
-    def __deepcopy__(self, memo: dict[int, object]) -> "FrozenJsonObject":
+    def __deepcopy__(self, memo: dict[int, object]) -> FrozenJsonObject:
         return self
 
 
@@ -126,7 +126,7 @@ def _validate_timestamp(
     if not isinstance(value, str):
         raise ValueError(f"{field_name} must be an ISO 8601 timestamp.")
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
     except ValueError as exc:
         raise ValueError(f"{field_name} must be an ISO 8601 timestamp.") from exc
     if parsed.tzinfo is None:

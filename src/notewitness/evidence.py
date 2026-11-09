@@ -41,8 +41,6 @@ __all__ = [
     "CORE_EVENT_TYPES",
     "CORE_RELATION_TYPES",
     "EVENT_LAYERS",
-    "EvidenceGraph",
-    "EvidenceGraphError",
     "GENERATOR_KINDS",
     "MAX_JSON_DEPTH",
     "MAX_PROJECT_BYTES",
@@ -51,5 +49,7 @@ __all__ = [
     "REVISION_OPERATIONS",
     "SCHEMA_VERSION",
     "VISIBILITY_LEVELS",
+    "EvidenceGraph",
+    "EvidenceGraphError",
     "ValidationIssue",
 ]
